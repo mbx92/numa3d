@@ -89,7 +89,7 @@ Margin bersih penjualan = `(harga jual × (1 − fee marketplace%) − HPP) × q
 Postgres dan MinIO tidak ikut di-compose — pakai server yang sudah ada. Template env: `.env.coolify.example`.
 
 1. Push repo ke Git, lalu di Coolify: **New Resource → Docker Compose** (bukan Nixpacks). File compose: `docker-compose.yml`.
-2. Jika PG/MinIO juga di Coolify, sambungkan app ke **jaringan Docker yang sama** supaya hostname service-nya bisa di-resolve.
+2. Compose stack punya jaringan sendiri. Hostname internal Postgres (UUID Coolify) **tidak resolve** sampai app ikut jaringan Coolify: di resource app, nyalakan **Connect to Predefined Network**, lalu redeploy. `docker-compose.yml` juga join network eksternal `coolify`. Error `getaddrinfo EAI_AGAIN` = DNS di container tidak menemukan host itu.
 3. Isi environment (lihat `.env.coolify.example`):
 
 | Variabel | Keterangan |
