@@ -103,7 +103,7 @@ Postgres dan MinIO tidak ikut di-compose — pakai server yang sudah ada. Templa
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | kredensial MinIO |
 | `MINIO_BUCKET` | default `numa3d-files` (dibuat otomatis saat upload) |
 
-4. Domain HTTPS dipasang ke service **app** (port 3000). MinIO tidak perlu dipublikasikan — file di-proxy lewat `/api/files`.
+4. Domain HTTPS dipasang ke service **app** (port 3000). Compose mem-publish `3000:3000`. Di Coolify, set **Ports Exposes** / domain ke port 3000 pada service **app**. MinIO tidak perlu dipublikasikan — file di-proxy lewat `/api/files`.
 5. Deploy. Entry point menjalankan migrasi lalu `node .output/server/index.mjs`.
 6. Login dengan `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Setelah itu kelola user di menu User.
 

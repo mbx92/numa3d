@@ -13,8 +13,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-numa3d-files}
-    expose:
-      - "3000"
+    ports:
+      - "3017:3000"
     networks:
       - default
       - coolify
