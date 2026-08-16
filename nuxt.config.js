@@ -32,11 +32,15 @@ export default defineNuxtConfig({
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'theme-color', content: '#1f2429' },
+        // Standalone tanpa chrome browser (Android + iOS modern)
+        { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
         { name: 'apple-mobile-web-app-title', content: 'Numa3D' }
       ],
       link: [
+        // Explicit: @vite-pwa/nuxt kadang gagal inject link manifest (unhead regression)
+        { rel: 'manifest', href: '/manifest.webmanifest' },
         { rel: 'icon', type: 'image/svg+xml', href: '/icon.svg' },
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico', sizes: 'any' },
         { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' }
@@ -45,6 +49,7 @@ export default defineNuxtConfig({
   },
   pwa: {
     registerType: 'autoUpdate',
+    injectRegister: 'auto',
     manifest: {
       name: 'Numa3D — Pencatatan Produksi',
       short_name: 'Numa3D',
@@ -52,6 +57,8 @@ export default defineNuxtConfig({
       theme_color: '#1f2429',
       background_color: '#15181c',
       display: 'standalone',
+      display_override: ['standalone', 'browser'],
+      orientation: 'any',
       start_url: '/',
       scope: '/',
       lang: 'id',
