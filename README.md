@@ -84,23 +84,28 @@ Margin bersih penjualan = `(harga jual × (1 − fee marketplace%) − HPP) × q
 - Rate limit login: in-memory, tanpa Redis (cukup untuk single-instance). Maks 5 percobaan gagal per 15 menit per kombinasi IP+username, dan maks 20 per 15 menit per IP (cegah iterasi banyak username dari satu sumber). Reset otomatis setelah window lewat atau saat login berhasil. **Catatan**: karena in-memory, counter ini hilang saat proses dev di-restart, dan pada deployment multi-instance/serverless tiap instance punya counter terpisah (tidak dibagi) — cukup untuk single-instance, butuh store bersama (mis. Redis) kalau nanti di-scale horizontal.
 - Search di halaman Material & Produk: filter client-side (nama/supplier, nama/deskripsi) — cukup untuk skala katalog UMKM, tidak butuh full-text search di database.
 
-## Deploy di Coolify (Docker Compose)
+## Deploy di Coolify (app saja)
 
-1. Push repo ke Git, lalu di Coolify: **New Resource → Docker Compose** (bukan Nixpacks), pilih repo ini. File compose: `docker-compose.yml`.
-2. Isi environment (wajib):
+Postgres dan MinIO tidak ikut di-compose — pakai server yang sudah ada. Template env: `.env.coolify.example`.
 
-| Variabel | Contoh |
+1. Push repo ke Git, lalu di Coolify: **New Resource → Docker Compose** (bukan Nixpacks). File compose: `docker-compose.yml`.
+2. Jika PG/MinIO juga di Coolify, sambungkan app ke **jaringan Docker yang sama** supaya hostname service-nya bisa di-resolve.
+3. Isi environment (lihat `.env.coolify.example`):
+
+| Variabel | Keterangan |
 |---|---|
-| `POSTGRES_PASSWORD` | password acak PostgreSQL |
-| `MINIO_SECRET_KEY` | min. 8 karakter |
+| `DATABASE_URL` | `postgres://user:pass@host:5432/dbname` |
 | `SESSION_SECRET` | `openssl rand -hex 32` |
-| `ADMIN_PASSWORD` | password admin pertama (hanya dipakai jika tabel users kosong) |
+| `ADMIN_PASSWORD` | password admin pertama (hanya jika tabel users kosong) |
+| `MINIO_ENDPOINT` | hostname MinIO dari dalam container app |
+| `MINIO_PORT` | biasanya `9000`; HTTPS publik sering `443` |
+| `MINIO_USE_SSL` | `true` jika MinIO HTTPS |
+| `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | kredensial MinIO |
+| `MINIO_BUCKET` | default `numa3d-files` (dibuat otomatis saat upload) |
 
-Opsional: `ADMIN_USERNAME` (default `admin`), `POSTGRES_USER` / `POSTGRES_DB` (default `numa3d`), `MINIO_ACCESS_KEY` (default `minioadmin`), `MINIO_BUCKET`.
-
-3. Domain HTTPS dipasang ke service **app** (port 3000). MinIO tidak perlu dipublikasikan — file di-proxy lewat `/api/files`.
-4. Deploy. Entry point otomatis menjalankan migrasi lalu `node .output/server/index.mjs`.
-5. Login dengan `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Setelah itu kelola user di menu User.
+4. Domain HTTPS dipasang ke service **app** (port 3000). MinIO tidak perlu dipublikasikan — file di-proxy lewat `/api/files`.
+5. Deploy. Entry point menjalankan migrasi lalu `node .output/server/index.mjs`.
+6. Login dengan `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Setelah itu kelola user di menu User.
 
 PWA: setelah HTTPS aktif, Chrome/Android menampilkan prompt **Pasang Numa3D**. Safari iOS: Share → Add to Home Screen.
 
