@@ -4,4 +4,7 @@
   </NuxtLayout>
   <ConfirmDialog />
   <ToastContainer />
+  <ClientOnly>
+    <PwaPrompt />
+  </ClientOnly>
 </template>

@@ -83,3 +83,27 @@ Margin bersih penjualan = `(harga jual × (1 − fee marketplace%) − HPP) × q
 - Audit log: tiap mutasi (tambah/ubah/hapus) di seluruh entitas dicatat ke tabel `audit_logs` (siapa, kapan, aksi, ringkasan) — dilihat admin di halaman **Log Aktivitas** (200 entri terakhir, tanpa paginasi karena skala aplikasi kecil).
 - Rate limit login: in-memory, tanpa Redis (cukup untuk single-instance). Maks 5 percobaan gagal per 15 menit per kombinasi IP+username, dan maks 20 per 15 menit per IP (cegah iterasi banyak username dari satu sumber). Reset otomatis setelah window lewat atau saat login berhasil. **Catatan**: karena in-memory, counter ini hilang saat proses dev di-restart, dan pada deployment multi-instance/serverless tiap instance punya counter terpisah (tidak dibagi) — cukup untuk single-instance, butuh store bersama (mis. Redis) kalau nanti di-scale horizontal.
 - Search di halaman Material & Produk: filter client-side (nama/supplier, nama/deskripsi) — cukup untuk skala katalog UMKM, tidak butuh full-text search di database.
+
+## Deploy di Coolify (Docker Compose)
+
+1. Push repo ke Git, lalu di Coolify: **New Resource → Docker Compose** (bukan Nixpacks), pilih repo ini. File compose: `docker-compose.yml`.
+2. Isi environment (wajib):
+
+| Variabel | Contoh |
+|---|---|
+| `POSTGRES_PASSWORD` | password acak PostgreSQL |
+| `MINIO_SECRET_KEY` | min. 8 karakter |
+| `SESSION_SECRET` | `openssl rand -hex 32` |
+| `ADMIN_PASSWORD` | password admin pertama (hanya dipakai jika tabel users kosong) |
+
+Opsional: `ADMIN_USERNAME` (default `admin`), `POSTGRES_USER` / `POSTGRES_DB` (default `numa3d`), `MINIO_ACCESS_KEY` (default `minioadmin`), `MINIO_BUCKET`.
+
+3. Domain HTTPS dipasang ke service **app** (port 3000). MinIO tidak perlu dipublikasikan — file di-proxy lewat `/api/files`.
+4. Deploy. Entry point otomatis menjalankan migrasi lalu `node .output/server/index.mjs`.
+5. Login dengan `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Setelah itu kelola user di menu User.
+
+PWA: setelah HTTPS aktif, Chrome/Android menampilkan prompt **Pasang Numa3D**. Safari iOS: Share → Add to Home Screen.
+
+## PWA (lokal)
+
+Prompt install hanya muncul di build produksi (`npm run build && npm run preview`) atau di Coolify. `npm run dev` tidak mendaftarkan service worker.

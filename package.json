@@ -8,10 +8,12 @@
     "preview": "nuxt preview",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "start": "node .output/server/index.mjs"
   },
   "dependencies": {
     "@heroicons/vue": "^2.1.5",
+    "@vite-pwa/nuxt": "^1.1.1",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.36.4",
     "minio": "^8.0.7",

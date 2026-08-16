@@ -1,0 +1,11 @@
+node_modules
+.nuxt
+.output
+.git
+.env
+*.md
+snapshot.json
+devices.json
+tuya-raw.json
+.DS_Store
+agent-transcripts

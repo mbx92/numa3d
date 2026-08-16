@@ -35,11 +35,14 @@ export default defineEventHandler(async (event) => {
   clearLoginAttempts(ip, username)
   await logAuthEvent({ action: 'login', username: user.username, summary: `Login berhasil dari IP ${ip}` })
 
+  const forwardedProto = getHeader(event, 'x-forwarded-proto')
+  const secure = forwardedProto === 'https' || process.env.NODE_ENV === 'production'
   setCookie(event, SESSION_COOKIE, createSessionToken(useRuntimeConfig().sessionSecret, user), {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',
-    maxAge: SESSION_MAX_AGE
+    maxAge: SESSION_MAX_AGE,
+    secure
   })
   return { ok: true, user: { id: user.id, username: user.username, role: user.role } }
 })
