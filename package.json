@@ -1,0 +1,27 @@
+{
+  "name": "numa3d",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --host",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "@heroicons/vue": "^2.1.5",
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "^0.36.4",
+    "minio": "^8.0.7",
+    "nuxt": "^3.14.0",
+    "pg": "^8.13.1",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@nuxtjs/tailwindcss": "^6.12.2",
+    "dotenv": "^16.4.5",
+    "drizzle-kit": "^0.28.1"
+  }
+}

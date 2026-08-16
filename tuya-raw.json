@@ -1,0 +1,17 @@
+{
+    "result": [],
+    "code": 28841107,
+    "msg": "No permission. The data center is suspended.Please go to the cloud development platform to enable the data center. ",
+    "success": false,
+    "t": 1786895414950,
+    "tid": "2c12fc62998a11f19b9dc2f12493b847",
+    "fetches": 1,
+    "total": 0,
+    "file": {
+        "name": "tuya-raw.json",
+        "description": "Full raw list of Tuya devices.",
+        "account": "9jwrsna7psw9t3scfjhg",
+        "date": "2026-08-16T23:50:14.712596",
+        "tinytuya": "1.20.0"
+    }
+}

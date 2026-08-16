@@ -1,0 +1,40 @@
+export default defineNuxtConfig({
+  compatibilityDate: '2024-11-01',
+  devtools: { enabled: false },
+  modules: ['@nuxtjs/tailwindcss'],
+  css: ['~/assets/css/main.css'],
+  devServer: {
+    host: '0.0.0.0',
+    port: 3000
+  },
+  runtimeConfig: {
+    databaseUrl: process.env.DATABASE_URL || 'postgres://mbx@localhost:5432/numa3d',
+    adminUsername: process.env.ADMIN_USERNAME || 'admin',
+    adminPassword: process.env.ADMIN_PASSWORD || '',
+    sessionSecret: process.env.SESSION_SECRET || 'dev-secret-ganti-di-env',
+    minio: {
+      endPoint: process.env.MINIO_ENDPOINT || 'localhost',
+      port: Number(process.env.MINIO_PORT || 9000),
+      useSSL: process.env.MINIO_USE_SSL === 'true',
+      accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
+      secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin',
+      bucket: process.env.MINIO_BUCKET || 'numa3d-files'
+    },
+    tuya: {
+      apiKey: process.env.TUYA_API_KEY || '',
+      apiSecret: process.env.TUYA_API_SECRET || '',
+      apiRegion: process.env.TUYA_API_REGION || 'in'
+    }
+  },
+  app: {
+    head: {
+      title: 'Numa3D — Pencatatan Produksi',
+      meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1' }],
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/icon.svg' },
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico', sizes: 'any' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' }
+      ]
+    }
+  }
+})

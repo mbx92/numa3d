@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="104" fill="#1f2429" />
+  <g stroke="#15181c" stroke-width="6" stroke-linejoin="round">
+    <polygon points="256,96 394.6,176 256,256 117.4,176" fill="#f87171" />
+    <polygon points="256,256 256,416 117.4,336 117.4,176" fill="#dc2626" />
+    <polygon points="394.6,176 394.6,336 256,416 256,256" fill="#7f1d1d" />
+  </g>
+</svg>

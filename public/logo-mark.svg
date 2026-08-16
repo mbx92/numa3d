@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Kubus isometrik sederhana, 3 sisi terlihat (atas/kiri/kanan), gradasi merah
+       mensimulasikan cahaya dari kiri-atas: atas paling terang, kanan sisi bayangan. -->
+  <g stroke="#7f1d1d" stroke-width="6" stroke-linejoin="round">
+    <polygon points="256,96 394.6,176 256,256 117.4,176" fill="#f87171" />
+    <polygon points="256,256 256,416 117.4,336 117.4,176" fill="#dc2626" />
+    <polygon points="394.6,176 394.6,336 256,416 256,256" fill="#7f1d1d" />
+  </g>
+</svg>
