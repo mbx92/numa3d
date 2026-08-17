@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     .values({
       name: body.name,
       description: body.description || null,
-      status: body.status || 'rnd',
+      status: body.status || 'draft',
       seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null
     })
 

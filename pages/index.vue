@@ -119,7 +119,7 @@ function signedPct(n) {
         <div class="text-[10px] uppercase font-semibold text-ink-400">Katalog</div>
         <div class="font-mono font-semibold">{{ data?.inventory?.productsActive || 0 }} aktif</div>
         <div class="text-xs text-ink-400">
-          {{ data?.inventory?.productsRnd || 0 }} R&amp;D · {{ data?.inventory?.series || 0 }} series · {{ data?.inventory?.machines || 0 }} mesin
+          {{ data?.inventory?.productsDraft || 0 }} draft · {{ data?.inventory?.productsRnd || 0 }} R&amp;D · {{ data?.inventory?.series || 0 }} series · {{ data?.inventory?.machines || 0 }} mesin
         </div>
       </div>
     </div>

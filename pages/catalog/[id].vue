@@ -1,5 +1,6 @@
 <script setup>
 import { PhotoIcon, ArrowLeftIcon, PlusIcon, XMarkIcon, CheckIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
+import { productStatusLabel, productStatusBadge } from '~/utils/productStatus.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -8,12 +9,8 @@ const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const { data: series, refresh } = await useFetch(`/api/series/${id}`)
 const { data: allProducts } = await useFetch('/api/products')
 
-const statusBadge = {
-  rnd: 'bg-ink-200 text-ink-600',
-  active: 'bg-green-100 text-green-700',
-  discontinued: 'bg-ink-100 text-ink-400'
-}
-const statusLabel = { rnd: 'R&D', active: 'Aktif', discontinued: 'Discontinued' }
+const statusBadge = productStatusBadge
+const statusLabel = productStatusLabel
 
 const showAdd = ref(false)
 const search = ref('')

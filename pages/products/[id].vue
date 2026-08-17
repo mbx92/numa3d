@@ -1,5 +1,6 @@
 <script setup>
 import { CheckIcon, ArrowUpTrayIcon, EyeIcon, ArrowDownTrayIcon, TrashIcon, PlusIcon, PhotoIcon } from '@heroicons/vue/24/outline'
+import { PRODUCT_STATUSES, productStatusLabel, productStatusClass } from '~/utils/productStatus.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -143,11 +144,9 @@ const breakdownLabels = {
     <div class="flex items-start gap-2 sm:items-center sm:gap-3 flex-wrap">
       <NuxtLink to="/products" class="text-sm text-ink-500 hover:text-accent-600 shrink-0">&larr; Produk</NuxtLink>
       <h1 class="text-lg sm:text-xl font-bold min-w-0 break-words flex-1">{{ product.name }}</h1>
-      <span class="badge shrink-0" :class="{
-        'bg-ink-200 text-ink-600': product.status === 'rnd',
-        'bg-green-100 text-green-700': product.status === 'active',
-        'bg-ink-100 text-ink-400': product.status === 'discontinued'
-      }">{{ product.status }}</span>
+      <span class="badge shrink-0" :class="productStatusClass(product.status)">
+        {{ productStatusLabel[product.status] || product.status }}
+      </span>
     </div>
 
     <NuxtLink
@@ -199,10 +198,9 @@ const breakdownLabels = {
               <div>
                 <label class="label">Status</label>
                 <select v-model="info.status" class="input" :disabled="!isAdmin">
-                  <option value="rnd">R&D</option>
-                  <option value="active">Aktif</option>
-                  <option value="discontinued">Discontinued</option>
+                  <option v-for="s in PRODUCT_STATUSES" :key="s" :value="s">{{ productStatusLabel[s] }}</option>
                 </select>
+                <p class="text-xs text-ink-500 mt-1">Draft = kumpulkan data; R&amp;D = riset; Aktif = siap jual.</p>
               </div>
               <div>
                 <label class="label">Series</label>

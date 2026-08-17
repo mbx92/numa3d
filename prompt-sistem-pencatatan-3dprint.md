@@ -15,7 +15,7 @@ Keep the UI clean and functional first — this is a data-entry/reporting tool u
 - **Typography**: a clean geometric sans-serif for UI text; monospace font for numeric/data fields (costs, quantities, measurements) to reinforce a technical, precision feel and improve scanability in tables.
 - **Iconography**: simple line icons for machine, spool, box/packaging, gear — sourced from an icon set already available in the project (e.g. Heroicons via `@heroicons/vue`), not custom illustrations.
 - **Structure cues**: subtle dividers/borders like panel seams, card corners with slightly squared (not overly rounded) edges, and a card-based dashboard layout to suggest modular "workstations" — each dashboard card = one station (materials, machines, products, sales).
-- **Status colors**: consistent semantic colors for stock levels (low stock = amber/red), product status (rnd = gray, active = green, discontinued = muted), and margin health (healthy = green, thin/negative = red) — this matters more for daily usability than decorative theming.
+- **Status colors**: consistent semantic colors for stock levels (low stock = amber/red), product status (draft = amber, rnd = gray, active = green, discontinued = muted), and margin health (healthy = green, thin/negative = red) — this matters more for daily usability than decorative theming.
 - Avoid gradients, skeuomorphic textures, or literal factory imagery (no background photos of printers/gears) — the theme should read through color, type, and layout discipline, not illustration.
 
 ## Core Domain & Data Model
@@ -34,7 +34,7 @@ General expense log — material purchases, tool purchases, electricity, R&D cos
 
 ### 4. Products (`products`)
 Master product catalog.
-- id, name, description, status (enum: rnd, active, discontinued), created_at
+- id, name, description, status (enum: draft, rnd, active, discontinued), created_at
 
 ### 5. Product Recipes (`product_recipes`)
 Defines what a product consumes to calculate HPP automatically.

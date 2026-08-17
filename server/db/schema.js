@@ -13,7 +13,7 @@ import {
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'staff'])
 export const materialTypeEnum = pgEnum('material_type', ['filament', 'resin'])
-export const productStatusEnum = pgEnum('product_status', ['rnd', 'active', 'discontinued'])
+export const productStatusEnum = pgEnum('product_status', ['draft', 'rnd', 'active', 'discontinued'])
 export const salesChannelEnum = pgEnum('sales_channel', [
   'tokopedia',
   'shopee',
@@ -97,7 +97,7 @@ export const products = pgTable('products', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
-  status: productStatusEnum('status').notNull().default('rnd'),
+  status: productStatusEnum('status').notNull().default('draft'),
   // Object key gambar di MinIO — dipakai sebagai foto utama di katalog.
   imageKey: text('image_key'),
   // Series tempat produk ini bernaung (boleh null = belum punya series).
