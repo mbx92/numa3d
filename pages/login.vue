@@ -23,7 +23,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-ink-900 p-4">
+  <div class="min-h-screen flex items-center justify-center bg-ink-900 p-4 pt-safe pb-safe">
     <div class="panel w-full max-w-sm">
       <div class="px-6 pt-6 flex items-center gap-2">
         <img src="/logo-mark.svg" alt="" class="w-7 h-7" />

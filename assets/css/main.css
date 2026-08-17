@@ -8,6 +8,25 @@
   }
 }
 
+/* PWA standalone / notch: ruang di atas & bawah agar kontrol tetap bisa diklik */
+@layer utilities {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .min-h-topbar-safe {
+    min-height: calc(3.5rem + env(safe-area-inset-top, 0px));
+  }
+}
+
 @layer components {
   .panel {
     @apply bg-white border border-ink-200 rounded-panel shadow-sm;
