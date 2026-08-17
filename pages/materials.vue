@@ -242,10 +242,7 @@ async function saveAdjust() {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Harga per unit</label>
-            <div class="money-input">
-              <span class="money-input__prefix">Rp</span>
-              <input v-model.number="form.pricePerUnit" type="number" min="0" class="input-num" required />
-            </div>
+            <IdrInput v-model="form.pricePerUnit" required />
           </div>
           <div>
             <label class="label">Stok ({{ form.unit }})</label>

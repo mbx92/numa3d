@@ -35,11 +35,13 @@ export default defineEventHandler(async (event) => {
       description: schema.expenses.description,
       amount: schema.expenses.amount,
       relatedProductId: schema.expenses.relatedProductId,
-      productName: schema.products.name
+      productName: schema.products.name,
+      fromMachine: schema.machines.id
     })
     .from(schema.expenses)
     .leftJoin(schema.products, eq(schema.expenses.relatedProductId, schema.products.id))
     .leftJoin(schema.expenseCategories, eq(schema.expenses.category, schema.expenseCategories.key))
+    .leftJoin(schema.machines, eq(schema.machines.expenseId, schema.expenses.id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(schema.expenses.date), desc(schema.expenses.id))
 
@@ -67,7 +69,8 @@ export default defineEventHandler(async (event) => {
 
   return list.map((e) => {
     const names = namesByExp[e.id]
-    if (names?.length) return { ...e, productName: names.join(', ') }
-    return e
+    const fromMachine = Boolean(e.fromMachine)
+    if (names?.length) return { ...e, productName: names.join(', '), fromMachine }
+    return { ...e, fromMachine }
   })
 })

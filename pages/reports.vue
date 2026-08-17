@@ -174,6 +174,10 @@ function monthLabel(key) {
             mengurangkan keduanya akan menghitung biaya material dua kali.
           </p>
           <p>
+            Pembelian mesin <span class="font-mono">{{ formatIDR(summary?.machinePurchases) }}</span>
+            juga tidak dikurangkan dari laba (aset; masuk HPP lewat depresiasi). Tetap terhitung di kas keluar.
+          </p>
+          <p>
             Total kas keluar periode ini (pembelian material + biaya operasional):
             <span class="font-mono font-semibold text-ink-700">{{ formatIDR(summary?.totalCashOut) }}</span>
           </p>

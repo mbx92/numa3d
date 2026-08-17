@@ -3,6 +3,7 @@ import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { setExpenseProducts } from '../../utils/expenseProducts.js'
 import { assertExpenseCategory } from '../../utils/expenseCategory.js'
+import { assertNotMachineLinkedExpense } from '../../utils/machineExpense.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -12,6 +13,7 @@ export default defineEventHandler(async (event) => {
   const cat = await assertExpenseCategory(db, schema, body.category)
   const [prev] = await db.select().from(schema.expenses).where(eq(schema.expenses.id, id))
   if (!prev) throw createError({ statusCode: 404, statusMessage: 'Pengeluaran tidak ditemukan' })
+  await assertNotMachineLinkedExpense(db, schema, id)
 
   const existingLinks = await db
     .select({ productId: schema.expenseProducts.productId })

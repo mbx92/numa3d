@@ -1,6 +1,7 @@
 import { gte } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { loadSalesWithHpp, marginPercent } from '../../utils/salesAggregate.js'
+import { isOperatingExpenseCategory } from '../../utils/expensePl.js'
 
 // Tren N bulan terakhir (default 12): revenue bersih, HPP, pengeluaran
 // operasional, dan laba bersih per bulan. Konsisten dengan /reports/summary,
@@ -48,7 +49,7 @@ export default defineEventHandler(async (event) => {
     const b = buckets.get(String(e.date).slice(0, 7))
     if (!b) continue
     if (e.category === 'material') b.materialPurchases += e.amount
-    else b.operatingExpenses += e.amount
+    else if (isOperatingExpenseCategory(e.category)) b.operatingExpenses += e.amount
   }
 
   return [...buckets.values()].map((b) => {

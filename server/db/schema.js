@@ -76,6 +76,8 @@ export const machines = pgTable('machines', {
   purchaseDate: date('purchase_date'),
   depreciationMonths: integer('depreciation_months').notNull().default(36),
   notes: text('notes'),
+  // Pengeluaran otomatis dari harga beli. Kas keluar sekali di sini, bukan dipotong lagi di modal.
+  expenseId: integer('expense_id').references(() => expenses.id, { onDelete: 'set null' }),
   // Object key gambar di MinIO (bucket sama dengan file 3D). null = tanpa gambar.
   imageKey: text('image_key'),
   // Smart plug Tuya (Local Tuya). local_key jangan dikirim ke klien.
