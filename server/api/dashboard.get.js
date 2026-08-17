@@ -181,7 +181,7 @@ export default defineEventHandler(async () => {
       db.select({ price: schema.machines.purchasePrice, expenseId: schema.machines.expenseId }).from(schema.machines)
     ])
 
-  const productsByStatus = { active: 0, rnd: 0, discontinued: 0 }
+  const productsByStatus = { draft: 0, active: 0, rnd: 0, discontinued: 0 }
   let productsTotal = 0
   for (const r of productCounts) {
     productsByStatus[r.status] = r.c
@@ -229,6 +229,8 @@ export default defineEventHandler(async () => {
       products: productsTotal,
       productsActive: productsByStatus.active,
       productsRnd: productsByStatus.rnd,
+      productsDraft: productsByStatus.draft,
+      productsDiscontinued: productsByStatus.discontinued,
       series: seriesCount[0]?.c || 0,
       machines: machineCount[0]?.c || 0
     },
