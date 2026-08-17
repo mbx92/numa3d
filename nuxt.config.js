@@ -24,6 +24,13 @@ export default defineNuxtConfig({
       apiKey: process.env.TUYA_API_KEY || '',
       apiSecret: process.env.TUYA_API_SECRET || '',
       apiRegion: process.env.TUYA_API_REGION || 'in'
+    },
+    public: {
+      // Global toast UI — posisi default 'top' (aman untuk PWA / keyboard).
+      toast: {
+        position: 'top',
+        duration: 4000
+      }
     }
   },
   app: {
