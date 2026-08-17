@@ -89,23 +89,13 @@ async function save() {
     }
     if (editing.value) {
       await $fetch(`/api/machines/${editing.value.id}`, { method: 'PUT', body })
+      useToast().success('Mesin diperbarui.')
     } else {
-      const created = await $fetch('/api/machines', { method: 'POST', body })
-      editing.value = created
-      form.value = {
-        ...created,
-        purchaseDate: created.purchaseDate || '',
-        tuyaIp: created.tuyaIp || '',
-        tuyaDeviceId: created.tuyaDeviceId || '',
-        tuyaLocalKey: '',
-        tuyaVersion: created.tuyaVersion || 'auto'
-      }
-      tuyaEnabled.value = !!created.tuyaConfigured
-      await refresh()
-      useToast().success('Mesin tersimpan. Tambahkan gambar bila perlu.')
-      return
+      await $fetch('/api/machines', { method: 'POST', body })
+      useToast().success('Mesin tersimpan.')
     }
     showForm.value = false
+    editing.value = null
     await refresh()
     await refreshAllPower()
   } catch (e) {
@@ -278,40 +268,73 @@ onUnmounted(() => {
       Daya live dari smart plug Tuya (jika dikaitkan) tidak otomatis mengganti angka HPP.
     </p>
 
-    <div class="relative max-w-xs">
-      <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-      <input v-model="search" class="input pl-9" placeholder="Cari nama mesin…" />
+    <div class="relative w-full md:max-w-xs">
+      <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+      <input
+        v-model="search"
+        class="input pl-9 w-full"
+        type="search"
+        enterkeyhint="search"
+        autocomplete="off"
+        placeholder="Cari nama mesin…"
+      />
     </div>
 
+    <!-- Kartu (mobile) -->
     <div class="md:hidden space-y-2">
-      <div v-for="m in paged" :key="m.id" class="panel p-3 flex gap-3">
-        <div class="w-14 h-14 rounded border border-ink-200 bg-ink-50 overflow-hidden shrink-0 flex items-center justify-center">
-          <img v-if="m.imageKey" :src="`/api/machines/${m.id}/image`" alt="" class="w-full h-full object-cover" />
-          <PhotoIcon v-else class="w-5 h-5 text-ink-300" />
-        </div>
-        <div class="min-w-0 flex-1 space-y-1">
-          <div class="font-medium break-words">{{ m.name }}</div>
-          <div v-if="m.notes" class="text-xs text-ink-400">{{ m.notes }}</div>
-          <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm pt-1">
-            <div class="flex justify-between"><dt class="text-ink-500">Daya HPP</dt><dd class="font-mono">{{ m.powerWatt }} W</dd></div>
-            <div class="flex justify-between gap-2">
-              <dt class="text-ink-500">Live</dt>
-              <dd class="font-mono text-right">
-                <span v-if="m.tuyaConfigured && displayWatt(m) != null" class="inline-flex items-center gap-0.5 text-teal-700">
-                  <BoltIcon class="w-3.5 h-3.5" />{{ displayWatt(m) }} W
-                </span>
-                <span v-else-if="m.tuyaConfigured && liveOf(m)?.error" class="text-xs text-red-600">error</span>
-                <span v-else-if="m.tuyaConfigured" class="text-ink-400">…</span>
-                <span v-else class="text-ink-400">—</span>
-              </dd>
-            </div>
-            <div class="flex justify-between"><dt class="text-ink-500">Harga</dt><dd class="font-mono">{{ formatIDR(m.purchasePrice) }}</dd></div>
-            <div class="flex justify-between"><dt class="text-ink-500">Listrik/jam</dt><dd class="font-mono">{{ formatIDR(hourlyElectricity(m)) }}</dd></div>
-          </dl>
-          <div v-if="isAdmin" class="flex flex-wrap gap-1 pt-1">
-            <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(m)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-            <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(m)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+      <div v-for="m in paged" :key="m.id" class="panel p-3 space-y-3">
+        <div class="flex gap-3">
+          <div class="w-14 h-14 rounded border border-ink-200 bg-ink-50 overflow-hidden shrink-0 flex items-center justify-center">
+            <img v-if="m.imageKey" :src="`/api/machines/${m.id}/image`" alt="" class="w-full h-full object-cover" />
+            <PhotoIcon v-else class="w-5 h-5 text-ink-300" />
           </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-medium break-words leading-snug">{{ m.name }}</div>
+                <p v-if="m.notes" class="text-xs text-ink-400 mt-0.5 line-clamp-2">{{ m.notes }}</p>
+              </div>
+              <span
+                v-if="m.tuyaConfigured"
+                class="badge shrink-0 bg-teal-500/10 text-teal-700"
+              >Plug</span>
+            </div>
+          </div>
+        </div>
+
+        <dl class="grid grid-cols-2 gap-2 text-sm">
+          <div class="rounded-panel bg-ink-50 px-2.5 py-2">
+            <dt class="text-[10px] uppercase tracking-wide text-ink-500">Daya HPP</dt>
+            <dd class="font-mono font-medium mt-0.5">{{ m.powerWatt }} W</dd>
+          </div>
+          <div class="rounded-panel bg-ink-50 px-2.5 py-2">
+            <dt class="text-[10px] uppercase tracking-wide text-ink-500">Live</dt>
+            <dd class="font-mono font-medium mt-0.5">
+              <span v-if="m.tuyaConfigured && displayWatt(m) != null" class="inline-flex items-center gap-0.5 text-teal-700">
+                <BoltIcon class="w-3.5 h-3.5" />{{ displayWatt(m) }} W
+              </span>
+              <span v-else-if="m.tuyaConfigured && liveOf(m)?.error" class="text-xs text-red-600 font-sans">error</span>
+              <span v-else-if="m.tuyaConfigured" class="text-ink-400">…</span>
+              <span v-else class="text-ink-400">—</span>
+            </dd>
+          </div>
+          <div class="rounded-panel bg-ink-50 px-2.5 py-2">
+            <dt class="text-[10px] uppercase tracking-wide text-ink-500">Harga beli</dt>
+            <dd class="font-mono font-medium mt-0.5">{{ formatIDR(m.purchasePrice) }}</dd>
+          </div>
+          <div class="rounded-panel bg-ink-50 px-2.5 py-2">
+            <dt class="text-[10px] uppercase tracking-wide text-ink-500">Listrik / jam</dt>
+            <dd class="font-mono font-medium mt-0.5">{{ formatIDR(hourlyElectricity(m)) }}</dd>
+          </div>
+        </dl>
+
+        <div v-if="isAdmin" class="flex flex-wrap gap-1.5 border-t border-ink-100 pt-2">
+          <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(m)">
+            <PencilSquareIcon class="w-3.5 h-3.5" />Edit
+          </button>
+          <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(m)">
+            <TrashIcon class="w-3.5 h-3.5" />Hapus
+          </button>
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">
@@ -329,6 +352,7 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Tabel (desktop) -->
     <div class="panel hidden md:block">
       <div class="overflow-x-auto">
       <table class="table-std">
@@ -353,8 +377,11 @@ onUnmounted(() => {
               </div>
             </td>
             <td class="font-medium">
-              {{ m.name }}
-              <div v-if="m.notes" class="text-xs text-ink-400">{{ m.notes }}</div>
+              <div class="flex items-center gap-2">
+                <span>{{ m.name }}</span>
+                <span v-if="m.tuyaConfigured" class="badge bg-teal-500/10 text-teal-700 text-[10px]">Plug</span>
+              </div>
+              <div v-if="m.notes" class="text-xs text-ink-400 font-normal mt-0.5">{{ m.notes }}</div>
             </td>
             <td class="num">{{ m.powerWatt }} W</td>
             <td class="num">
