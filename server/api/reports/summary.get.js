@@ -2,6 +2,7 @@ import { and, gte, lte } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { loadSalesWithHpp, marginPercent } from '../../utils/salesAggregate.js'
 import { isOperatingExpenseCategory } from '../../utils/expensePl.js'
+import { toDateStr } from '../../utils/dates.js'
 
 // Ringkasan laba rugi.
 //
@@ -11,12 +12,14 @@ import { isOperatingExpenseCategory } from '../../utils/expensePl.js'
 // tetap dilaporkan terpisah sebagai arus kas keluar.
 export default defineEventHandler(async (event) => {
   const q = getQuery(event)
+  const dateFrom = toDateStr(q.dateFrom)
+  const dateTo = toDateStr(q.dateTo)
   const db = useDb()
-  const sales = await loadSalesWithHpp({ dateFrom: q.dateFrom, dateTo: q.dateTo })
+  const sales = await loadSalesWithHpp({ dateFrom, dateTo })
 
   const conds = []
-  if (q.dateFrom) conds.push(gte(schema.expenses.date, q.dateFrom))
-  if (q.dateTo) conds.push(lte(schema.expenses.date, q.dateTo))
+  if (dateFrom) conds.push(gte(schema.expenses.date, dateFrom))
+  if (dateTo) conds.push(lte(schema.expenses.date, dateTo))
   const expenses = await db
     .select({ category: schema.expenses.category, amount: schema.expenses.amount })
     .from(schema.expenses)
@@ -29,12 +32,12 @@ export default defineEventHandler(async (event) => {
   const grossProfit = netRevenue - cogs
 
   const byCategory = {}
-  for (const e of expenses) byCategory[e.category] = (byCategory[e.category] || 0) + e.amount
+  for (const e of expenses) byCategory[e.category] = (byCategory[e.category] || 0) + (Number(e.amount) || 0)
   const materialPurchases = byCategory.material || 0
   const machinePurchases = byCategory.machine || 0
   const operatingExpenses = expenses
     .filter((e) => isOperatingExpenseCategory(e.category))
-    .reduce((a, e) => a + e.amount, 0)
+    .reduce((a, e) => a + (Number(e.amount) || 0), 0)
   const netProfit = grossProfit - operatingExpenses
 
   return {
@@ -51,7 +54,7 @@ export default defineEventHandler(async (event) => {
     netProfitPercent: marginPercent(netProfit, netRevenue),
     materialPurchases,
     machinePurchases,
-    totalCashOut: expenses.reduce((a, e) => a + e.amount, 0),
+    totalCashOut: expenses.reduce((a, e) => a + (Number(e.amount) || 0), 0),
     expensesByCategory: byCategory
   }
 })
