@@ -149,31 +149,41 @@ async function remove(s) {
     </div>
 
     <!-- Filter -->
-    <div class="panel p-3 grid grid-cols-2 lg:flex lg:flex-wrap lg:items-end gap-2">
-      <div class="col-span-2 lg:col-auto">
-        <label class="label">Produk</label>
-        <select v-model="filters.productId" class="input !py-1.5 lg:w-44">
-          <option value="">Semua</option>
-          <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
+    <div class="panel p-3 space-y-2 overflow-hidden">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end gap-2 min-w-0">
+        <div class="min-w-0 lg:w-44">
+          <label class="label">Produk</label>
+          <select v-model="filters.productId" class="input">
+            <option value="">Semua</option>
+            <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </div>
+        <div class="min-w-0 lg:w-36">
+          <label class="label">Channel</label>
+          <select v-model="filters.channel" class="input">
+            <option value="">Semua</option>
+            <option v-for="(label, key) in channelLabel" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </div>
+        <div class="date-range col-span-full lg:contents">
+          <div class="date-field lg:w-40">
+            <label class="label">Dari</label>
+            <input v-model="filters.dateFrom" type="date" class="input" />
+          </div>
+          <div class="date-field lg:w-40">
+            <label class="label">Sampai</label>
+            <input v-model="filters.dateTo" type="date" class="input" />
+          </div>
+        </div>
+        <div class="flex gap-2 col-span-full lg:col-auto">
+          <button type="button" class="btn-secondary !py-1.5 text-xs flex-1 lg:flex-none" @click="setThisMonth">
+            <CalendarDaysIcon class="w-3.5 h-3.5" />Bulan ini
+          </button>
+          <button type="button" class="btn-secondary !py-1.5 text-xs flex-1 lg:flex-none" @click="clearFilters">
+            <ArrowPathIcon class="w-3.5 h-3.5" />Reset
+          </button>
+        </div>
       </div>
-      <div class="col-span-2 lg:col-auto">
-        <label class="label">Channel</label>
-        <select v-model="filters.channel" class="input !py-1.5 lg:w-36">
-          <option value="">Semua</option>
-          <option v-for="(label, key) in channelLabel" :key="key" :value="key">{{ label }}</option>
-        </select>
-      </div>
-      <div class="min-w-0">
-        <label class="label">Dari</label>
-        <input v-model="filters.dateFrom" type="date" class="input w-full min-w-0" />
-      </div>
-      <div class="min-w-0">
-        <label class="label">Sampai</label>
-        <input v-model="filters.dateTo" type="date" class="input w-full min-w-0" />
-      </div>
-      <button class="btn-secondary !py-1.5 text-xs" @click="setThisMonth"><CalendarDaysIcon class="w-3.5 h-3.5" />Bulan ini</button>
-      <button class="btn-secondary !py-1.5 text-xs" @click="clearFilters"><ArrowPathIcon class="w-3.5 h-3.5" />Reset</button>
     </div>
 
     <!-- Running totals -->
@@ -288,12 +298,12 @@ async function remove(s) {
     <AppModal v-if="showForm" title="Catat Penjualan" size="lg" @close="showForm = false">
       <form class="grid grid-cols-1 lg:grid-cols-5 gap-4" @submit.prevent="save">
         <div class="lg:col-span-3 space-y-3">
-          <div class="grid grid-cols-2 gap-3">
-            <div class="min-w-0">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="date-field">
               <label class="label">Tanggal</label>
-              <input v-model="form.date" type="date" class="input w-full min-w-0" required />
+              <input v-model="form.date" type="date" class="input" required />
             </div>
-            <div>
+            <div class="min-w-0">
               <label class="label">Channel</label>
               <select v-model="form.channel" class="input">
                 <option v-for="(label, key) in channelLabel" :key="key" :value="key">{{ label }}</option>

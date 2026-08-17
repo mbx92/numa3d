@@ -72,16 +72,18 @@ function monthLabel(key) {
     <h1 class="text-xl font-bold">Laporan</h1>
 
     <!-- Rentang tanggal -->
-    <div class="panel p-3 flex flex-wrap items-end gap-2">
-      <div class="flex-1 min-w-[8rem]">
-        <label class="label">Dari</label>
-        <input v-model="filters.dateFrom" type="date" class="input w-full min-w-0" />
+    <div class="panel p-3 space-y-2 overflow-hidden">
+      <div class="date-range">
+        <div class="date-field">
+          <label class="label">Dari</label>
+          <input v-model="filters.dateFrom" type="date" class="input" />
+        </div>
+        <div class="date-field">
+          <label class="label">Sampai</label>
+          <input v-model="filters.dateTo" type="date" class="input" />
+        </div>
       </div>
-      <div class="flex-1 min-w-[8rem]">
-        <label class="label">Sampai</label>
-        <input v-model="filters.dateTo" type="date" class="input w-full min-w-0" />
-      </div>
-      <div class="flex gap-2 w-full sm:w-auto">
+      <div class="flex gap-2 w-full">
         <button class="btn-secondary !py-1.5 text-xs flex-1" @click="setThisMonth"><CalendarDaysIcon class="w-3.5 h-3.5" />Bulan ini</button>
         <button class="btn-secondary !py-1.5 text-xs flex-1" @click="setLast30"><ArrowPathIcon class="w-3.5 h-3.5" />30 hari</button>
         <button class="btn-secondary !py-1.5 text-xs flex-1" @click="setThisYear">Tahun ini</button>

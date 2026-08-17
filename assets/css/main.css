@@ -61,21 +61,71 @@
   select.input {
     @apply text-base sm:text-sm;
   }
-  /* Samakan tinggi/tampilan native date dengan field teks (PWA/mobile) */
+
+  /*
+   * Date / time inputs — native control punya intrinsic min-width besar di iOS/Android
+   * sehingga mudah overflow card atau bertumpuk di grid 2 kolom.
+   */
   .input[type='date'],
   .input[type='datetime-local'],
   .input[type='time'],
   .input[type='month'] {
-    @apply min-h-[2.625rem] leading-normal min-w-0;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 2.75rem;
+    line-height: 1.25;
     color-scheme: light;
+    -webkit-appearance: none;
+    appearance: none;
+    /* Cegah intrinsic content-size mendorong parent */
+    field-sizing: fixed;
   }
+
   .input[type='date']::-webkit-date-and-time-value {
     text-align: left;
+    min-width: 0;
   }
-  .input[type='date']::-webkit-calendar-picker-indicator {
+
+  .input[type='date']::-webkit-datetime-edit,
+  .input[type='datetime-local']::-webkit-datetime-edit,
+  .input[type='time']::-webkit-datetime-edit,
+  .input[type='month']::-webkit-datetime-edit {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .input[type='date']::-webkit-datetime-edit-fields-wrapper,
+  .input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper {
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+  }
+
+  .input[type='date']::-webkit-calendar-picker-indicator,
+  .input[type='datetime-local']::-webkit-calendar-picker-indicator,
+  .input[type='month']::-webkit-calendar-picker-indicator {
     opacity: 0.55;
     cursor: pointer;
+    margin-left: 0.25rem;
+    flex-shrink: 0;
   }
+
+  /* Wrapper: selalu boleh mengecil di dalam grid/flex */
+  .date-field {
+    @apply min-w-0 w-full;
+  }
+
+  /* Pasangan Dari–Sampai: 1 kolom di mobile, 2 kolom mulai sm */
+  .date-range {
+    @apply grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0 w-full;
+  }
+
   .money-input {
     @apply relative;
   }

@@ -145,8 +145,8 @@ async function remove(t) {
     </div>
 
     <!-- Filter -->
-    <div class="panel p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-      <div>
+    <div class="panel p-3 space-y-2 overflow-hidden">
+      <div class="min-w-0">
         <label class="label">Jenis</label>
         <select v-model="filters.type" class="input w-full min-w-0">
           <option value="">Semua</option>
@@ -154,13 +154,15 @@ async function remove(t) {
           <option value="withdrawal">Penarikan</option>
         </select>
       </div>
-      <div class="min-w-0">
-        <label class="label">Dari</label>
-        <input v-model="filters.dateFrom" type="date" class="input w-full min-w-0" />
-      </div>
-      <div class="min-w-0">
-        <label class="label">Sampai</label>
-        <input v-model="filters.dateTo" type="date" class="input w-full min-w-0" />
+      <div class="date-range">
+        <div class="date-field">
+          <label class="label">Dari</label>
+          <input v-model="filters.dateFrom" type="date" class="input" />
+        </div>
+        <div class="date-field">
+          <label class="label">Sampai</label>
+          <input v-model="filters.dateTo" type="date" class="input" />
+        </div>
       </div>
     </div>
 
@@ -249,12 +251,12 @@ async function remove(t) {
 
     <AppModal v-if="showForm" :title="editing ? 'Edit Mutasi Modal' : 'Catat Mutasi Modal'" @close="showForm = false">
       <form class="space-y-3" @submit.prevent="save">
-        <div class="grid grid-cols-2 gap-3">
-          <div class="min-w-0">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="date-field">
             <label class="label">Tanggal</label>
-            <input v-model="form.date" type="date" class="input w-full min-w-0" required />
+            <input v-model="form.date" type="date" class="input" required />
           </div>
-          <div>
+          <div class="min-w-0">
             <label class="label">Jenis</label>
             <select v-model="form.type" class="input">
               <option value="deposit">Setoran</option>

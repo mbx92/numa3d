@@ -111,28 +111,32 @@ async function remove(e) {
     </p>
 
     <!-- Filter -->
-    <div class="panel p-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <div>
-        <label class="label">Kategori</label>
-        <select v-model="filters.category" class="input w-full min-w-0">
-          <option value="">Semua</option>
-          <option v-for="c in categories" :key="c.key" :value="c.key">{{ c.name }}</option>
-        </select>
+    <div class="panel p-3 space-y-2 overflow-hidden">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+        <div class="min-w-0">
+          <label class="label">Kategori</label>
+          <select v-model="filters.category" class="input w-full min-w-0">
+            <option value="">Semua</option>
+            <option v-for="c in categories" :key="c.key" :value="c.key">{{ c.name }}</option>
+          </select>
+        </div>
+        <div class="min-w-0">
+          <label class="label">Produk</label>
+          <select v-model="filters.productId" class="input w-full min-w-0">
+            <option value="">Semua</option>
+            <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label class="label">Produk</label>
-        <select v-model="filters.productId" class="input w-full min-w-0">
-          <option value="">Semua</option>
-          <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
-      </div>
-      <div class="min-w-0">
-        <label class="label">Dari</label>
-        <input v-model="filters.dateFrom" type="date" class="input w-full min-w-0" />
-      </div>
-      <div class="min-w-0">
-        <label class="label">Sampai</label>
-        <input v-model="filters.dateTo" type="date" class="input w-full min-w-0" />
+      <div class="date-range">
+        <div class="date-field">
+          <label class="label">Dari</label>
+          <input v-model="filters.dateFrom" type="date" class="input" />
+        </div>
+        <div class="date-field">
+          <label class="label">Sampai</label>
+          <input v-model="filters.dateTo" type="date" class="input" />
+        </div>
       </div>
     </div>
 
@@ -221,15 +225,15 @@ async function remove(e) {
 
     <AppModal v-if="showForm" :title="editing ? 'Edit Pengeluaran' : 'Catat Pengeluaran'" @close="showForm = false">
       <form class="space-y-3" @submit.prevent="save">
-        <div class="grid grid-cols-2 gap-3">
-          <div class="min-w-0">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="date-field">
             <label class="label">Tanggal</label>
-            <input v-model="form.date" type="date" class="input w-full min-w-0" required />
+            <input v-model="form.date" type="date" class="input" required />
           </div>
-          <div>
+          <div class="min-w-0">
             <label class="label">Kategori</label>
-            <div class="flex gap-2">
-              <select v-model="form.category" class="input" required>
+            <div class="flex gap-2 min-w-0">
+              <select v-model="form.category" class="input min-w-0" required>
                 <option v-for="c in categories" :key="c.key" :value="c.key">{{ c.name }}</option>
               </select>
               <button type="button" class="btn-secondary shrink-0" title="Kelola kategori" @click="openCategories">

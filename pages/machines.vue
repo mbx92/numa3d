@@ -452,10 +452,10 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div class="min-w-0">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="date-field">
             <label class="label">Tanggal Beli</label>
-            <input v-model="form.purchaseDate" type="date" class="input w-full min-w-0" />
+            <input v-model="form.purchaseDate" type="date" class="input" />
           </div>
           <div class="min-w-0">
             <label class="label">Masa Depresiasi (bulan)</label>

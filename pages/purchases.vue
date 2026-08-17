@@ -229,14 +229,14 @@ async function remove(p) {
     <AppModal v-if="showForm" title="Catat Pembelian Supplier" size="lg" @close="showForm = false">
       <form class="space-y-3" @submit.prevent="save">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div class="min-w-0">
+          <div class="date-field">
             <label class="label">Tanggal</label>
-            <input v-model="form.date" type="date" class="input w-full min-w-0" required />
+            <input v-model="form.date" type="date" class="input" required />
           </div>
-          <div>
+          <div class="min-w-0">
             <label class="label">Supplier</label>
-            <div class="flex gap-2">
-              <select v-model="form.supplier" class="input" required>
+            <div class="flex gap-2 min-w-0">
+              <select v-model="form.supplier" class="input min-w-0" required>
                 <option value="" disabled>Pilih supplier…</option>
                 <option v-for="s in suppliers" :key="s.id" :value="s.name">{{ s.name }}</option>
               </select>
@@ -245,10 +245,10 @@ async function remove(p) {
               </button>
             </div>
           </div>
-          <div class="sm:col-span-2">
+          <div class="sm:col-span-2 min-w-0">
             <label class="label">Kategori pengeluaran</label>
-            <div class="flex gap-2">
-              <select v-model="form.category" class="input" required>
+            <div class="flex gap-2 min-w-0">
+              <select v-model="form.category" class="input min-w-0" required>
                 <option v-for="c in categories" :key="c.key" :value="c.key">{{ c.name }}</option>
               </select>
               <button type="button" class="btn-secondary shrink-0" title="Kelola kategori" @click="openCategories">
