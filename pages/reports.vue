@@ -1,6 +1,6 @@
 <script setup>
 import { CalendarDaysIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
-import { categoryNameOf } from '~/utils/expenseCategory.js'
+import { categoryBadgeClass, categoryNameOf } from '~/utils/expenseCategory.js'
 
 const filters = ref({ dateFrom: monthStartStr(), dateTo: todayStr() })
 const query = computed(() => {
@@ -10,10 +10,13 @@ const query = computed(() => {
   return q
 })
 
-const { data: summary } = await useFetch('/api/reports/summary', { query })
-const { data: byProduct } = await useFetch('/api/reports/products', { query })
-const { data: byChannel } = await useFetch('/api/reports/channels', { query })
-const { data: byExpense } = await useFetch('/api/reports/expenses', { query })
+const { data: summary } = await useFetch('/api/reports/summary', { query, watch: [query] })
+const { data: byProduct } = await useFetch('/api/reports/products', { query, watch: [query] })
+const { data: byChannel } = await useFetch('/api/reports/channels', { query, watch: [query] })
+const { data: byExpense, error: expenseError } = await useFetch('/api/reports/expenses', {
+  query,
+  watch: [query]
+})
 const { data: monthly } = await useFetch('/api/reports/monthly', { query: { months: 12 } })
 const { data: expenseCategories } = await useFetch('/api/expense-categories')
 
@@ -54,6 +57,10 @@ const channelLabel = {
 function expenseCatName(key) {
   return categoryNameOf(expenseCategories.value, key)
 }
+
+const expenseEntries = computed(() => byExpense.value?.entries || [])
+const expensePager = usePagination(expenseEntries, 10)
+watch(query, expensePager.reset, { deep: true })
 
 const productPager = usePagination(computed(() => byProduct.value || []), 10)
 watch(query, productPager.reset, { deep: true })
@@ -263,25 +270,74 @@ function monthLabel(key) {
     </div>
 
     <!-- Pengeluaran per kategori -->
-    <div v-else-if="tab === 'expenses'" class="panel">
-      <div class="panel-header">
-        <span class="panel-title">Pengeluaran per Kategori</span>
-        <span class="font-mono font-semibold text-red-600">{{ formatIDR(byExpense?.total) }}</span>
-      </div>
-      <div class="p-4 space-y-3">
-        <div v-for="c in byExpense?.categories" :key="c.category" class="space-y-1">
-          <div class="flex items-center justify-between text-sm gap-2">
-            <span class="font-medium">{{ expenseCatName(c.category) }}</span>
-            <span class="font-mono">{{ formatIDR(c.amount) }} <span class="text-ink-400">({{ c.percent }}%)</span></span>
-          </div>
-          <div class="h-2 rounded-full bg-ink-100 overflow-hidden">
-            <div class="h-full bg-accent-500 rounded-full" :style="{ width: c.percent + '%' }"></div>
-          </div>
-          <div class="text-xs text-ink-400">{{ c.count }} entri</div>
+    <div v-else-if="tab === 'expenses'" class="space-y-3">
+      <div class="panel min-w-0 overflow-hidden">
+        <div class="panel-header">
+          <span class="panel-title">Pengeluaran per Kategori</span>
+          <span class="font-mono font-semibold text-red-600">{{ formatIDR(byExpense?.total) }}</span>
         </div>
-        <p v-if="!byExpense?.categories?.length" class="text-center text-ink-500 py-6 text-sm">
-          Tidak ada pengeluaran pada rentang ini.
-        </p>
+        <div class="p-4 space-y-3">
+          <p v-if="expenseError" class="text-center text-red-600 py-4 text-sm">
+            Gagal memuat laporan pengeluaran. Coba ubah rentang tanggal atau muat ulang.
+          </p>
+          <template v-else-if="byExpense?.categories?.length">
+            <div v-for="c in byExpense.categories" :key="c.category" class="space-y-1">
+              <div class="flex items-center justify-between text-sm gap-2 min-w-0">
+                <span class="font-medium min-w-0 truncate">{{ c.name || expenseCatName(c.category) }}</span>
+                <span class="font-mono shrink-0">{{ formatIDR(c.amount) }} <span class="text-ink-400">({{ c.percent }}%)</span></span>
+              </div>
+              <div class="h-2 rounded-full bg-ink-100 overflow-hidden">
+                <div class="h-full bg-red-400/80 rounded-full" :style="{ width: Math.max(c.percent, 0) + '%' }"></div>
+              </div>
+              <div class="text-xs text-ink-400">{{ c.count }} entri</div>
+            </div>
+          </template>
+          <p v-else class="text-center text-ink-500 py-6 text-sm">
+            Tidak ada pengeluaran pada rentang ini.
+          </p>
+        </div>
+      </div>
+
+      <div class="panel min-w-0 overflow-hidden">
+        <div class="panel-header">
+          <span class="panel-title">Detail pengeluaran</span>
+          <span class="text-xs text-ink-400">{{ byExpense?.entryCount || 0 }} entri</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table-std">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Kategori</th>
+                <th>Deskripsi</th>
+                <th class="text-right">Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="e in expensePager.paged.value" :key="e.id">
+                <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(e.date) }}</td>
+                <td>
+                  <span class="badge" :class="categoryBadgeClass(e.category)">{{ e.categoryName || expenseCatName(e.category) }}</span>
+                </td>
+                <td class="min-w-0 max-w-[14rem]"><div class="truncate" :title="e.description">{{ e.description }}</div></td>
+                <td class="num text-red-600">{{ formatIDR(e.amount) }}</td>
+              </tr>
+              <tr v-if="!expensePager.paged.value.length">
+                <td colspan="4" class="text-center text-ink-500 py-6">Tidak ada pengeluaran pada rentang ini.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="p-3 border-t border-ink-100">
+          <AppPagination
+            v-model:page="expensePager.page.value"
+            v-model:pageSize="expensePager.pageSize.value"
+            :total-pages="expensePager.totalPages.value"
+            :total="expensePager.total.value"
+            :range-start="expensePager.rangeStart.value"
+            :range-end="expensePager.rangeEnd.value"
+          />
+        </div>
       </div>
     </div>
 

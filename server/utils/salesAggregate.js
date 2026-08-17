@@ -1,6 +1,7 @@
 import { and, gte, lte, eq } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { getHppForProducts } from './productHpp.js'
+import { toDateStr } from './dates.js'
 
 // Ambil baris penjualan pada rentang tanggal, sudah dilengkapi HPP saat ini
 // dan turunannya (harga bersih setelah fee, revenue, margin).
@@ -8,9 +9,11 @@ import { getHppForProducts } from './productHpp.js'
 // transaksi terjadi — mengubah harga material akan mengubah laporan historis.
 export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
   const db = useDb()
+  const from = toDateStr(dateFrom)
+  const to = toDateStr(dateTo)
   const conds = []
-  if (dateFrom) conds.push(gte(schema.sales.date, dateFrom))
-  if (dateTo) conds.push(lte(schema.sales.date, dateTo))
+  if (from) conds.push(gte(schema.sales.date, from))
+  if (to) conds.push(lte(schema.sales.date, to))
 
   const rows = await db
     .select({
@@ -38,6 +41,7 @@ export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
     const totalHpp = hppPerUnit * r.quantity
     return {
       ...r,
+      date: toDateStr(r.date) || r.date,
       netPricePerUnit,
       hppPerUnit,
       grossRevenue,

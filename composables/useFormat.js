@@ -12,7 +12,13 @@ export function formatNumber(value, digits = 0) {
 
 export function formatDate(value) {
   if (!value) return '-'
-  const d = new Date(value)
+  // Hindari geser hari: 'YYYY-MM-DD' / ISO date-only diparse sebagai tanggal kalender lokal.
+  const raw = String(value)
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const d = m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    : new Date(value)
+  if (Number.isNaN(d.getTime())) return '-'
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
