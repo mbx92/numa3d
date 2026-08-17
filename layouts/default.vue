@@ -70,9 +70,9 @@ async function logout() {
 
 <template>
   <div class="min-h-screen md:flex">
-    <!-- Topbar (mobile) -->
+    <!-- Topbar (mobile) — pt-safe agar hamburger tidak tertutup status bar di PWA standalone -->
     <header
-      class="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 h-14 bg-ink-900 text-ink-100 border-b border-ink-700"
+      class="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 pt-safe min-h-topbar-safe bg-ink-900 text-ink-100 border-b border-ink-700"
     >
       <button class="p-2 -ml-2 rounded hover:bg-ink-800" aria-label="Buka menu" @click="drawerOpen = true">
         <Bars3Icon class="w-6 h-6" />
@@ -86,7 +86,7 @@ async function logout() {
     <Teleport to="body">
       <div v-if="drawerOpen" class="md:hidden fixed inset-0 z-50 flex">
         <div class="absolute inset-0 bg-ink-950/60" @click="drawerOpen = false"></div>
-        <aside class="relative bg-ink-900 text-ink-100 w-72 max-w-[85vw] h-full flex flex-col">
+        <aside class="relative bg-ink-900 text-ink-100 w-72 max-w-[85vw] h-full flex flex-col pt-safe pb-safe">
           <div class="px-4 py-4 flex items-center gap-2 border-b border-ink-700">
             <img src="/logo-mark.svg" alt="" class="w-6 h-6" />
             <span class="font-bold tracking-wide">NUMA3D</span>
@@ -136,8 +136,8 @@ async function logout() {
       </div>
     </Teleport>
 
-    <!-- Sidebar (desktop) -->
-    <aside class="hidden md:flex bg-ink-900 text-ink-100 w-56 h-screen sticky top-0 shrink-0 flex-col">
+    <!-- Sidebar (desktop / tablet standalone) -->
+    <aside class="hidden md:flex bg-ink-900 text-ink-100 w-56 h-screen sticky top-0 shrink-0 flex-col pt-safe pb-safe">
       <div class="px-4 py-4 flex items-center gap-2 border-b border-ink-700">
         <img src="/logo-mark.svg" alt="" class="w-6 h-6" />
         <span class="font-bold tracking-wide">NUMA3D</span>

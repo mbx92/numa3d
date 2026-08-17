@@ -41,7 +41,7 @@ onMounted(() => {
   <div class="contents">
     <div
       v-if="needRefresh"
-      class="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-4 sm:max-w-sm z-[91] panel p-3 shadow-lg"
+      class="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-4 sm:max-w-sm z-[91] panel p-3 shadow-lg mb-[env(safe-area-inset-bottom,0px)]"
     >
       <div class="text-sm font-semibold">Versi baru Numa3D</div>
       <p class="text-xs text-ink-500 mt-0.5">Muat ulang untuk memakai pembaruan.</p>
@@ -53,7 +53,7 @@ onMounted(() => {
 
     <div
       v-else-if="visible"
-      class="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-4 sm:max-w-sm z-[90] panel p-3 shadow-lg"
+      class="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-4 sm:max-w-sm z-[90] panel p-3 shadow-lg mb-[env(safe-area-inset-bottom,0px)]"
     >
       <div class="flex items-start gap-3">
         <img src="/pwa-192x192.png" alt="" class="w-10 h-10 rounded-panel shrink-0" />
