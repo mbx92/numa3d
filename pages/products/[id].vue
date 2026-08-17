@@ -337,10 +337,7 @@ const breakdownLabels = {
               </div>
               <div>
                 <label class="label">Upah/jam</label>
-                <div class="money-input">
-                  <span class="money-input__prefix">Rp</span>
-                  <input v-model.number="r.laborRatePerHour" type="number" min="0" step="500" class="input-num !py-1 w-full" :disabled="!isAdmin" />
-                </div>
+                <IdrInput v-model="r.laborRatePerHour" :disabled="!isAdmin" input-class="!py-1 w-full" />
               </div>
               <div>
                 <label class="label">Print (menit)</label>

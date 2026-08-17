@@ -43,11 +43,12 @@ export default defineEventHandler(async (event) => {
     0
   )
 
-  // Total pengeluaran & pembelian mesin (semua periode).
+  // Pengeluaran (termasuk beli mesin otomatis). Mesin tanpa tautan pengeluaran
+  // masih dipotong terpisah supaya data lama tidak hilang dari kas.
   const expenseRows = await db.select({ amount: schema.expenses.amount }).from(schema.expenses)
   const totalExpenses = expenseRows.reduce((a, r) => a + r.amount, 0)
-  const machineRows = await db.select({ price: schema.machines.purchasePrice }).from(schema.machines)
-  const machinePurchases = machineRows.reduce((a, r) => a + r.price, 0)
+  const machineRows = await db.select({ price: schema.machines.purchasePrice, expenseId: schema.machines.expenseId }).from(schema.machines)
+  const unlinkedMachinePurchases = machineRows.filter((r) => !r.expenseId).reduce((a, r) => a + r.price, 0)
 
   const netCapital = totalDeposit - totalWithdrawal
 
@@ -59,8 +60,8 @@ export default defineEventHandler(async (event) => {
       netCapital,
       salesNetRevenue,
       totalExpenses,
-      machinePurchases,
-      estimatedCash: netCapital + salesNetRevenue - totalExpenses - machinePurchases
+      machinePurchases: unlinkedMachinePurchases,
+      estimatedCash: netCapital + salesNetRevenue - totalExpenses - unlinkedMachinePurchases
     }
   }
 })

@@ -358,10 +358,7 @@ async function remove(s) {
                 Pakai harga saran
               </button>
             </div>
-            <div class="money-input">
-              <span class="money-input__prefix">Rp</span>
-              <input v-model.number="form.salePricePerUnit" type="number" min="0" step="500" class="input-num" required />
-            </div>
+            <IdrInput v-model="form.salePricePerUnit" required />
           </div>
 
           <div>

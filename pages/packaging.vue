@@ -194,10 +194,7 @@ async function remove(p) {
           </div>
           <div>
             <label class="label">Harga per unit</label>
-            <div class="money-input">
-              <span class="money-input__prefix">Rp</span>
-              <input v-model.number="form.pricePerUnit" type="number" min="0" class="input-num" required />
-            </div>
+            <IdrInput v-model="form.pricePerUnit" required />
           </div>
           <div>
             <label class="label">Stok</label>

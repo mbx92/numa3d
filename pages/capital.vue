@@ -123,11 +123,11 @@ async function remove(t) {
             <td class="num text-teal-600">{{ formatIDR(summary.salesNetRevenue) }}</td>
           </tr>
           <tr>
-            <td class="pl-6 text-ink-500">− Total pengeluaran</td>
+            <td class="pl-6 text-ink-500">− Total pengeluaran (termasuk beli mesin)</td>
             <td class="num text-red-600">{{ formatIDR(summary.totalExpenses) }}</td>
           </tr>
-          <tr>
-            <td class="pl-6 text-ink-500">− Pembelian mesin (aset)</td>
+          <tr v-if="summary.machinePurchases">
+            <td class="pl-6 text-ink-500">− Pembelian mesin belum tercatat pengeluaran</td>
             <td class="num text-red-600">{{ formatIDR(summary.machinePurchases) }}</td>
           </tr>
           <tr class="bg-ink-50 font-semibold">
@@ -139,7 +139,8 @@ async function remove(t) {
         </tbody>
       </table>
       <div class="p-3 text-xs text-ink-500 border-t border-ink-200">
-        Perkiraan kasar posisi kas: modal bersih + uang masuk dari penjualan − uang keluar (pengeluaran + beli mesin).
+        Perkiraan kasar posisi kas: modal bersih + penjualan − pengeluaran.
+        Tambah mesin otomatis tercatat di Pengeluaran — jangan catat beli mesin dua kali.
         Bukan laporan akuntansi penuh.
       </div>
     </div>
@@ -266,10 +267,7 @@ async function remove(t) {
         </div>
         <div>
           <label class="label">Jumlah</label>
-          <div class="money-input">
-            <span class="money-input__prefix">Rp</span>
-            <input v-model.number="form.amount" type="number" min="1" class="input-num" required placeholder="0" />
-          </div>
+          <IdrInput v-model="form.amount" :min="1" required />
         </div>
         <div>
           <label class="label">Keterangan (opsional)</label>

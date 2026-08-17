@@ -446,10 +446,8 @@ onUnmounted(() => {
           </div>
           <div>
             <label class="label">Harga Beli</label>
-            <div class="money-input">
-              <span class="money-input__prefix">Rp</span>
-              <input v-model.number="form.purchasePrice" type="number" min="0" class="input-num" required />
-            </div>
+            <IdrInput v-model="form.purchasePrice" required />
+            <p class="text-xs text-ink-500 mt-1">Otomatis tercatat sebagai pengeluaran (kategori Mesin). Jangan catat lagi di halaman Pengeluaran.</p>
           </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

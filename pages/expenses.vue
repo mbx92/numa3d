@@ -157,7 +157,8 @@ async function remove(e) {
           <span class="font-mono text-xs text-ink-500">{{ formatDate(e.date) }}</span>
         </div>
         <div v-if="e.productName" class="text-xs text-ink-400">Produk: {{ e.productName }}</div>
-        <div class="flex flex-wrap gap-1 pt-1">
+        <p v-if="e.fromMachine" class="text-xs text-ink-400">Dari halaman Mesin — ubah di sana.</p>
+        <div v-if="!e.fromMachine" class="flex flex-wrap gap-1 pt-1">
           <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
           <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
@@ -196,8 +197,13 @@ async function remove(e) {
               <td class="text-ink-500">{{ e.productName || '-' }}</td>
               <td class="num">{{ formatIDR(e.amount) }}</td>
               <td class="whitespace-nowrap text-right">
-                <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-                <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                <template v-if="e.fromMachine">
+                  <span class="text-xs text-ink-400">Dari Mesin</span>
+                </template>
+                <template v-else>
+                  <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                  <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                </template>
               </td>
             </tr>
             <tr v-if="!total">
@@ -249,10 +255,7 @@ async function remove(e) {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Jumlah</label>
-            <div class="money-input">
-              <span class="money-input__prefix">Rp</span>
-              <input v-model.number="form.amount" type="number" min="0" class="input-num" required />
-            </div>
+            <IdrInput v-model="form.amount" required />
           </div>
           <div>
             <label class="label">Produk terkait (opsional)</label>

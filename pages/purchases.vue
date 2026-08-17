@@ -312,10 +312,7 @@ async function remove(p) {
               </div>
               <div>
                 <label class="label">Harga / unit</label>
-                <div class="money-input">
-                  <span class="money-input__prefix">Rp</span>
-                  <input v-model.number="line.unitPrice" type="number" min="0" class="input-num !py-1 w-full" required />
-                </div>
+                <IdrInput v-model="line.unitPrice" required input-class="!py-1 w-full" />
               </div>
               <div>
                 <label class="label">Subtotal</label>

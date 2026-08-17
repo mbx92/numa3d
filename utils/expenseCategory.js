@@ -4,6 +4,7 @@ export function categoryBadgeClass(key) {
     packaging: 'bg-sky-500/10 text-sky-700',
     tool: 'bg-ink-200 text-ink-600',
     electricity: 'bg-amber-100 text-amber-700',
+    machine: 'bg-slate-200 text-slate-700',
     rnd: 'bg-purple-100 text-purple-700',
     other: 'bg-ink-100 text-ink-500'
   }

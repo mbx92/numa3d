@@ -41,10 +41,7 @@ function formatBytes(bytes) {
       <form class="p-4 space-y-4" @submit.prevent="save">
         <div>
           <label class="label">Tarif listrik (Rp / kWh)</label>
-          <div class="money-input">
-            <span class="money-input__prefix">Rp</span>
-            <input v-model.number="form.electricityRatePerKwh" type="number" min="0" class="input-num" required :disabled="!isAdmin" />
-          </div>
+          <IdrInput v-model="form.electricityRatePerKwh" required :disabled="!isAdmin" />
           <p class="text-xs text-ink-500 mt-1">Tarif PLN rumah tangga 1.300–2.200 VA ± Rp 1.445/kWh.</p>
         </div>
         <div>

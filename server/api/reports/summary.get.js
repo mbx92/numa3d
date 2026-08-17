@@ -1,6 +1,7 @@
 import { and, gte, lte } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { loadSalesWithHpp, marginPercent } from '../../utils/salesAggregate.js'
+import { isOperatingExpenseCategory } from '../../utils/expensePl.js'
 
 // Ringkasan laba rugi.
 //
@@ -30,8 +31,9 @@ export default defineEventHandler(async (event) => {
   const byCategory = {}
   for (const e of expenses) byCategory[e.category] = (byCategory[e.category] || 0) + e.amount
   const materialPurchases = byCategory.material || 0
+  const machinePurchases = byCategory.machine || 0
   const operatingExpenses = expenses
-    .filter((e) => e.category !== 'material')
+    .filter((e) => isOperatingExpenseCategory(e.category))
     .reduce((a, e) => a + e.amount, 0)
   const netProfit = grossProfit - operatingExpenses
 
@@ -48,7 +50,8 @@ export default defineEventHandler(async (event) => {
     netProfit,
     netProfitPercent: marginPercent(netProfit, netRevenue),
     materialPurchases,
-    totalCashOut: materialPurchases + operatingExpenses,
+    machinePurchases,
+    totalCashOut: expenses.reduce((a, e) => a + e.amount, 0),
     expensesByCategory: byCategory
   }
 })

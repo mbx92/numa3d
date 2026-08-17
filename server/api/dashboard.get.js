@@ -2,6 +2,7 @@ import { and, gte, lte, lt, eq, count } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { loadSalesWithHpp, marginPercent } from '../utils/salesAggregate.js'
 import { localDateStr, monthStartStr } from '../utils/dates.js'
+import { isOperatingExpenseCategory } from '../utils/expensePl.js'
 
 const MATERIAL_LOW_STOCK = 200
 const PACKAGING_LOW_STOCK = 10
@@ -30,7 +31,7 @@ function plFrom(sales, expenses) {
   const cogs = sales.reduce((a, s) => a + s.totalHpp, 0)
   const grossProfit = netRevenue - cogs
   const materialPurchases = expenses.filter((e) => e.category === 'material').reduce((a, e) => a + e.amount, 0)
-  const operatingExpenses = expenses.filter((e) => e.category !== 'material').reduce((a, e) => a + e.amount, 0)
+  const operatingExpenses = expenses.filter((e) => isOperatingExpenseCategory(e.category)).reduce((a, e) => a + e.amount, 0)
   const netProfit = grossProfit - operatingExpenses
   return {
     unitsSold: sales.reduce((a, s) => a + s.quantity, 0),
@@ -43,7 +44,7 @@ function plFrom(sales, expenses) {
     grossProfitPercent: marginPercent(grossProfit, netRevenue),
     operatingExpenses,
     materialPurchases,
-    totalCashOut: materialPurchases + operatingExpenses,
+    totalCashOut: expenses.reduce((a, e) => a + e.amount, 0),
     netProfit,
     netProfitPercent: marginPercent(netProfit, netRevenue)
   }
@@ -177,7 +178,7 @@ export default defineEventHandler(async () => {
         })
         .from(schema.sales),
       db.select({ amount: schema.expenses.amount }).from(schema.expenses),
-      db.select({ price: schema.machines.purchasePrice }).from(schema.machines)
+      db.select({ price: schema.machines.purchasePrice, expenseId: schema.machines.expenseId }).from(schema.machines)
     ])
 
   const productsByStatus = { active: 0, rnd: 0, discontinued: 0 }
@@ -195,7 +196,7 @@ export default defineEventHandler(async () => {
     0
   )
   const expensesAll = allExpenses.reduce((a, r) => a + r.amount, 0)
-  const machinePurchases = machinePrices.reduce((a, r) => a + r.price, 0)
+  const unlinkedMachinePurchases = machinePrices.filter((r) => !r.expenseId).reduce((a, r) => a + r.price, 0)
 
   return {
     month: monthStart.slice(0, 7),
@@ -233,7 +234,7 @@ export default defineEventHandler(async () => {
     },
     capital: {
       netCapital,
-      estimatedCash: netCapital + salesNetAll - expensesAll - machinePurchases
+      estimatedCash: netCapital + salesNetAll - expensesAll - unlinkedMachinePurchases
     }
   }
 })
