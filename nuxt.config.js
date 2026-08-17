@@ -30,7 +30,11 @@ export default defineNuxtConfig({
     head: {
       title: 'Numa3D — Pencatatan Produksi',
       meta: [
-        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
+        {
+          name: 'viewport',
+          content:
+            'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content'
+        },
         { name: 'theme-color', content: '#1f2429' },
         // Standalone tanpa chrome browser (Android + iOS modern)
         { name: 'mobile-web-app-capable', content: 'yes' },

@@ -49,16 +49,13 @@ async function save() {
   try {
     if (editing.value) {
       await $fetch(`/api/materials/${editing.value.id}`, { method: 'PUT', body: form.value })
+      useToast().success('Material diperbarui.')
     } else {
-      const created = await $fetch('/api/materials', { method: 'POST', body: form.value })
-      // Tetap di modal agar gambar bisa langsung diunggah untuk material baru.
-      editing.value = created
-      form.value = { ...created }
-      await refresh()
-      useToast().success('Material tersimpan. Tambahkan gambar bila perlu.')
-      return
+      await $fetch('/api/materials', { method: 'POST', body: form.value })
+      useToast().success('Material tersimpan.')
     }
     showForm.value = false
+    editing.value = null
     await refresh()
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan'
@@ -99,9 +96,16 @@ async function saveAdjust() {
       </button>
     </div>
 
-    <div class="relative max-w-xs">
-      <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-      <input v-model="search" class="input pl-9" placeholder="Cari nama atau supplier…" />
+    <div class="relative w-full md:max-w-xs">
+      <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+      <input
+        v-model="search"
+        class="input pl-9 w-full"
+        type="search"
+        enterkeyhint="search"
+        autocomplete="off"
+        placeholder="Cari nama atau supplier…"
+      />
     </div>
 
     <!-- Tabel (desktop) -->
