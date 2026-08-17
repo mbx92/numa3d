@@ -40,6 +40,7 @@ const fetchingCloud = ref(false)
 const scanResults = ref([])
 const probeMsg = ref('')
 const tuyaReady = ref(null)
+const tuyaEnabled = ref(false)
 
 function emptyTuya() {
   return { tuyaIp: '', tuyaDeviceId: '', tuyaLocalKey: '', tuyaVersion: 'auto' }
@@ -58,6 +59,7 @@ function openAdd() {
   errorMsg.value = ''
   probeMsg.value = ''
   scanResults.value = []
+  tuyaEnabled.value = false
   showForm.value = true
   loadTuyaReady()
 }
@@ -74,16 +76,21 @@ function openEdit(m) {
   errorMsg.value = ''
   probeMsg.value = ''
   scanResults.value = []
+  tuyaEnabled.value = !!m.tuyaConfigured
   showForm.value = true
   loadTuyaReady()
 }
 async function save() {
   errorMsg.value = ''
   try {
+    const body = { ...form.value }
+    if (!tuyaEnabled.value) {
+      Object.assign(body, emptyTuya(), { tuyaClear: true })
+    }
     if (editing.value) {
-      await $fetch(`/api/machines/${editing.value.id}`, { method: 'PUT', body: form.value })
+      await $fetch(`/api/machines/${editing.value.id}`, { method: 'PUT', body })
     } else {
-      const created = await $fetch('/api/machines', { method: 'POST', body: form.value })
+      const created = await $fetch('/api/machines', { method: 'POST', body })
       editing.value = created
       form.value = {
         ...created,
@@ -93,6 +100,7 @@ async function save() {
         tuyaLocalKey: '',
         tuyaVersion: created.tuyaVersion || 'auto'
       }
+      tuyaEnabled.value = !!created.tuyaConfigured
       await refresh()
       useToast().success('Mesin tersimpan. Tambahkan gambar bila perlu.')
       return
@@ -114,9 +122,20 @@ async function remove(m) {
   }
 }
 async function clearTuya() {
-  form.value = { ...form.value, tuyaIp: '', tuyaDeviceId: '', tuyaLocalKey: '', tuyaVersion: 'auto', tuyaClear: true }
+  form.value = { ...form.value, ...emptyTuya(), tuyaClear: true }
+  tuyaEnabled.value = false
   probeMsg.value = 'Plug akan diputus saat disimpan.'
+  scanResults.value = []
 }
+
+watch(tuyaEnabled, (on) => {
+  if (on) {
+    loadTuyaReady()
+    return
+  }
+  probeMsg.value = ''
+  scanResults.value = []
+})
 
 function hourlyElectricity(m) {
   return (m.powerWatt / 1000) * (settings.value?.electricityRatePerKwh ?? 1445)
@@ -407,11 +426,11 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <div>
+          <div class="min-w-0">
             <label class="label">Tanggal Beli</label>
-            <input v-model="form.purchaseDate" type="date" class="input" />
+            <input v-model="form.purchaseDate" type="date" class="input w-full min-w-0" />
           </div>
-          <div>
+          <div class="min-w-0">
             <label class="label">Masa Depresiasi (bulan)</label>
             <input v-model.number="form.depreciationMonths" type="number" min="1" class="input-num" required />
           </div>
@@ -421,7 +440,21 @@ onUnmounted(() => {
           <input v-model="form.notes" class="input" placeholder="opsional" />
         </div>
 
-        <div class="border border-ink-200 rounded-panel p-3 space-y-3">
+        <label class="flex items-start gap-3 cursor-pointer select-none rounded-panel border border-ink-200 p-3">
+          <input
+            v-model="tuyaEnabled"
+            type="checkbox"
+            class="mt-1 h-4 w-4 shrink-0 rounded border-ink-300 text-accent-500 focus:ring-accent-400"
+          />
+          <span class="min-w-0">
+            <span class="block text-sm font-medium text-ink-900">Aktifkan smart plug Tuya</span>
+            <span class="block text-xs text-ink-500 mt-0.5">
+              Hubungkan plug untuk baca daya live. Form detail hanya tampil jika diaktifkan.
+            </span>
+          </span>
+        </label>
+
+        <div v-if="tuyaEnabled" class="border border-ink-200 rounded-panel p-3 space-y-3">
           <div class="flex items-center justify-between gap-2">
             <div>
               <div class="label !mb-0">Smart plug Tuya (TinyTuya)</div>
