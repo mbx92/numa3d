@@ -97,11 +97,21 @@ Postgres dan MinIO tidak ikut di-compose — pakai server yang sudah ada. Templa
 | `DATABASE_URL` | `postgres://user:pass@host:5432/dbname` |
 | `SESSION_SECRET` | `openssl rand -hex 32` |
 | `ADMIN_PASSWORD` | password admin pertama (hanya jika tabel users kosong) |
-| `MINIO_ENDPOINT` | hostname MinIO dari dalam container app |
-| `MINIO_PORT` | biasanya `9000`; HTTPS publik sering `443` |
+| `MINIO_ENDPOINT` | **hostname saja** (tanpa `https://`), mis. `s3.example.com` atau `minio` di Docker |
+| `MINIO_PORT` | internal Docker biasanya `9000`; domain HTTPS publik biasanya `443` |
 | `MINIO_USE_SSL` | `true` jika MinIO HTTPS |
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | kredensial MinIO |
 | `MINIO_BUCKET` | default `numa3d-files` (dibuat otomatis saat upload) |
+
+Contoh MinIO publik HTTPS:
+
+```env
+MINIO_ENDPOINT=s3.example.com
+MINIO_PORT=443
+MINIO_USE_SSL=true
+```
+
+Salah umum: `MINIO_ENDPOINT=https://s3.example.com` (skema tidak boleh) atau `MINIO_PORT=9000` ke domain publik yang hanya expose 443.
 
 4. Domain HTTPS dipasang ke service **app** (port 3000). Compose mem-publish `3000:3000`. Di Coolify, set **Ports Exposes** / domain ke port 3000 pada service **app**. MinIO tidak perlu dipublikasikan — file di-proxy lewat `/api/files`.
 5. Deploy. Entry point menjalankan migrasi lalu `node .output/server/index.mjs`.
