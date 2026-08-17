@@ -164,13 +164,13 @@ async function remove(s) {
           <option v-for="(label, key) in channelLabel" :key="key" :value="key">{{ label }}</option>
         </select>
       </div>
-      <div>
+      <div class="min-w-0">
         <label class="label">Dari</label>
-        <input v-model="filters.dateFrom" type="date" class="input !py-1.5" />
+        <input v-model="filters.dateFrom" type="date" class="input w-full min-w-0" />
       </div>
-      <div>
+      <div class="min-w-0">
         <label class="label">Sampai</label>
-        <input v-model="filters.dateTo" type="date" class="input !py-1.5" />
+        <input v-model="filters.dateTo" type="date" class="input w-full min-w-0" />
       </div>
       <button class="btn-secondary !py-1.5 text-xs" @click="setThisMonth"><CalendarDaysIcon class="w-3.5 h-3.5" />Bulan ini</button>
       <button class="btn-secondary !py-1.5 text-xs" @click="clearFilters"><ArrowPathIcon class="w-3.5 h-3.5" />Reset</button>
@@ -289,9 +289,9 @@ async function remove(s) {
       <form class="grid grid-cols-1 lg:grid-cols-5 gap-4" @submit.prevent="save">
         <div class="lg:col-span-3 space-y-3">
           <div class="grid grid-cols-2 gap-3">
-            <div>
+            <div class="min-w-0">
               <label class="label">Tanggal</label>
-              <input v-model="form.date" type="date" class="input" required />
+              <input v-model="form.date" type="date" class="input w-full min-w-0" required />
             </div>
             <div>
               <label class="label">Channel</label>

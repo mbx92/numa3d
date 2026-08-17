@@ -57,6 +57,21 @@
   .input-num {
     @apply input font-mono text-right;
   }
+  /* Samakan tinggi/tampilan native date dengan field teks (PWA/mobile) */
+  .input[type='date'],
+  .input[type='datetime-local'],
+  .input[type='time'],
+  .input[type='month'] {
+    @apply min-h-[2.625rem] leading-normal min-w-0;
+    color-scheme: light;
+  }
+  .input[type='date']::-webkit-date-and-time-value {
+    text-align: left;
+  }
+  .input[type='date']::-webkit-calendar-picker-indicator {
+    opacity: 0.55;
+    cursor: pointer;
+  }
   .money-input {
     @apply relative;
   }

@@ -39,15 +39,14 @@ async function save() {
   try {
     if (editing.value) {
       await $fetch(`/api/series/${editing.value.id}`, { method: 'PUT', body: form.value })
-      showForm.value = false
-      await refresh()
+      useToast().success('Series diperbarui.')
     } else {
-      const created = await $fetch('/api/series', { method: 'POST', body: form.value })
-      editing.value = created
-      await refresh()
-      useToast().success('Series tersimpan. Tambahkan sampul bila perlu.')
-      return
+      await $fetch('/api/series', { method: 'POST', body: form.value })
+      useToast().success('Series tersimpan.')
     }
+    showForm.value = false
+    editing.value = null
+    await refresh()
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan'
   }
@@ -77,9 +76,16 @@ async function remove(s) {
       </div>
     </div>
 
-    <div class="relative max-w-xs">
-      <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-      <input v-model="search" class="input pl-9" placeholder="Cari series…" />
+    <div class="relative w-full md:max-w-xs">
+      <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+      <input
+        v-model="search"
+        class="input pl-9 w-full"
+        type="search"
+        enterkeyhint="search"
+        autocomplete="off"
+        placeholder="Cari series…"
+      />
     </div>
 
     <div v-if="total" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">

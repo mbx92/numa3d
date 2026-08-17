@@ -127,9 +127,16 @@ async function removeFromSeries(p) {
 
     <AppModal v-if="showAdd" title="Tambah Produk ke Series" @close="showAdd = false">
       <div class="space-y-3">
-        <div class="relative">
-          <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-          <input v-model="search" class="input pl-9" placeholder="Cari produk…" />
+        <div class="relative w-full">
+          <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+          <input
+            v-model="search"
+            class="input pl-9 w-full"
+            type="search"
+            enterkeyhint="search"
+            autocomplete="off"
+            placeholder="Cari produk…"
+          />
         </div>
         <ul v-if="available.length" class="max-h-72 overflow-y-auto divide-y divide-ink-100 border border-ink-200 rounded-panel">
           <li v-for="p in available" :key="p.id">

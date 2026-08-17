@@ -229,9 +229,9 @@ async function remove(p) {
     <AppModal v-if="showForm" title="Catat Pembelian Supplier" size="lg" @close="showForm = false">
       <form class="space-y-3" @submit.prevent="save">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
+          <div class="min-w-0">
             <label class="label">Tanggal</label>
-            <input v-model="form.date" type="date" class="input" required />
+            <input v-model="form.date" type="date" class="input w-full min-w-0" required />
           </div>
           <div>
             <label class="label">Supplier</label>

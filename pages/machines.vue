@@ -82,22 +82,13 @@ async function save() {
   try {
     if (editing.value) {
       await $fetch(`/api/machines/${editing.value.id}`, { method: 'PUT', body: form.value })
+      useToast().success('Mesin diperbarui.')
     } else {
-      const created = await $fetch('/api/machines', { method: 'POST', body: form.value })
-      editing.value = created
-      form.value = {
-        ...created,
-        purchaseDate: created.purchaseDate || '',
-        tuyaIp: created.tuyaIp || '',
-        tuyaDeviceId: created.tuyaDeviceId || '',
-        tuyaLocalKey: '',
-        tuyaVersion: created.tuyaVersion || 'auto'
-      }
-      await refresh()
-      useToast().success('Mesin tersimpan. Tambahkan gambar bila perlu.')
-      return
+      await $fetch('/api/machines', { method: 'POST', body: form.value })
+      useToast().success('Mesin tersimpan.')
     }
     showForm.value = false
+    editing.value = null
     await refresh()
     await refreshAllPower()
   } catch (e) {
@@ -259,9 +250,16 @@ onUnmounted(() => {
       Daya live dari smart plug Tuya (jika dikaitkan) tidak otomatis mengganti angka HPP.
     </p>
 
-    <div class="relative max-w-xs">
-      <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-      <input v-model="search" class="input pl-9" placeholder="Cari nama mesin…" />
+    <div class="relative w-full md:max-w-xs">
+      <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+      <input
+        v-model="search"
+        class="input pl-9 w-full"
+        type="search"
+        enterkeyhint="search"
+        autocomplete="off"
+        placeholder="Cari nama mesin…"
+      />
     </div>
 
     <div class="md:hidden space-y-2">
@@ -407,11 +405,11 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <div>
+          <div class="min-w-0">
             <label class="label">Tanggal Beli</label>
-            <input v-model="form.purchaseDate" type="date" class="input" />
+            <input v-model="form.purchaseDate" type="date" class="input w-full min-w-0" />
           </div>
-          <div>
+          <div class="min-w-0">
             <label class="label">Masa Depresiasi (bulan)</label>
             <input v-model.number="form.depreciationMonths" type="number" min="1" class="input-num" required />
           </div>

@@ -75,12 +75,19 @@ async function remove(p) {
       </button>
     </div>
 
-    <div class="flex flex-wrap gap-2">
-      <div class="relative flex-1 min-w-[12rem] max-w-xs">
-        <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-        <input v-model="search" class="input pl-9" placeholder="Cari nama atau deskripsi…" />
+    <div class="flex flex-col sm:flex-row flex-wrap gap-2">
+      <div class="relative w-full sm:flex-1 sm:min-w-[12rem] md:max-w-xs">
+        <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+        <input
+          v-model="search"
+          class="input pl-9 w-full"
+          type="search"
+          enterkeyhint="search"
+          autocomplete="off"
+          placeholder="Cari nama atau deskripsi…"
+        />
       </div>
-      <select v-model="statusFilter" class="input w-40">
+      <select v-model="statusFilter" class="input w-full sm:w-40">
         <option value="">Semua status</option>
         <option value="rnd">R&amp;D</option>
         <option value="active">Aktif</option>

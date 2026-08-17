@@ -75,11 +75,11 @@ function monthLabel(key) {
     <div class="panel p-3 flex flex-wrap items-end gap-2">
       <div class="flex-1 min-w-[8rem]">
         <label class="label">Dari</label>
-        <input v-model="filters.dateFrom" type="date" class="input !py-1.5" />
+        <input v-model="filters.dateFrom" type="date" class="input w-full min-w-0" />
       </div>
       <div class="flex-1 min-w-[8rem]">
         <label class="label">Sampai</label>
-        <input v-model="filters.dateTo" type="date" class="input !py-1.5" />
+        <input v-model="filters.dateTo" type="date" class="input w-full min-w-0" />
       </div>
       <div class="flex gap-2 w-full sm:w-auto">
         <button class="btn-secondary !py-1.5 text-xs flex-1" @click="setThisMonth"><CalendarDaysIcon class="w-3.5 h-3.5" />Bulan ini</button>
