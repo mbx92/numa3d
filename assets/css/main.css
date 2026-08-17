@@ -51,11 +51,15 @@
     @apply btn bg-white border border-red-300 text-red-600 hover:bg-red-50;
   }
   .input {
-    @apply w-full px-3 py-2 rounded-panel border border-ink-300 bg-white text-sm
+    /* text-base (16px): cegah iOS/PWA zoom otomatis saat fokus field */
+    @apply w-full px-3 py-2 rounded-panel border border-ink-300 bg-white text-base sm:text-sm
       focus:outline-none focus:ring-2 focus:ring-accent-400 focus:border-accent-400;
   }
   .input-num {
     @apply input font-mono text-right;
+  }
+  select.input {
+    @apply text-base sm:text-sm;
   }
   /* Samakan tinggi/tampilan native date dengan field teks (PWA/mobile) */
   .input[type='date'],
