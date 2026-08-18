@@ -1,5 +1,10 @@
-CREATE TYPE "public"."production_status" AS ENUM('queued', 'in_progress', 'done', 'cancelled');--> statement-breakpoint
-ALTER TABLE "products" ADD COLUMN "stock_quantity" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."production_status" AS ENUM('queued', 'in_progress', 'done', 'cancelled');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "stock_quantity" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "productions" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"date" date NOT NULL,

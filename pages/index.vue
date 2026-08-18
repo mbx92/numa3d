@@ -119,39 +119,41 @@ function signedPct(n) {
         <div class="text-[10px] uppercase font-semibold text-ink-400">Katalog</div>
         <div class="font-mono font-semibold">{{ data?.inventory?.productsActive || 0 }} aktif</div>
         <div class="text-xs text-ink-400">
-          {{ data?.inventory?.productsRnd || 0 }} R&amp;D · {{ data?.inventory?.series || 0 }} series · {{ data?.productionOpen || 0 }} produksi berjalan
+          {{ data?.inventory?.productsDraft || 0 }} draft · {{ data?.inventory?.productsRnd || 0 }} R&amp;D · {{ data?.inventory?.series || 0 }} series · {{ data?.productionOpen || 0 }} produksi berjalan
         </div>
       </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      <div class="panel">
+      <div class="panel min-w-0 overflow-hidden">
         <div class="panel-header">
           <span class="panel-title">Top produk (margin)</span>
           <NuxtLink to="/reports" class="text-xs text-accent-600 hover:underline">Semua</NuxtLink>
         </div>
-        <table v-if="data?.topProducts?.length" class="table-std">
-          <thead>
-            <tr>
-              <th>Produk</th>
-              <th class="text-right">Unit</th>
-              <th class="text-right">Bersih</th>
-              <th class="text-right">Margin</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in data.topProducts" :key="p.productId">
-              <td class="font-medium">{{ p.productName }}</td>
-              <td class="num">{{ p.units }}</td>
-              <td class="num">{{ formatIDR(p.netRevenue) }}</td>
-              <td class="num" :class="p.margin >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatIDR(p.margin) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-if="data?.topProducts?.length" class="overflow-x-auto">
+          <table class="table-std">
+            <thead>
+              <tr>
+                <th>Produk</th>
+                <th class="text-right">Unit</th>
+                <th class="text-right">Bersih</th>
+                <th class="text-right">Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in data.topProducts" :key="p.productId">
+                <td class="font-medium min-w-0 max-w-[12rem] truncate">{{ p.productName }}</td>
+                <td class="num">{{ p.units }}</td>
+                <td class="num">{{ formatIDR(p.netRevenue) }}</td>
+                <td class="num" :class="p.margin >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatIDR(p.margin) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p v-else class="p-4 text-sm text-ink-500">Belum ada penjualan bulan ini.</p>
       </div>
 
-      <div class="panel">
+      <div class="panel min-w-0 overflow-hidden">
         <div class="panel-header">
           <span class="panel-title">Penjualan per channel</span>
         </div>
@@ -174,16 +176,16 @@ function signedPct(n) {
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      <div class="panel">
+      <div class="panel min-w-0 overflow-hidden">
         <div class="panel-header">
           <span class="panel-title">Pengeluaran per kategori</span>
           <NuxtLink to="/expenses" class="text-xs text-accent-600 hover:underline">Pengeluaran</NuxtLink>
         </div>
         <div v-if="data?.expensesByCategory?.length" class="p-4 space-y-3">
           <div v-for="c in data.expensesByCategory" :key="c.category" class="space-y-1">
-            <div class="flex items-center justify-between text-sm gap-2">
-              <span class="badge" :class="categoryBadgeClass(c.category)">{{ c.name }}</span>
-              <span class="font-mono text-xs">{{ formatIDR(c.amount) }} · {{ c.count }}x</span>
+            <div class="flex items-center justify-between text-sm gap-2 min-w-0">
+              <span class="badge min-w-0 truncate" :class="categoryBadgeClass(c.category)">{{ c.name }}</span>
+              <span class="font-mono text-xs shrink-0">{{ formatIDR(c.amount) }} · {{ c.count }}x</span>
             </div>
             <div class="h-2 rounded-full bg-ink-100 overflow-hidden">
               <div class="h-full bg-red-400/80 rounded-full" :style="{ width: Math.max(4, c.percent) + '%' }" />
@@ -193,7 +195,7 @@ function signedPct(n) {
         <p v-else class="p-4 text-sm text-ink-500">Belum ada pengeluaran bulan ini.</p>
       </div>
 
-      <div class="panel">
+      <div class="panel min-w-0 overflow-hidden">
         <div class="panel-header">
           <span class="panel-title">Stok rendah</span>
           <NuxtLink to="/production" class="text-xs text-accent-600 hover:underline">Produksi</NuxtLink>
@@ -234,56 +236,66 @@ function signedPct(n) {
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      <div class="panel">
+      <div class="panel min-w-0 overflow-hidden">
         <div class="panel-header">
           <span class="panel-title">Penjualan terbaru</span>
           <NuxtLink to="/sales" class="text-xs text-accent-600 hover:underline">Semua</NuxtLink>
         </div>
-        <table v-if="data?.recentSales?.length" class="table-std">
-          <thead>
-            <tr>
-              <th>Tanggal</th>
-              <th>Produk</th>
-              <th>Channel</th>
-              <th class="text-right">Bersih</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="s in data.recentSales" :key="s.id">
-              <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(s.date) }}</td>
-              <td>{{ s.productName }} <span class="text-ink-400">×{{ s.quantity }}</span></td>
-              <td><span class="badge bg-ink-100 text-ink-600">{{ channelLabel[s.channel] || s.channel }}</span></td>
-              <td class="num">{{ formatIDR(s.netRevenue) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-if="data?.recentSales?.length" class="overflow-x-auto">
+          <table class="table-std">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Produk</th>
+                <th>Channel</th>
+                <th class="text-right">Bersih</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in data.recentSales" :key="s.id">
+                <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(s.date) }}</td>
+                <td class="min-w-0 max-w-[10rem] sm:max-w-[14rem]">
+                  <div class="truncate">{{ s.productName }} <span class="text-ink-400">×{{ s.quantity }}</span></div>
+                </td>
+                <td><span class="badge bg-ink-100 text-ink-600 whitespace-nowrap">{{ channelLabel[s.channel] || s.channel }}</span></td>
+                <td class="num">{{ formatIDR(s.netRevenue) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p v-else class="p-4 text-sm text-ink-500">Belum ada penjualan.</p>
       </div>
 
-      <div class="panel">
+      <div class="panel min-w-0 overflow-hidden">
         <div class="panel-header">
           <span class="panel-title">Pengeluaran terbaru</span>
           <NuxtLink to="/expenses" class="text-xs text-accent-600 hover:underline">Semua</NuxtLink>
         </div>
-        <table v-if="data?.recentExpenses?.length" class="table-std">
-          <thead>
-            <tr>
-              <th>Tanggal</th>
-              <th>Deskripsi</th>
-              <th class="text-right">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="e in data.recentExpenses" :key="e.id">
-              <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(e.date) }}</td>
-              <td>
-                <div class="truncate max-w-[220px] sm:max-w-none">{{ e.description }}</div>
-                <span class="badge" :class="categoryBadgeClass(e.category)">{{ e.categoryName || e.category }}</span>
-              </td>
-              <td class="num text-red-600">{{ formatIDR(e.amount) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-if="data?.recentExpenses?.length" class="overflow-x-auto">
+          <table class="table-std w-full">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Deskripsi</th>
+                <th class="text-right">Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="e in data.recentExpenses" :key="e.id">
+                <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(e.date) }}</td>
+                <td class="w-full max-w-0">
+                  <div class="truncate" :title="e.description">{{ e.description }}</div>
+                  <span
+                    class="badge mt-0.5 max-w-full truncate align-bottom"
+                    :class="categoryBadgeClass(e.category)"
+                    :title="e.categoryName || e.category"
+                  >{{ e.categoryName || e.category }}</span>
+                </td>
+                <td class="num text-red-600">{{ formatIDR(e.amount) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p v-else class="p-4 text-sm text-ink-500">Belum ada pengeluaran.</p>
       </div>
     </div>

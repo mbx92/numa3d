@@ -1,15 +1,17 @@
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
+import { sanitizeText } from '../../../utils/sanitizeText.js'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const name = String(body.name || '').trim()
+  const name = sanitizeText(body.name || '')
   if (!name) throw createError({ statusCode: 400, statusMessage: 'Nama supplier wajib diisi' })
+  const notes = body.notes ? sanitizeText(body.notes) || null : null
   const db = useDb()
   try {
     const rows = await db
       .insert(schema.suppliers)
-      .values({ name, notes: body.notes ? String(body.notes).trim() : null })
+      .values({ name, notes })
       .returning()
     await logAudit(event, { action: 'create', entity: 'supplier', entityId: rows[0].id, summary: `Tambah supplier "${rows[0].name}"` })
     return rows[0]

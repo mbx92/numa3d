@@ -8,17 +8,14 @@ import {
   MagnifyingGlassIcon,
   PhotoIcon
 } from '@heroicons/vue/24/outline'
+import { PRODUCT_STATUSES, productStatusLabel, productStatusBadge } from '~/utils/productStatus.js'
 
 const { data: products, refresh } = await useFetch('/api/products')
 const { data: seriesList } = await useFetch('/api/series')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
-const statusBadge = {
-  rnd: 'bg-ink-200 text-ink-600',
-  active: 'bg-green-100 text-green-700',
-  discontinued: 'bg-ink-100 text-ink-400 line-through'
-}
-const statusLabel = { rnd: 'R&D', active: 'Aktif', discontinued: 'Discontinued' }
+const statusBadge = productStatusBadge
+const statusLabel = productStatusLabel
 
 const search = ref('')
 const statusFilter = ref('')
@@ -41,7 +38,7 @@ const form = ref({})
 const errorMsg = ref('')
 
 function openAdd() {
-  form.value = { name: '', description: '', status: 'rnd', seriesId: '' }
+  form.value = { name: '', description: '', status: 'draft', seriesId: '' }
   errorMsg.value = ''
   showForm.value = true
 }
@@ -89,9 +86,7 @@ async function remove(p) {
       </div>
       <select v-model="statusFilter" class="input w-full sm:w-40">
         <option value="">Semua status</option>
-        <option value="rnd">R&amp;D</option>
-        <option value="active">Aktif</option>
-        <option value="discontinued">Discontinued</option>
+        <option v-for="s in PRODUCT_STATUSES" :key="s" :value="s">{{ statusLabel[s] }}</option>
       </select>
     </div>
 
@@ -216,10 +211,9 @@ async function remove(p) {
         <div>
           <label class="label">Status</label>
           <select v-model="form.status" class="input">
-            <option value="rnd">R&amp;D</option>
-            <option value="active">Aktif</option>
-            <option value="discontinued">Discontinued</option>
+            <option v-for="s in PRODUCT_STATUSES" :key="s" :value="s">{{ statusLabel[s] }}</option>
           </select>
+          <p class="text-xs text-ink-500 mt-1">Draft untuk kumpulkan data dulu, sebelum diputuskan masuk R&amp;D atau tidak.</p>
         </div>
         <div>
           <label class="label">Series katalog</label>

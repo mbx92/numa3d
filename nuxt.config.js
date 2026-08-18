@@ -83,11 +83,14 @@ export default defineNuxtConfig({
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
       navigateFallback: '/',
-      navigateFallbackDenylist: [/^\/api\//]
+      navigateFallbackDenylist: [/^\/api\//],
+      cleanupOutdatedCaches: true,
+      clientsClaim: true,
+      skipWaiting: true
     },
     client: {
       installPrompt: true,
-      periodicSyncForUpdates: 3600
+      periodicSyncForUpdates: 300
     },
     devOptions: {
       enabled: false
