@@ -1,5 +1,6 @@
 <script setup>
 import { PlusIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { sanitizeText } from '~/utils/sanitizeText.js'
 
 const { data: purchases, refresh } = await useFetch('/api/purchases')
 const { data: materials } = await useFetch('/api/materials')
@@ -7,10 +8,20 @@ const { data: packagingItems } = await useFetch('/api/packaging')
 const { data: suppliers, refresh: refreshSuppliers } = await useFetch('/api/suppliers')
 const { data: categories, refresh: refreshCategories } = await useFetch('/api/expense-categories')
 
-const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } = usePagination(
-  computed(() => purchases.value || []),
-  10
+const cleanPurchases = computed(() =>
+  (purchases.value || []).map((p) => ({
+    ...p,
+    supplier: sanitizeText(p.supplier) || p.supplier || '',
+    notes: p.notes ? sanitizeText(p.notes) : p.notes,
+    lines: (p.lines || []).map((l) => ({
+      ...l,
+      itemName: sanitizeText(l.itemName) || l.itemName || '(barang dihapus)',
+      unit: sanitizeText(l.unit) || l.unit || ''
+    }))
+  }))
 )
+
+const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } = usePagination(cleanPurchases, 10)
 watch(purchases, reset)
 
 const showForm = ref(false)
@@ -190,7 +201,7 @@ async function remove(p) {
               </td>
               <td class="num">{{ formatIDR(p.totalAmount) }}</td>
               <td class="text-right">
-                <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" aria-hidden="true" />Hapus</button>
+                <button type="button" class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)">Hapus</button>
               </td>
             </tr>
             <tr v-if="!total">
@@ -221,7 +232,7 @@ async function remove(p) {
         <div class="text-xs text-ink-500">
           <div v-for="l in p.lines" :key="l.id">{{ l.itemName }} - {{ formatNumber(l.quantity, 1) }} {{ l.unit }}</div>
         </div>
-        <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" aria-hidden="true" />Hapus</button>
+        <button type="button" class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)">Hapus</button>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada pembelian.</p>
     </div>
