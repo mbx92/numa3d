@@ -1,5 +1,6 @@
 import { eq, desc } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
+import { sanitizeText } from '../../../utils/sanitizeText.js'
 
 export default defineEventHandler(async () => {
   const db = useDb()
@@ -22,8 +23,8 @@ export default defineEventHandler(async () => {
       line.itemType === 'material' ? matMap.get(line.materialId) : packMap.get(line.packagingId)
     const row = {
       ...line,
-      itemName: item?.name || '(barang dihapus)',
-      unit: item?.unit || ''
+      itemName: sanitizeText(item?.name) || '(barang dihapus)',
+      unit: sanitizeText(item?.unit) || ''
     }
     const arr = linesByPurchase.get(line.purchaseId) || []
     arr.push(row)
@@ -32,6 +33,8 @@ export default defineEventHandler(async () => {
 
   return purchases.map((p) => ({
     ...p,
+    supplier: sanitizeText(p.supplier) || p.supplier,
+    notes: p.notes ? sanitizeText(p.notes) : p.notes,
     lines: linesByPurchase.get(p.id) || []
   }))
 })

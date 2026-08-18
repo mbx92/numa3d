@@ -156,7 +156,7 @@ async function remove(p) {
     <div class="flex items-center justify-between gap-2">
       <h1 class="text-xl font-bold">Pembelian Supplier</h1>
       <button class="btn-primary" @click="openAdd">
-        <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Catat Pembelian</span><span class="sm:hidden">Catat</span>
+        <PlusIcon class="w-4 h-4" aria-hidden="true" /><span class="hidden sm:inline">Catat Pembelian</span><span class="sm:hidden">Catat</span>
       </button>
     </div>
     <p class="text-xs text-ink-500">
@@ -190,7 +190,7 @@ async function remove(p) {
               </td>
               <td class="num">{{ formatIDR(p.totalAmount) }}</td>
               <td class="text-right">
-                <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" aria-hidden="true" />Hapus</button>
               </td>
             </tr>
             <tr v-if="!total">
@@ -221,7 +221,7 @@ async function remove(p) {
         <div class="text-xs text-ink-500">
           <div v-for="l in p.lines" :key="l.id">{{ l.itemName }} - {{ formatNumber(l.quantity, 1) }} {{ l.unit }}</div>
         </div>
-        <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+        <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" aria-hidden="true" />Hapus</button>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada pembelian.</p>
     </div>
