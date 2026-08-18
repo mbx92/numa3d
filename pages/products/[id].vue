@@ -1,5 +1,15 @@
 <script setup>
-import { CheckIcon, ArrowUpTrayIcon, EyeIcon, ArrowDownTrayIcon, TrashIcon, PlusIcon, PhotoIcon } from '@heroicons/vue/24/outline'
+import {
+  CheckIcon,
+  ArrowUpTrayIcon,
+  EyeIcon,
+  ArrowDownTrayIcon,
+  TrashIcon,
+  PlusIcon,
+  PhotoIcon,
+  ListBulletIcon,
+  Squares2X2Icon
+} from '@heroicons/vue/24/outline'
 import { PRODUCT_STATUSES, productStatusLabel, productStatusClass } from '~/utils/productStatus.js'
 
 const route = useRoute()
@@ -88,6 +98,20 @@ const uploadProgress = ref('')
 const uploadPercent = ref(0)
 const uploadError = ref('')
 const previewFile = ref(files.value?.[0] || null)
+
+const FILE_VIEW_KEY = 'numa3d-product-files-view'
+const filesView = ref('list')
+onMounted(() => {
+  const saved = localStorage.getItem(FILE_VIEW_KEY)
+  if (saved === 'list' || saved === 'grid') filesView.value = saved
+})
+watch(filesView, (v) => {
+  if (import.meta.client) localStorage.setItem(FILE_VIEW_KEY, v)
+})
+
+function fileExt(name) {
+  return (String(name || '').split('.').pop() || '').toUpperCase()
+}
 
 function uploadOneFile(file, onProgress) {
   return new Promise((resolve, reject) => {
@@ -280,18 +304,42 @@ const breakdownLabels = {
         <div class="panel overflow-hidden flex flex-col lg:sticky lg:top-3">
           <div class="panel-header !flex-wrap gap-2 sticky top-0 z-10 bg-white">
             <span class="panel-title">File 3D</span>
-            <label v-if="isAdmin" class="btn-secondary !py-1 text-xs cursor-pointer shrink-0">
-              <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ uploading ? `${uploadPercent}%` : 'Upload File' }}
-              <input
-                ref="fileInput"
-                type="file"
-                accept=".stl,.obj,.3mf,.glb,.gltf"
-                multiple
-                class="hidden"
-                :disabled="uploading"
-                @change="uploadFile"
-              />
-            </label>
+            <div class="flex items-center gap-1.5 ml-auto shrink-0">
+              <div class="inline-flex rounded-panel border border-ink-200 overflow-hidden">
+                <button
+                  type="button"
+                  class="p-1.5 transition-colors"
+                  :class="filesView === 'list' ? 'bg-ink-100 text-ink-800' : 'text-ink-400 hover:text-ink-700 hover:bg-ink-50'"
+                  title="List view"
+                  aria-label="List view"
+                  @click="filesView = 'list'"
+                >
+                  <ListBulletIcon class="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  class="p-1.5 transition-colors border-l border-ink-200"
+                  :class="filesView === 'grid' ? 'bg-ink-100 text-ink-800' : 'text-ink-400 hover:text-ink-700 hover:bg-ink-50'"
+                  title="Grid view"
+                  aria-label="Grid view"
+                  @click="filesView = 'grid'"
+                >
+                  <Squares2X2Icon class="w-4 h-4" />
+                </button>
+              </div>
+              <label v-if="isAdmin" class="btn-secondary !py-1 text-xs cursor-pointer shrink-0">
+                <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ uploading ? `${uploadPercent}%` : 'Upload File' }}
+                <input
+                  ref="fileInput"
+                  type="file"
+                  accept=".stl,.obj,.3mf,.glb,.gltf"
+                  multiple
+                  class="hidden"
+                  :disabled="uploading"
+                  @change="uploadFile"
+                />
+              </label>
+            </div>
           </div>
           <div v-if="uploading" class="px-3 sm:px-4 pt-3 space-y-1.5">
             <div class="flex items-center justify-between gap-2 text-xs text-ink-500">
@@ -306,7 +354,9 @@ const breakdownLabels = {
             </div>
           </div>
           <p v-if="uploadError" class="px-3 sm:px-4 pt-3 text-sm text-red-600 whitespace-pre-line">{{ uploadError }}</p>
-          <div v-if="files?.length" class="max-h-[18.75rem] overflow-y-auto overscroll-contain">
+
+          <!-- List view -->
+          <div v-if="files?.length && filesView === 'list'" class="max-h-[18.75rem] overflow-y-auto overscroll-contain">
             <ul class="divide-y divide-ink-100">
               <li
                 v-for="f in files"
@@ -317,7 +367,7 @@ const breakdownLabels = {
               >
                 <div class="font-mono text-sm break-all line-clamp-2">{{ f.filename }}</div>
                 <div class="text-xs text-ink-500">
-                  {{ formatSize(f.sizeBytes) }} · {{ new Date(f.createdAt).toLocaleDateString('id-ID') }}
+                  {{ formatSize(f.sizeBytes) }} - {{ formatDate(f.createdAt) }}
                 </div>
                 <div class="flex items-center gap-3 flex-wrap">
                   <span
@@ -335,6 +385,7 @@ const breakdownLabels = {
                   </a>
                   <button
                     v-if="isAdmin"
+                    type="button"
                     class="inline-flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700"
                     @click.stop="deleteFile(f)"
                   >
@@ -344,6 +395,50 @@ const breakdownLabels = {
               </li>
             </ul>
           </div>
+
+          <!-- Grid view -->
+          <div v-else-if="files?.length && filesView === 'grid'" class="max-h-[18.75rem] overflow-y-auto overscroll-contain p-2">
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                v-for="f in files"
+                :key="f.id"
+                type="button"
+                class="text-left rounded-panel border p-2 space-y-1.5 transition-colors"
+                :class="previewFile?.id === f.id ? 'border-accent-400 bg-accent-50' : 'border-ink-200 hover:border-ink-300 bg-white'"
+                @click="previewFile = f"
+              >
+                <div
+                  class="aspect-square rounded border border-ink-100 bg-ink-50 flex items-center justify-center"
+                  :class="previewFile?.id === f.id ? 'border-accent-200' : ''"
+                >
+                  <span class="text-[10px] font-mono font-semibold uppercase tracking-wide text-ink-500">{{ fileExt(f.filename) }}</span>
+                </div>
+                <div class="font-mono text-[11px] leading-snug break-all line-clamp-2 min-h-[2rem]">{{ f.filename }}</div>
+                <div class="text-[10px] text-ink-400">{{ formatSize(f.sizeBytes) }}</div>
+                <div class="flex items-center gap-2 pt-0.5" @click.stop>
+                  <a
+                    :href="`/api/files/${f.id}?download=1`"
+                    class="text-teal-600 hover:text-teal-700"
+                    title="Unduh"
+                    aria-label="Unduh"
+                  >
+                    <ArrowDownTrayIcon class="w-3.5 h-3.5" />
+                  </a>
+                  <button
+                    v-if="isAdmin"
+                    type="button"
+                    class="text-red-500 hover:text-red-700"
+                    title="Hapus"
+                    aria-label="Hapus"
+                    @click="deleteFile(f)"
+                  >
+                    <TrashIcon class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </button>
+            </div>
+          </div>
+
           <p v-else class="p-4 text-sm text-ink-500">
             Belum ada file. Upload model 3D (.stl, .obj, .3mf, .glb, .gltf) — bisa pilih banyak file sekaligus, maks 100 MB per file, disimpan di MinIO.
           </p>
