@@ -84,25 +84,46 @@ async function saveRecipe() {
 const { data: files, refresh: refreshFiles } = await useFetch(`/api/products/${id}/files`)
 const fileInput = ref(null)
 const uploading = ref(false)
+const uploadProgress = ref('')
 const uploadError = ref('')
 const previewFile = ref(files.value?.[0] || null)
 
-async function uploadFile() {
-  const file = fileInput.value?.files?.[0]
-  if (!file) return
+async function uploadFile(event) {
+  const selected = Array.from(event?.target?.files || fileInput.value?.files || [])
+  if (!selected.length) return
+
   uploading.value = true
   uploadError.value = ''
-  const form = new FormData()
-  form.append('file', file)
+  uploadProgress.value = ''
+  const errors = []
+  let lastUploaded = null
+
   try {
-    const uploaded = await $fetch(`/api/products/${id}/files`, { method: 'POST', body: form })
-    fileInput.value.value = ''
+    for (let i = 0; i < selected.length; i++) {
+      const file = selected[i]
+      uploadProgress.value = `Mengunggah ${i + 1}/${selected.length}: ${file.name}`
+      const form = new FormData()
+      form.append('file', file)
+      try {
+        lastUploaded = await $fetch(`/api/products/${id}/files`, { method: 'POST', body: form })
+      } catch (e) {
+        errors.push(`${file.name}: ${e.data?.statusMessage || e.message || 'gagal'}`)
+      }
+    }
     await refreshFiles()
-    previewFile.value = uploaded
-  } catch (e) {
-    uploadError.value = e.data?.statusMessage || 'Upload gagal'
+    if (lastUploaded) previewFile.value = lastUploaded
+    if (errors.length) {
+      uploadError.value =
+        errors.length === selected.length
+          ? `Semua upload gagal.\n${errors.join('\n')}`
+          : `${errors.length} dari ${selected.length} file gagal.\n${errors.join('\n')}`
+    } else if (selected.length > 1) {
+      useToast().success(`${selected.length} file berhasil diunggah.`)
+    }
   } finally {
     uploading.value = false
+    uploadProgress.value = ''
+    if (fileInput.value) fileInput.value.value = ''
   }
 }
 
@@ -220,18 +241,20 @@ const breakdownLabels = {
           <div class="panel-header !flex-wrap gap-2">
             <span class="panel-title">File 3D</span>
             <label v-if="isAdmin" class="btn-secondary !py-1 text-xs cursor-pointer shrink-0">
-              <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ uploading ? 'Mengunggah…' : 'Upload File' }}
+              <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ uploading ? (uploadProgress || 'Mengunggah...') : 'Upload File' }}
               <input
                 ref="fileInput"
                 type="file"
                 accept=".stl,.obj,.3mf,.glb,.gltf"
+                multiple
                 class="hidden"
                 :disabled="uploading"
                 @change="uploadFile"
               />
             </label>
           </div>
-          <p v-if="uploadError" class="px-3 sm:px-4 pt-3 text-sm text-red-600">{{ uploadError }}</p>
+          <p v-if="uploadProgress" class="px-3 sm:px-4 pt-3 text-xs text-ink-500">{{ uploadProgress }}</p>
+          <p v-if="uploadError" class="px-3 sm:px-4 pt-3 text-sm text-red-600 whitespace-pre-line">{{ uploadError }}</p>
           <ul v-if="files?.length" class="divide-y divide-ink-100">
             <li
               v-for="f in files"
@@ -269,7 +292,7 @@ const breakdownLabels = {
             </li>
           </ul>
           <p v-else class="p-4 text-sm text-ink-500">
-            Belum ada file. Upload model 3D (.stl, .obj, .3mf, .glb, .gltf) — maks 100 MB, disimpan di MinIO.
+            Belum ada file. Upload model 3D (.stl, .obj, .3mf, .glb, .gltf) — bisa pilih banyak file sekaligus, maks 100 MB per file, disimpan di MinIO.
           </p>
         </div>
       </div>
