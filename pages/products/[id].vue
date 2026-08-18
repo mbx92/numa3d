@@ -237,8 +237,8 @@ const breakdownLabels = {
           </form>
         </div>
 
-        <div class="panel">
-          <div class="panel-header !flex-wrap gap-2">
+        <div class="panel overflow-hidden flex flex-col lg:sticky lg:top-3">
+          <div class="panel-header !flex-wrap gap-2 sticky top-0 z-10 bg-white">
             <span class="panel-title">File 3D</span>
             <label v-if="isAdmin" class="btn-secondary !py-1 text-xs cursor-pointer shrink-0">
               <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ uploading ? (uploadProgress || 'Mengunggah...') : 'Upload File' }}
@@ -255,42 +255,44 @@ const breakdownLabels = {
           </div>
           <p v-if="uploadProgress" class="px-3 sm:px-4 pt-3 text-xs text-ink-500">{{ uploadProgress }}</p>
           <p v-if="uploadError" class="px-3 sm:px-4 pt-3 text-sm text-red-600 whitespace-pre-line">{{ uploadError }}</p>
-          <ul v-if="files?.length" class="divide-y divide-ink-100">
-            <li
-              v-for="f in files"
-              :key="f.id"
-              class="p-3 space-y-1 cursor-pointer"
-              :class="{ 'bg-accent-50': previewFile?.id === f.id }"
-              @click="previewFile = f"
-            >
-              <div class="font-mono text-sm break-all">{{ f.filename }}</div>
-              <div class="text-xs text-ink-500">
-                {{ formatSize(f.sizeBytes) }} · {{ new Date(f.createdAt).toLocaleDateString('id-ID') }}
-              </div>
-              <div class="flex items-center gap-3 flex-wrap">
-                <span
-                  class="inline-flex items-center gap-1 text-xs font-medium"
-                  :class="previewFile?.id === f.id ? 'text-accent-700' : 'text-accent-600'"
-                >
-                  <EyeIcon class="w-3.5 h-3.5" />{{ previewFile?.id === f.id ? 'Ditampilkan' : 'Preview' }}
-                </span>
-                <a
-                  :href="`/api/files/${f.id}?download=1`"
-                  class="inline-flex items-center gap-1 text-xs font-medium text-teal-600 hover:text-teal-700"
-                  @click.stop
-                >
-                  <ArrowDownTrayIcon class="w-3.5 h-3.5" />Unduh
-                </a>
-                <button
-                  v-if="isAdmin"
-                  class="inline-flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700"
-                  @click.stop="deleteFile(f)"
-                >
-                  <TrashIcon class="w-3.5 h-3.5" />Hapus
-                </button>
-              </div>
-            </li>
-          </ul>
+          <div v-if="files?.length" class="max-h-[18.75rem] overflow-y-auto overscroll-contain">
+            <ul class="divide-y divide-ink-100">
+              <li
+                v-for="f in files"
+                :key="f.id"
+                class="p-3 space-y-1 cursor-pointer"
+                :class="{ 'bg-accent-50': previewFile?.id === f.id }"
+                @click="previewFile = f"
+              >
+                <div class="font-mono text-sm break-all line-clamp-2">{{ f.filename }}</div>
+                <div class="text-xs text-ink-500">
+                  {{ formatSize(f.sizeBytes) }} · {{ new Date(f.createdAt).toLocaleDateString('id-ID') }}
+                </div>
+                <div class="flex items-center gap-3 flex-wrap">
+                  <span
+                    class="inline-flex items-center gap-1 text-xs font-medium"
+                    :class="previewFile?.id === f.id ? 'text-accent-700' : 'text-accent-600'"
+                  >
+                    <EyeIcon class="w-3.5 h-3.5" />{{ previewFile?.id === f.id ? 'Ditampilkan' : 'Preview' }}
+                  </span>
+                  <a
+                    :href="`/api/files/${f.id}?download=1`"
+                    class="inline-flex items-center gap-1 text-xs font-medium text-teal-600 hover:text-teal-700"
+                    @click.stop
+                  >
+                    <ArrowDownTrayIcon class="w-3.5 h-3.5" />Unduh
+                  </a>
+                  <button
+                    v-if="isAdmin"
+                    class="inline-flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700"
+                    @click.stop="deleteFile(f)"
+                  >
+                    <TrashIcon class="w-3.5 h-3.5" />Hapus
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
           <p v-else class="p-4 text-sm text-ink-500">
             Belum ada file. Upload model 3D (.stl, .obj, .3mf, .glb, .gltf) — bisa pilih banyak file sekaligus, maks 100 MB per file, disimpan di MinIO.
           </p>
