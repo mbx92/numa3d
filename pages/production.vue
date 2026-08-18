@@ -91,7 +91,7 @@ watch(
   (n) => {
     if (form.value.status !== 'done') form.value.quantityGood = Math.max(Math.round(Number(n) || 1), 1)
   }
-}
+)
 
 async function save() {
   errorMsg.value = ''
