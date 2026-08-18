@@ -85,8 +85,40 @@ const { data: files, refresh: refreshFiles } = await useFetch(`/api/products/${i
 const fileInput = ref(null)
 const uploading = ref(false)
 const uploadProgress = ref('')
+const uploadPercent = ref(0)
 const uploadError = ref('')
 const previewFile = ref(files.value?.[0] || null)
+
+function uploadOneFile(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const form = new FormData()
+    form.append('file', file)
+    xhr.open('POST', `/api/products/${id}/files`)
+    xhr.withCredentials = true
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total)
+      else onProgress(0)
+    }
+    xhr.onload = () => {
+      let body = null
+      try {
+        body = xhr.responseText ? JSON.parse(xhr.responseText) : null
+      } catch {
+        body = null
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(1)
+        resolve(body)
+        return
+      }
+      reject(new Error(body?.statusMessage || body?.message || `Upload gagal (${xhr.status})`))
+    }
+    xhr.onerror = () => reject(new Error('Koneksi upload gagal'))
+    xhr.onabort = () => reject(new Error('Upload dibatalkan'))
+    xhr.send(form)
+  })
+}
 
 async function uploadFile(event) {
   const selected = Array.from(event?.target?.files || fileInput.value?.files || [])
@@ -95,34 +127,42 @@ async function uploadFile(event) {
   uploading.value = true
   uploadError.value = ''
   uploadProgress.value = ''
+  uploadPercent.value = 0
   const errors = []
   let lastUploaded = null
+  const total = selected.length
 
   try {
-    for (let i = 0; i < selected.length; i++) {
+    for (let i = 0; i < total; i++) {
       const file = selected[i]
-      uploadProgress.value = `Mengunggah ${i + 1}/${selected.length}: ${file.name}`
-      const form = new FormData()
-      form.append('file', file)
+      uploadProgress.value =
+        total === 1 ? `Mengunggah ${file.name}` : `Mengunggah ${i + 1}/${total}: ${file.name}`
       try {
-        lastUploaded = await $fetch(`/api/products/${id}/files`, { method: 'POST', body: form })
+        lastUploaded = await uploadOneFile(file, (ratio) => {
+          uploadPercent.value = Math.min(100, Math.round(((i + ratio) / total) * 100))
+        })
+        uploadPercent.value = Math.min(100, Math.round(((i + 1) / total) * 100))
       } catch (e) {
-        errors.push(`${file.name}: ${e.data?.statusMessage || e.message || 'gagal'}`)
+        errors.push(`${file.name}: ${e.message || 'gagal'}`)
+        uploadPercent.value = Math.min(100, Math.round(((i + 1) / total) * 100))
       }
     }
     await refreshFiles()
     if (lastUploaded) previewFile.value = lastUploaded
     if (errors.length) {
       uploadError.value =
-        errors.length === selected.length
+        errors.length === total
           ? `Semua upload gagal.\n${errors.join('\n')}`
-          : `${errors.length} dari ${selected.length} file gagal.\n${errors.join('\n')}`
-    } else if (selected.length > 1) {
-      useToast().success(`${selected.length} file berhasil diunggah.`)
+          : `${errors.length} dari ${total} file gagal.\n${errors.join('\n')}`
+    } else if (total > 1) {
+      useToast().success(`${total} file berhasil diunggah.`)
+    } else if (total === 1 && lastUploaded) {
+      useToast().success(`File "${lastUploaded.filename}" berhasil diunggah.`)
     }
   } finally {
     uploading.value = false
     uploadProgress.value = ''
+    uploadPercent.value = 0
     if (fileInput.value) fileInput.value.value = ''
   }
 }
@@ -241,7 +281,7 @@ const breakdownLabels = {
           <div class="panel-header !flex-wrap gap-2 sticky top-0 z-10 bg-white">
             <span class="panel-title">File 3D</span>
             <label v-if="isAdmin" class="btn-secondary !py-1 text-xs cursor-pointer shrink-0">
-              <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ uploading ? (uploadProgress || 'Mengunggah...') : 'Upload File' }}
+              <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ uploading ? `${uploadPercent}%` : 'Upload File' }}
               <input
                 ref="fileInput"
                 type="file"
@@ -253,7 +293,18 @@ const breakdownLabels = {
               />
             </label>
           </div>
-          <p v-if="uploadProgress" class="px-3 sm:px-4 pt-3 text-xs text-ink-500">{{ uploadProgress }}</p>
+          <div v-if="uploading" class="px-3 sm:px-4 pt-3 space-y-1.5">
+            <div class="flex items-center justify-between gap-2 text-xs text-ink-500">
+              <span class="truncate min-w-0">{{ uploadProgress || 'Mengunggah...' }}</span>
+              <span class="font-mono shrink-0 tabular-nums">{{ uploadPercent }}%</span>
+            </div>
+            <div class="h-2 rounded-full bg-ink-100 overflow-hidden" role="progressbar" :aria-valuenow="uploadPercent" aria-valuemin="0" aria-valuemax="100">
+              <div
+                class="h-full bg-accent-500 rounded-full transition-[width] duration-150 ease-out"
+                :style="{ width: Math.max(uploadPercent, 2) + '%' }"
+              />
+            </div>
+          </div>
           <p v-if="uploadError" class="px-3 sm:px-4 pt-3 text-sm text-red-600 whitespace-pre-line">{{ uploadError }}</p>
           <div v-if="files?.length" class="max-h-[18.75rem] overflow-y-auto overscroll-contain">
             <ul class="divide-y divide-ink-100">
