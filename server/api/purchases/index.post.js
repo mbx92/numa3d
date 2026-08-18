@@ -3,6 +3,7 @@ import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
 import { productIdsForPurchaseLines, setExpenseProducts } from '../../utils/expenseProducts.js'
 import { assertExpenseCategory } from '../../utils/expenseCategory.js'
+import { sanitizeText } from '../../../utils/sanitizeText.js'
 
 function lineAmount(qty, unitPrice) {
   return Math.round((Number(qty) || 0) * (Number(unitPrice) || 0))
@@ -10,7 +11,9 @@ function lineAmount(qty, unitPrice) {
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  if (!body.date || !body.supplier) {
+  const supplier = sanitizeText(body.supplier || '')
+  const notes = body.notes ? sanitizeText(body.notes) || null : null
+  if (!body.date || !supplier) {
     throw createError({ statusCode: 400, statusMessage: 'Tanggal dan supplier wajib diisi' })
   }
   const rawLines = Array.isArray(body.lines) ? body.lines : []
@@ -33,8 +36,8 @@ export default defineEventHandler(async (event) => {
       .insert(schema.supplierPurchases)
       .values({
         date: body.date,
-        supplier: String(body.supplier).trim(),
-        notes: body.notes || null,
+        supplier,
+        notes,
         totalAmount
       })
       .returning()
