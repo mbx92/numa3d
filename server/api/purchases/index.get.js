@@ -22,7 +22,7 @@ export default defineEventHandler(async () => {
       line.itemType === 'material' ? matMap.get(line.materialId) : packMap.get(line.packagingId)
     const row = {
       ...line,
-      itemName: item?.name || '?',
+      itemName: item?.name || '(barang dihapus)',
       unit: item?.unit || ''
     }
     const arr = linesByPurchase.get(line.purchaseId) || []

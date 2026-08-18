@@ -185,7 +185,7 @@ async function remove(p) {
               </td>
               <td class="text-sm text-ink-600">
                 <div v-for="l in p.lines" :key="l.id">
-                  {{ l.itemName }} · {{ formatNumber(l.quantity, 1) }} {{ l.unit }}
+                  {{ l.itemName }} - {{ formatNumber(l.quantity, 1) }} {{ l.unit }}
                 </div>
               </td>
               <td class="num">{{ formatIDR(p.totalAmount) }}</td>
@@ -219,7 +219,7 @@ async function remove(p) {
           <div class="font-mono font-semibold">{{ formatIDR(p.totalAmount) }}</div>
         </div>
         <div class="text-xs text-ink-500">
-          <div v-for="l in p.lines" :key="l.id">{{ l.itemName }} · {{ formatNumber(l.quantity, 1) }} {{ l.unit }}</div>
+          <div v-for="l in p.lines" :key="l.id">{{ l.itemName }} - {{ formatNumber(l.quantity, 1) }} {{ l.unit }}</div>
         </div>
         <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
       </div>
@@ -237,7 +237,7 @@ async function remove(p) {
             <label class="label">Supplier</label>
             <div class="flex gap-2 min-w-0">
               <select v-model="form.supplier" class="input min-w-0" required>
-                <option value="" disabled>Pilih supplier…</option>
+                <option value="" disabled>Pilih supplier...</option>
                 <option v-for="s in suppliers" :key="s.id" :value="s.name">{{ s.name }}</option>
               </select>
               <button type="button" class="btn-secondary shrink-0" title="Kelola supplier" @click="openSuppliers">
@@ -259,7 +259,7 @@ async function remove(p) {
         </div>
         <div>
           <label class="label">Catatan</label>
-          <input v-model="form.notes" class="input" placeholder="opsional — no. invoice / ekspedisi" />
+          <input v-model="form.notes" class="input" placeholder="opsional - no. invoice / ekspedisi" />
         </div>
 
         <div class="space-y-2">
@@ -288,7 +288,7 @@ async function remove(p) {
                     required
                     @change="onItemChange(line)"
                   >
-                    <option value="" disabled>Pilih material…</option>
+                    <option value="" disabled>Pilih material...</option>
                     <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }} ({{ m.unit }})</option>
                   </select>
                   <select
@@ -298,12 +298,19 @@ async function remove(p) {
                     required
                     @change="onItemChange(line)"
                   >
-                    <option value="" disabled>Pilih packaging…</option>
+                    <option value="" disabled>Pilih packaging...</option>
                     <option v-for="pk in packagingItems" :key="pk.id" :value="pk.id">{{ pk.name }} ({{ pk.unit }})</option>
                   </select>
                 </div>
               </div>
-              <button type="button" class="text-red-500 hover:text-red-700 text-lg leading-none px-1 mt-5" @click="form.lines.splice(i, 1)">&times;</button>
+              <button
+                type="button"
+                class="text-red-500 hover:text-red-700 p-1 mt-5 shrink-0"
+                title="Hapus baris"
+                @click="form.lines.splice(i, 1)"
+              >
+                <XMarkIcon class="w-5 h-5" />
+              </button>
             </div>
             <div class="grid grid-cols-3 gap-2">
               <div>
@@ -330,7 +337,7 @@ async function remove(p) {
         <div class="flex justify-end gap-2">
           <button type="button" class="btn-secondary" @click="showForm = false"><XMarkIcon class="w-4 h-4" />Batal</button>
           <button type="submit" class="btn-primary" :disabled="saving">
-            <CheckIcon class="w-4 h-4" />{{ saving ? 'Menyimpan…' : 'Simpan Pembelian' }}
+            <CheckIcon class="w-4 h-4" />{{ saving ? 'Menyimpan...' : 'Simpan Pembelian' }}
           </button>
         </div>
       </form>
@@ -350,7 +357,7 @@ async function remove(p) {
           <p v-if="supplierError" class="text-sm text-red-600">{{ supplierError }}</p>
           <div class="flex justify-end">
             <button type="submit" class="btn-primary" :disabled="savingSupplier">
-              <CheckIcon class="w-4 h-4" />{{ savingSupplier ? 'Menyimpan…' : 'Tambah' }}
+              <CheckIcon class="w-4 h-4" />{{ savingSupplier ? 'Menyimpan...' : 'Tambah' }}
             </button>
           </div>
         </form>
@@ -383,7 +390,7 @@ async function remove(p) {
           <p v-if="categoryError" class="text-sm text-red-600">{{ categoryError }}</p>
           <div class="flex justify-end">
             <button type="submit" class="btn-primary" :disabled="savingCategory">
-              <CheckIcon class="w-4 h-4" />{{ savingCategory ? 'Menyimpan…' : 'Tambah' }}
+              <CheckIcon class="w-4 h-4" />{{ savingCategory ? 'Menyimpan...' : 'Tambah' }}
             </button>
           </div>
         </form>
