@@ -9,14 +9,18 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const seriesId = body.seriesId === '' || body.seriesId == null ? null : Number(body.seriesId)
   const db = useDb()
+  const patch = {
+    name: body.name,
+    description: body.description || null,
+    status: body.status,
+    seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null
+  }
+  if (body.stockQuantity !== undefined && body.stockQuantity !== '') {
+    patch.stockQuantity = Math.max(Math.round(Number(body.stockQuantity) || 0), 0)
+  }
   const rows = await db
     .update(schema.products)
-    .set({
-      name: body.name,
-      description: body.description || null,
-      status: body.status,
-      seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null
-    })
+    .set(patch)
 
     .where(eq(schema.products.id, id))
     .returning()

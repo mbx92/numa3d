@@ -315,7 +315,7 @@ async function remove(s) {
             <label class="label">Produk</label>
             <select v-model="form.productId" class="input" required>
               <option v-for="p in products" :key="p.id" :value="p.id">
-                {{ p.name }}{{ p.hasRecipe ? ` — HPP ${formatIDR(p.hpp)}` : ' — belum ada recipe' }}
+                {{ p.name }}{{ p.hasRecipe ? ` — HPP ${formatIDR(p.hpp)}` : ' — belum ada recipe' }} · stok {{ formatNumber(p.stockQuantity) }}
               </option>
             </select>
             <div v-if="selectedProduct" class="flex items-center gap-2 mt-2">
@@ -331,7 +331,9 @@ async function remove(s) {
               <p v-if="!selectedProduct.hasRecipe" class="text-xs text-amber-600">
                 Produk ini belum punya recipe — margin tidak bisa dihitung.
               </p>
-              <p v-else class="text-xs text-ink-500">HPP {{ formatIDR(selectedProduct.hpp) }} / unit</p>
+              <p v-else class="text-xs text-ink-500">
+                HPP {{ formatIDR(selectedProduct.hpp) }} / unit · stok {{ formatNumber(selectedProduct.stockQuantity) }}
+              </p>
             </div>
           </div>
 
@@ -339,6 +341,12 @@ async function remove(s) {
             <div>
               <label class="label">Qty</label>
               <input v-model.number="form.quantity" type="number" min="1" class="input-num" required />
+              <p
+                v-if="selectedProduct && form.quantity > (selectedProduct.stockQuantity || 0)"
+                class="text-xs text-amber-600 mt-1"
+              >
+                Qty melebihi stok ({{ formatNumber(selectedProduct.stockQuantity) }}). Penjualan tetap tercatat, stok bisa minus sampai produksi selesai.
+              </p>
             </div>
             <div>
               <label class="label">Fee marketplace (%)</label>

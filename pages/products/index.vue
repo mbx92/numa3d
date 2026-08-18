@@ -104,6 +104,7 @@ async function remove(p) {
               <th class="w-14"></th>
               <th>Produk</th>
               <th>Status</th>
+              <th class="text-right">Stok</th>
               <th class="text-right">HPP / unit</th>
               <th></th>
             </tr>
@@ -123,6 +124,9 @@ async function remove(p) {
                 <div v-if="p.description" class="text-xs text-ink-400">{{ p.description }}</div>
               </td>
               <td><span class="badge" :class="statusBadge[p.status]">{{ statusLabel[p.status] }}</span></td>
+              <td class="num" :class="(p.stockQuantity || 0) <= 0 ? 'text-amber-600 font-semibold' : ''">
+                {{ formatNumber(p.stockQuantity) }}
+              </td>
               <td class="num">
                 <span v-if="p.hasRecipe">{{ formatIDR(p.hpp) }}</span>
                 <span v-else class="text-ink-400 text-xs">belum ada recipe</span>
@@ -137,7 +141,7 @@ async function remove(p) {
               </td>
             </tr>
             <tr v-if="!total">
-              <td colspan="5" class="text-center text-ink-500 py-6">
+              <td colspan="6" class="text-center text-ink-500 py-6">
                 {{ search || statusFilter ? 'Tidak ada produk yang cocok.' : 'Belum ada produk.' }}
               </td>
             </tr>
@@ -170,8 +174,9 @@ async function remove(p) {
             <span class="badge shrink-0" :class="statusBadge[p.status]">{{ statusLabel[p.status] }}</span>
           </div>
           <div class="text-sm font-mono">
-            <span v-if="p.hasRecipe">HPP {{ formatIDR(p.hpp) }}</span>
-            <span v-else class="text-ink-400 text-xs">belum ada recipe</span>
+            Stok {{ formatNumber(p.stockQuantity) }}
+            <span v-if="p.hasRecipe"> · HPP {{ formatIDR(p.hpp) }}</span>
+            <span v-else class="text-ink-400 text-xs"> · belum ada recipe</span>
           </div>
           <div class="flex flex-wrap gap-1 pt-1">
             <NuxtLink :to="`/products/${p.id}`" class="btn-secondary !py-1 !px-2 text-xs">

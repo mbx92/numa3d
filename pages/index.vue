@@ -119,7 +119,7 @@ function signedPct(n) {
         <div class="text-[10px] uppercase font-semibold text-ink-400">Katalog</div>
         <div class="font-mono font-semibold">{{ data?.inventory?.productsActive || 0 }} aktif</div>
         <div class="text-xs text-ink-400">
-          {{ data?.inventory?.productsRnd || 0 }} R&amp;D · {{ data?.inventory?.series || 0 }} series · {{ data?.inventory?.machines || 0 }} mesin
+          {{ data?.inventory?.productsRnd || 0 }} R&amp;D · {{ data?.inventory?.series || 0 }} series · {{ data?.productionOpen || 0 }} produksi berjalan
         </div>
       </div>
     </div>
@@ -196,10 +196,19 @@ function signedPct(n) {
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">Stok rendah</span>
-          <span class="text-xs text-ink-400">{{ data?.inventory?.materials }} material · {{ data?.inventory?.packaging }} packaging</span>
+          <NuxtLink to="/production" class="text-xs text-accent-600 hover:underline">Produksi</NuxtLink>
         </div>
         <div class="p-4 space-y-2 text-sm">
-          <template v-if="data?.lowMaterials?.length || data?.lowPackaging?.length">
+          <template v-if="data?.lowMaterials?.length || data?.lowPackaging?.length || data?.lowProducts?.length">
+            <NuxtLink
+              v-for="p in data.lowProducts"
+              :key="'pr' + p.id"
+              to="/production"
+              class="flex items-center justify-between hover:bg-ink-50 -mx-1 px-1 rounded"
+            >
+              <span>{{ p.name }} <span class="text-ink-400">(produk)</span></span>
+              <span class="badge bg-amber-100 text-amber-800 font-mono">{{ formatNumber(p.stockQuantity) }} pcs</span>
+            </NuxtLink>
             <NuxtLink
               v-for="m in data.lowMaterials"
               :key="'m' + m.id"

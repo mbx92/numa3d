@@ -1,4 +1,4 @@
-import { and, gte, lte, lt, eq, count } from 'drizzle-orm'
+import { and, gte, lte, lt, eq, count, inArray } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { loadSalesWithHpp, marginPercent } from '../utils/salesAggregate.js'
 import { localDateStr, monthStartStr } from '../utils/dates.js'
@@ -6,6 +6,7 @@ import { isOperatingExpenseCategory } from '../utils/expensePl.js'
 
 const MATERIAL_LOW_STOCK = 200
 const PACKAGING_LOW_STOCK = 10
+const PRODUCT_LOW_STOCK = 3
 
 function lastDayOfMonth(year, monthIndex) {
   return new Date(year, monthIndex + 1, 0).getDate()
@@ -157,10 +158,18 @@ export default defineEventHandler(async () => {
     .from(schema.supplierPurchases)
     .where(and(gte(schema.supplierPurchases.date, monthStart), lte(schema.supplierPurchases.date, monthEnd)))
 
-  const [lowMaterials, lowPackaging, materialsCount, packagingCount, productCounts, seriesCount, machineCount, capitalRows, allSales, allExpenses, machinePrices] =
+  const [lowMaterials, lowPackaging, lowProducts, materialsCount, packagingCount, productCounts, seriesCount, machineCount, productionOpen, capitalRows, allSales, allExpenses, machinePrices] =
     await Promise.all([
       db.select().from(schema.materials).where(lt(schema.materials.stockQuantity, MATERIAL_LOW_STOCK)),
       db.select().from(schema.packaging).where(lt(schema.packaging.stockQuantity, PACKAGING_LOW_STOCK)),
+      db
+        .select({
+          id: schema.products.id,
+          name: schema.products.name,
+          stockQuantity: schema.products.stockQuantity
+        })
+        .from(schema.products)
+        .where(and(eq(schema.products.status, 'active'), lt(schema.products.stockQuantity, PRODUCT_LOW_STOCK))),
       db.select({ c: count() }).from(schema.materials),
       db.select({ c: count() }).from(schema.packaging),
       db
@@ -169,6 +178,10 @@ export default defineEventHandler(async () => {
         .groupBy(schema.products.status),
       db.select({ c: count() }).from(schema.productSeries),
       db.select({ c: count() }).from(schema.machines),
+      db
+        .select({ c: count() })
+        .from(schema.productions)
+        .where(inArray(schema.productions.status, ['queued', 'in_progress'])),
       db.select({ type: schema.capitalTransactions.type, amount: schema.capitalTransactions.amount }).from(schema.capitalTransactions),
       db
         .select({
@@ -223,6 +236,8 @@ export default defineEventHandler(async () => {
     },
     lowMaterials,
     lowPackaging,
+    lowProducts,
+    productionOpen: productionOpen[0]?.c || 0,
     inventory: {
       materials: materialsCount[0]?.c || 0,
       packaging: packagingCount[0]?.c || 0,

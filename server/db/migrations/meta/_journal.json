@@ -99,6 +99,13 @@
       "when": 1786980000000,
       "tag": "0013_machine_purchase_expense",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787060000000,
+      "tag": "0014_production_stock",
+      "breakpoints": true
     }
   ]
 }

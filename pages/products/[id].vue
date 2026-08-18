@@ -17,7 +17,8 @@ const info = ref({
   name: product.value?.name,
   description: product.value?.description,
   status: product.value?.status,
-  seriesId: product.value?.seriesId ?? null
+  seriesId: product.value?.seriesId ?? null,
+  stockQuantity: product.value?.stockQuantity ?? 0
 })
 const savingInfo = ref(false)
 const currentSeries = computed(() => {
@@ -143,6 +144,7 @@ const breakdownLabels = {
     <div class="flex items-start gap-2 sm:items-center sm:gap-3 flex-wrap">
       <NuxtLink to="/products" class="text-sm text-ink-500 hover:text-accent-600 shrink-0">&larr; Produk</NuxtLink>
       <h1 class="text-lg sm:text-xl font-bold min-w-0 break-words flex-1">{{ product.name }}</h1>
+      <span class="badge shrink-0 font-mono">stok {{ formatNumber(product.stockQuantity) }}</span>
       <span class="badge shrink-0" :class="{
         'bg-ink-200 text-ink-600': product.status === 'rnd',
         'bg-green-100 text-green-700': product.status === 'active',
@@ -205,12 +207,17 @@ const breakdownLabels = {
                 </select>
               </div>
               <div>
-                <label class="label">Series</label>
-                <select v-model="info.seriesId" class="input" :disabled="!isAdmin">
-                  <option value="">— tanpa series —</option>
-                  <option v-for="s in seriesList" :key="s.id" :value="s.id">{{ s.name }}</option>
-                </select>
+                <label class="label">Stok tersedia</label>
+                <input v-model.number="info.stockQuantity" type="number" min="0" class="input-num" :disabled="!isAdmin" />
+                <p class="text-xs text-ink-400 mt-1">Bertambah dari menu Produksi, berkurang saat penjualan. Bisa diset sebagai stok awal.</p>
               </div>
+            </div>
+            <div>
+              <label class="label">Series</label>
+              <select v-model="info.seriesId" class="input" :disabled="!isAdmin">
+                <option value="">— tanpa series —</option>
+                <option v-for="s in seriesList" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
             </div>
             <button v-if="isAdmin" type="submit" class="btn-secondary w-full sm:w-auto" :disabled="savingInfo">
               <CheckIcon class="w-4 h-4" />{{ savingInfo ? 'Menyimpan…' : 'Simpan' }}

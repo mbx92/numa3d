@@ -24,6 +24,12 @@ export const salesChannelEnum = pgEnum('sales_channel', [
   'other'
 ])
 export const capitalTypeEnum = pgEnum('capital_type', ['deposit', 'withdrawal'])
+export const productionStatusEnum = pgEnum('production_status', [
+  'queued',
+  'in_progress',
+  'done',
+  'cancelled'
+])
 
 export const suppliers = pgTable('suppliers', {
   id: serial('id').primaryKey(),
@@ -44,7 +50,7 @@ export const productSeries = pgTable('product_series', {
 })
 
 // Pengguna sistem. Admin: akses penuh. Staff: hanya boleh mencatat
-// Pengeluaran & Penjualan, sisanya (Material/Mesin/Packaging/Produk/
+// Pengeluaran, Penjualan & Produksi, sisanya (Material/Mesin/Packaging/Produk/
 // Pengaturan/User) read-only — ditegakkan di server/utils/rbac.js.
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -104,6 +110,8 @@ export const products = pgTable('products', {
   seriesId: integer('series_id').references(() => productSeries.id, {
     onDelete: 'set null'
   }),
+  // Stok barang jadi. Bertambah saat produksi selesai, berkurang saat penjualan.
+  stockQuantity: integer('stock_quantity').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 
@@ -263,6 +271,24 @@ export const supplierPurchases = pgTable('supplier_purchases', {
   notes: text('notes'),
   totalAmount: integer('total_amount').notNull().default(0),
   expenseId: integer('expense_id').references(() => expenses.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+})
+
+// Batch produksi: pantau proses cetak. Saat status done, stok produk bertambah
+// dan stok material/packaging terpotong sesuai recipe (gagal cetak tetap makan material).
+export const productions = pgTable('productions', {
+  id: serial('id').primaryKey(),
+  date: date('date').notNull(),
+  productId: integer('product_id')
+    .notNull()
+    .references(() => products.id),
+  machineId: integer('machine_id').references(() => machines.id, { onDelete: 'set null' }),
+  quantityPlanned: integer('quantity_planned').notNull().default(1),
+  quantityGood: integer('quantity_good').notNull().default(0),
+  quantityFailed: integer('quantity_failed').notNull().default(0),
+  status: productionStatusEnum('status').notNull().default('queued'),
+  notes: text('notes'),
+  stockApplied: boolean('stock_applied').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 

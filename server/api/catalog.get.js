@@ -46,6 +46,7 @@ export default defineEventHandler(async () => {
       description: p.description,
       status: p.status,
       imageKey: p.imageKey,
+      stockQuantity: p.stockQuantity || 0,
       hasRecipe,
       hpp: total,
       suggestedPrice: hasRecipe ? Math.ceil(suggestedPrice(total, margin) / 500) * 500 : 0,

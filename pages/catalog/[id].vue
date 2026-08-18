@@ -108,6 +108,7 @@ async function removeFromSeries(p) {
             <span class="badge shrink-0" :class="statusBadge[p.status]">{{ statusLabel[p.status] }}</span>
           </div>
           <p v-if="p.description" class="text-xs text-ink-400 line-clamp-2">{{ p.description }}</p>
+          <p class="text-xs font-mono text-ink-500">Stok {{ formatNumber(p.stockQuantity) }}</p>
           <button
             v-if="isAdmin"
             type="button"

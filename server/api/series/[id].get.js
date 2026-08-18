@@ -14,7 +14,8 @@ export default defineEventHandler(async (event) => {
       name: schema.products.name,
       description: schema.products.description,
       status: schema.products.status,
-      imageKey: schema.products.imageKey
+      imageKey: schema.products.imageKey,
+      stockQuantity: schema.products.stockQuantity
     })
     .from(schema.products)
     .where(eq(schema.products.seriesId, id))
