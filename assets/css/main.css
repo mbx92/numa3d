@@ -8,6 +8,12 @@
   }
 }
 
+@media print {
+  body {
+    background: #fff !important;
+  }
+}
+
 /* PWA standalone / notch: ruang di atas & bawah agar kontrol tetap bisa diklik */
 @layer utilities {
   .pt-safe {

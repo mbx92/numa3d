@@ -14,7 +14,11 @@ export default defineEventHandler(async (event) => {
     .set({
       electricityRatePerKwh: Math.round(Number(body.electricityRatePerKwh) || 1445),
       machineUsageHoursPerMonth: Math.max(Math.round(Number(body.machineUsageHoursPerMonth) || 100), 1),
-      defaultMarginPercent: Number(body.defaultMarginPercent) || 40
+      defaultMarginPercent: Number(body.defaultMarginPercent) || 40,
+      invoiceBusinessName: String(body.invoiceBusinessName || '').trim() || 'Numa3D',
+      invoiceAddress: String(body.invoiceAddress || '').trim() || null,
+      invoicePhone: String(body.invoicePhone || '').trim() || null,
+      invoiceFooter: String(body.invoiceFooter || '').trim() || null
     })
     .where(eq(schema.appSettings.id, current.id))
     .returning()

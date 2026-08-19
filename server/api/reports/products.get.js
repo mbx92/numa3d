@@ -7,9 +7,11 @@ export default defineEventHandler(async (event) => {
 
   const perProduct = new Map()
   for (const s of sales) {
-    const agg = perProduct.get(s.productId) || {
+    const key = s.customOrderId ? `custom:${s.customOrderId}` : s.productId
+    const agg = perProduct.get(key) || {
       productId: s.productId,
-      productName: s.productName || '(produk terhapus)',
+      customOrderId: s.customOrderId || null,
+      productName: s.productName || (s.customOrderId ? 'Custom' : '(produk terhapus)'),
       hppPerUnit: s.hppPerUnit,
       units: 0,
       orders: 0,
@@ -22,7 +24,7 @@ export default defineEventHandler(async (event) => {
     agg.grossRevenue += s.grossRevenue
     agg.netRevenue += s.netRevenue
     agg.totalHpp += s.totalHpp
-    perProduct.set(s.productId, agg)
+    perProduct.set(key, agg)
   }
 
   return [...perProduct.values()]

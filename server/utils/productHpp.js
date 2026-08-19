@@ -6,7 +6,8 @@ import { getSettings } from './settings.js'
 // Hitung HPP untuk banyak produk sekaligus. Mengembalikan Map productId -> hasil computeHpp.
 export async function getHppForProducts(productIds) {
   const map = new Map()
-  if (!productIds.length) return map
+  const ids = productIds.filter((id) => Number(id) > 0)
+  if (!ids.length) return map
   const db = useDb()
   const settings = await getSettings()
 
@@ -27,7 +28,7 @@ export async function getHppForProducts(productIds) {
     .from(schema.productRecipes)
     .leftJoin(schema.materials, eq(schema.productRecipes.materialId, schema.materials.id))
     .leftJoin(schema.machines, eq(schema.productRecipes.machineId, schema.machines.id))
-    .where(inArray(schema.productRecipes.productId, productIds))
+    .where(inArray(schema.productRecipes.productId, ids))
 
   const packRows = await db
     .select({
@@ -39,9 +40,9 @@ export async function getHppForProducts(productIds) {
     })
     .from(schema.productPackaging)
     .leftJoin(schema.packaging, eq(schema.productPackaging.packagingId, schema.packaging.id))
-    .where(inArray(schema.productPackaging.productId, productIds))
+    .where(inArray(schema.productPackaging.productId, ids))
 
-  for (const pid of productIds) {
+  for (const pid of ids) {
     const recipes = recipeRows.filter((r) => r.productId === pid)
     const packs = packRows.filter((p) => p.productId === pid)
     map.set(pid, {

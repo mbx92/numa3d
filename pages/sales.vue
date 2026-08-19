@@ -7,6 +7,7 @@ import {
   CalendarDaysIcon,
   ArrowPathIcon,
   ExclamationTriangleIcon,
+  PrinterIcon,
   PhotoIcon
 } from '@heroicons/vue/24/outline'
 
@@ -69,6 +70,7 @@ function openAdd() {
     salePricePerUnit: 0,
     channel: 'direct',
     marketplaceFeePercent: 0,
+    customerName: '',
     notes: ''
   }
   errorMsg.value = ''
@@ -213,8 +215,12 @@ async function remove(s) {
       <div v-for="s in paged" :key="s.id" class="panel p-3 space-y-1">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <div class="font-medium break-words">{{ s.productName }}</div>
-            <div class="text-xs font-mono text-ink-500">{{ formatDate(s.date) }}</div>
+            <div class="font-medium break-words">
+              {{ s.productName }}
+              <span v-if="s.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">custom</span>
+            </div>
+            <div class="text-xs font-mono text-ink-500">{{ formatDate(s.date) }}<span v-if="s.invoiceNumber"> · {{ s.invoiceNumber }}</span></div>
+            <div v-if="s.customerName" class="text-xs text-ink-500">{{ s.customerName }}</div>
           </div>
           <span class="badge bg-ink-100 text-ink-600 shrink-0">{{ channelLabel[s.channel] }}</span>
         </div>
@@ -228,7 +234,10 @@ async function remove(s) {
             <dd class="font-mono" :class="s.netMargin >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatIDR(s.netMargin) }}</dd>
           </div>
         </dl>
-        <div class="pt-1">
+        <div class="pt-1 flex flex-wrap gap-1">
+          <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-secondary !py-1 !px-2 text-xs">
+            <PrinterIcon class="w-3.5 h-3.5" />Invoice
+          </NuxtLink>
           <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
       </div>
@@ -266,6 +275,8 @@ async function remove(s) {
               <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(s.date) }}</td>
               <td class="font-medium">
                 {{ s.productName }}
+                <span v-if="s.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">custom</span>
+                <div v-if="s.customerName" class="text-xs text-ink-500">{{ s.customerName }}</div>
                 <div v-if="s.notes" class="text-xs text-ink-400">{{ s.notes }}</div>
               </td>
               <td><span class="badge bg-ink-100 text-ink-600">{{ channelLabel[s.channel] }}</span></td>
@@ -274,8 +285,9 @@ async function remove(s) {
               <td class="num text-ink-500">{{ s.marketplaceFeePercent ? s.marketplaceFeePercent + '%' : '-' }}</td>
               <td class="num">{{ formatIDR(s.netPricePerUnit) }}</td>
               <td class="num" :class="s.netMargin >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatIDR(s.netMargin) }}</td>
-              <td class="text-right">
-                <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+              <td class="text-right whitespace-nowrap">
+                <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-secondary !py-1 !px-2 text-xs">Invoice</NuxtLink>
+                <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
               </td>
             </tr>
             <tr v-if="!total">
@@ -370,8 +382,13 @@ async function remove(s) {
           </div>
 
           <div>
+            <label class="label">Nama pelanggan</label>
+            <input v-model="form.customerName" class="input" placeholder="untuk invoice — opsional" />
+          </div>
+
+          <div>
             <label class="label">Catatan</label>
-            <input v-model="form.notes" class="input" placeholder="opsional — mis. nama pembeli / no. pesanan" />
+            <input v-model="form.notes" class="input" placeholder="opsional — mis. no. pesanan marketplace" />
           </div>
         </div>
 

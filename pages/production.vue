@@ -22,7 +22,7 @@ const statusBadge = {
   cancelled: 'bg-ink-100 text-ink-400'
 }
 
-const filters = ref({ status: '', productId: '', dateFrom: '', dateTo: '' })
+const filters = ref({ status: '', productId: '', custom: '', dateFrom: '', dateTo: '' })
 const query = computed(() => {
   const q = {}
   for (const [k, v] of Object.entries(filters.value)) if (v) q[k] = v
@@ -44,11 +44,27 @@ const inProcess = computed(() =>
 const doneRows = computed(() => (jobs.value || []).filter((j) => j.status === 'done'))
 const stockTotal = computed(() => (products.value || []).reduce((a, p) => a + (p.stockQuantity || 0), 0))
 
+const nowMs = ref(Date.now())
+let tick
+onMounted(() => {
+  tick = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+})
+onUnmounted(() => {
+  if (tick) clearInterval(tick)
+})
+
 const showForm = ref(false)
 const editing = ref(null)
 const form = ref({})
 const errorMsg = ref('')
 const saving = ref(false)
+
+const completeTarget = ref(null)
+const completeForm = ref({ good: 0, failed: 0 })
+const completeError = ref('')
+const completeSaving = ref(false)
 
 function openAdd() {
   editing.value = null
@@ -58,7 +74,7 @@ function openAdd() {
     productId: first?.id || '',
     machineId: '',
     quantityPlanned: 1,
-    quantityGood: 1,
+    quantityGood: 0,
     quantityFailed: 0,
     status: 'in_progress',
     notes: ''
@@ -70,7 +86,8 @@ function openEdit(j) {
   editing.value = j
   form.value = {
     date: j.date,
-    productId: j.productId,
+    productId: j.productId || '',
+    customOrderId: j.customOrderId || null,
     machineId: j.machineId || '',
     quantityPlanned: j.quantityPlanned,
     quantityGood: j.quantityGood,
@@ -86,20 +103,93 @@ const selectedProduct = computed(() =>
   (products.value || []).find((p) => Number(p.id) === Number(form.value.productId))
 )
 
-watch(
-  () => form.value.quantityPlanned,
-  (n) => {
-    if (form.value.status !== 'done') form.value.quantityGood = Math.max(Math.round(Number(n) || 1), 1)
+const formEstimateMinutes = computed(() => {
+  const per = selectedProduct.value?.printMinutesPerUnit || 0
+  const qty = Math.max(Math.round(Number(form.value.quantityPlanned) || 1), 1)
+  return per * qty
+})
+
+function formatMinutes(total) {
+  const n = Math.max(Math.round(Number(total) || 0), 0)
+  if (!n) return '—'
+  const h = Math.floor(n / 60)
+  const m = n % 60
+  if (h && m) return `${h}j ${m} mnt`
+  if (h) return `${h} jam`
+  return `${m} mnt`
+}
+
+function formatElapsed(ms) {
+  const sec = Math.max(Math.floor(ms / 1000), 0)
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = sec % 60
+  if (h) return `${h}j ${String(m).padStart(2, '0')}m`
+  return `${m}m ${String(s).padStart(2, '0')}d`
+}
+
+function jobProgress(j) {
+  nowMs.value
+  if (j.status !== 'in_progress' || !j.startedAt) return null
+  const elapsed = Math.max(0, nowMs.value - new Date(j.startedAt).getTime())
+  const totalMs = (j.durationMinutes || 0) * 60 * 1000
+  if (!totalMs) {
+    return { pct: 0, label: `berjalan ${formatElapsed(elapsed)}`, over: false, unknown: true }
   }
-)
+  const pct = Math.min(100, Math.round((elapsed / totalMs) * 100))
+  return {
+    pct,
+    label: `${formatElapsed(elapsed)} / ${formatMinutes(j.durationMinutes)}`,
+    over: elapsed > totalMs,
+    unknown: false
+  }
+}
+
+function jobPayload(j, extra = {}) {
+  return {
+    date: extra.date ?? j.date,
+    productId: extra.productId ?? j.productId,
+    customOrderId: extra.customOrderId ?? j.customOrderId,
+    machineId: extra.machineId ?? j.machineId,
+    quantityPlanned: extra.quantityPlanned ?? j.quantityPlanned,
+    quantityGood: extra.quantityGood ?? j.quantityGood,
+    quantityFailed: extra.quantityFailed ?? j.quantityFailed,
+    status: extra.status ?? j.status,
+    notes: extra.notes ?? j.notes
+  }
+}
+
+function jobTitle(j) {
+  return j.isCustom ? `${j.productName} · ${j.customerName}` : j.productName
+}
 
 async function save() {
   errorMsg.value = ''
+  if (form.value.status === 'done') {
+    const good = Math.max(Math.round(Number(form.value.quantityGood) || 0), 0)
+    const failed = Math.max(Math.round(Number(form.value.quantityFailed) || 0), 0)
+    if (good + failed <= 0) {
+      errorMsg.value = 'Isi jumlah jadi atau gagal sebelum menandai selesai'
+      return
+    }
+    const ok = await useConfirm().confirm(
+      form.value.customOrderId
+        ? good
+          ? `${good} unit jadi untuk pelanggan (tidak masuk stok produk)${failed ? `, ${failed} gagal` : ''}. Lanjutkan?`
+          : 'Semua unit gagal. Stok produk tidak berubah, material tetap terpotong. Lanjutkan?'
+        : good
+          ? `${good} unit jadi masuk stok produk${failed ? `, ${failed} unit gagal (material tetap terpotong)` : ''}. Lanjutkan?`
+          : `Semua unit gagal. Stok produk tidak bertambah, material tetap terpotong. Lanjutkan?`,
+      { title: 'Konfirmasi selesai', confirmText: 'Ya, selesai', danger: !good }
+    )
+    if (!ok) return
+  }
   saving.value = true
   try {
     const body = {
       ...form.value,
-      machineId: form.value.machineId || null
+      machineId: form.value.machineId || null,
+      productId: form.value.customOrderId ? null : form.value.productId
     }
     if (editing.value) {
       await $fetch(`/api/productions/${editing.value.id}`, { method: 'PUT', body })
@@ -120,16 +210,7 @@ async function setStatus(j, status) {
   try {
     await $fetch(`/api/productions/${j.id}`, {
       method: 'PUT',
-      body: {
-        date: j.date,
-        productId: j.productId,
-        machineId: j.machineId,
-        quantityPlanned: j.quantityPlanned,
-        quantityGood: status === 'done' && !j.quantityGood ? j.quantityPlanned : j.quantityGood,
-        quantityFailed: j.quantityFailed,
-        status,
-        notes: j.notes
-      }
+      body: jobPayload(j, { status })
     })
     await refresh()
     await refreshProducts()
@@ -138,9 +219,78 @@ async function setStatus(j, status) {
   }
 }
 
+function openComplete(j) {
+  completeTarget.value = j
+  completeForm.value = {
+    good: Math.max(j.quantityPlanned || 1, 0),
+    failed: 0
+  }
+  completeError.value = ''
+}
+
+const completeTotal = computed(
+  () => Math.max(Math.round(Number(completeForm.value.good) || 0), 0) + Math.max(Math.round(Number(completeForm.value.failed) || 0), 0)
+)
+
+watch(
+  () => completeForm.value.good,
+  (n) => {
+    if (!completeTarget.value) return
+    const planned = completeTarget.value.quantityPlanned || 0
+    const good = Math.max(Math.round(Number(n) || 0), 0)
+    completeForm.value.failed = Math.max(planned - good, 0)
+  }
+)
+
+async function submitComplete() {
+  const j = completeTarget.value
+  if (!j) return
+  const good = Math.max(Math.round(Number(completeForm.value.good) || 0), 0)
+  const failed = Math.max(Math.round(Number(completeForm.value.failed) || 0), 0)
+  if (good + failed <= 0) {
+    completeError.value = 'Isi jumlah jadi atau gagal'
+    return
+  }
+    const ok = await useConfirm().confirm(
+      j.isCustom
+        ? good
+          ? `Selesaikan produksi "${jobTitle(j)}"? ${good} unit jadi untuk pelanggan (tidak masuk stok)${failed ? `, ${failed} gagal` : ''}.`
+          : `Selesaikan "${jobTitle(j)}" sebagai gagal semua? Stok produk tidak berubah, material tetap terpotong.`
+        : good
+          ? `Selesaikan produksi "${j.productName}"? ${good} unit jadi masuk stok${failed ? `, ${failed} unit gagal` : ''}.`
+          : `Selesaikan "${j.productName}" sebagai gagal semua? Stok produk tidak bertambah, material tetap terpotong.`,
+      { title: 'Konfirmasi hasil produksi', confirmText: 'Ya, selesaikan', danger: !good }
+    )
+  if (!ok) return
+  completeSaving.value = true
+  completeError.value = ''
+  try {
+    await $fetch(`/api/productions/${j.id}`, {
+      method: 'PUT',
+      body: jobPayload(j, { status: 'done', quantityGood: good, quantityFailed: failed })
+    })
+    completeTarget.value = null
+    await refresh()
+    await refreshProducts()
+    useToast().success(
+      j.isCustom
+        ? good
+          ? `${good} unit siap diserahkan ke pelanggan`
+          : 'Produksi ditandai gagal, stok produk tidak berubah'
+        : good
+          ? `${good} unit masuk stok ${j.productName}`
+          : 'Produksi ditandai gagal, stok produk tidak berubah'
+    )
+  } catch (e) {
+    completeError.value = e.data?.statusMessage || 'Gagal menyelesaikan produksi'
+  } finally {
+    completeSaving.value = false
+  }
+}
+
 async function remove(j) {
   const extra = j.stockApplied ? ' Stok produk dan material akan dikembalikan.' : ''
-  if (!(await useConfirm().confirm(`Hapus produksi "${j.productName}"?${extra}`))) return
+  if (!(await useConfirm().confirm(`Hapus produksi "${jobTitle(j)}"?${extra}`))) return
   try {
     await $fetch(`/api/productions/${j.id}`, { method: 'DELETE' })
     await refresh()
@@ -160,8 +310,8 @@ async function remove(j) {
       </button>
     </div>
     <p class="text-xs text-ink-500">
-      Pantau proses cetak. Saat status <span class="font-semibold">Selesai</span>, unit jadi masuk stok produk
-      dan material/packaging terpotong dari recipe.
+      Progress mengikuti durasi cetak (recipe atau pesanan custom) sejak produksi dimulai. Katalog: unit jadi masuk stok.
+      Custom: unit jadi untuk pelanggan, tidak masuk stok produk.
     </p>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
@@ -184,12 +334,20 @@ async function remove(j) {
       </div>
     </div>
 
-    <div class="panel p-3 grid grid-cols-1 sm:grid-cols-4 gap-2">
+    <div class="panel p-3 grid grid-cols-1 sm:grid-cols-5 gap-2">
       <div>
         <label class="label">Status</label>
         <select v-model="filters.status" class="input !py-1.5">
           <option value="">Semua</option>
           <option v-for="(label, key) in statusLabel" :key="key" :value="key">{{ label }}</option>
+        </select>
+      </div>
+      <div>
+        <label class="label">Jenis</label>
+        <select v-model="filters.custom" class="input !py-1.5">
+          <option value="">Semua</option>
+          <option value="0">Katalog</option>
+          <option value="1">Custom</option>
         </select>
       </div>
       <div>
@@ -218,18 +376,36 @@ async function remove(j) {
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-start justify-between gap-2">
-              <span class="font-medium break-words">{{ j.productName }}</span>
+              <NuxtLink v-if="j.customOrderId" :to="`/custom-orders/${j.customOrderId}`" class="font-medium break-words hover:underline">{{ jobTitle(j) }}</NuxtLink>
+              <span v-else class="font-medium break-words">{{ jobTitle(j) }}</span>
               <span class="badge shrink-0" :class="statusBadge[j.status]">{{ statusLabel[j.status] }}</span>
             </div>
-            <div class="text-xs text-ink-500 font-mono">{{ formatDate(j.date) }} · rencana {{ j.quantityPlanned }} · jadi {{ j.quantityGood }}</div>
-            <div v-if="j.machineName" class="text-xs text-ink-400">{{ j.machineName }}</div>
+            <div class="text-xs text-ink-500 font-mono">
+              {{ formatDate(j.date) }} · rencana {{ j.quantityPlanned }}
+              <template v-if="j.status === 'done'"> · jadi {{ j.quantityGood }} · gagal {{ j.quantityFailed }}</template>
+            </div>
+            <div v-if="j.isCustom" class="text-xs text-ink-400">custom · tidak masuk stok</div>
+            <div v-else-if="j.machineName" class="text-xs text-ink-400">{{ j.machineName }}</div>
+            <div v-if="jobProgress(j)" class="mt-2 space-y-1">
+              <div class="flex justify-between gap-2 text-[11px] text-ink-500">
+                <span>{{ jobProgress(j).label }}</span>
+                <span v-if="!jobProgress(j).unknown" class="font-mono">{{ jobProgress(j).pct }}%</span>
+              </div>
+              <div class="h-1.5 rounded-full bg-ink-100 overflow-hidden">
+                <div
+                  class="h-full rounded-full transition-[width] duration-300"
+                  :class="jobProgress(j).over ? 'bg-amber-500' : 'bg-accent-500'"
+                  :style="{ width: (jobProgress(j).unknown ? 40 : Math.max(jobProgress(j).pct, 2)) + '%' }"
+                />
+              </div>
+            </div>
           </div>
         </div>
         <div class="flex flex-wrap gap-1">
           <button v-if="j.status === 'queued'" class="btn-secondary !py-1 !px-2 text-xs" @click="setStatus(j, 'in_progress')">
             <PlayIcon class="w-3.5 h-3.5" />Mulai
           </button>
-          <button v-if="j.status === 'queued' || j.status === 'in_progress'" class="btn-primary !py-1 !px-2 text-xs" @click="setStatus(j, 'done')">
+          <button v-if="j.status === 'queued' || j.status === 'in_progress'" class="btn-primary !py-1 !px-2 text-xs" @click="openComplete(j)">
             <CheckIcon class="w-3.5 h-3.5" />Selesai
           </button>
           <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(j)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
@@ -260,7 +436,7 @@ async function remove(j) {
               <th class="text-right">Rencana</th>
               <th class="text-right">Jadi</th>
               <th class="text-right">Gagal</th>
-              <th>Status</th>
+              <th>Progress</th>
               <th></th>
             </tr>
           </thead>
@@ -268,20 +444,35 @@ async function remove(j) {
             <tr v-for="j in paged" :key="j.id">
               <td class="whitespace-nowrap font-mono text-xs">{{ formatDate(j.date) }}</td>
               <td>
-                <div class="font-medium">{{ j.productName }}</div>
-                <div class="text-xs text-ink-400">stok {{ formatNumber(j.productStock) }}</div>
+                <div class="font-medium">
+                  <NuxtLink v-if="j.customOrderId" :to="`/custom-orders/${j.customOrderId}`" class="hover:underline">{{ jobTitle(j) }}</NuxtLink>
+                  <span v-else>{{ j.productName }}</span>
+                </div>
+                <div class="text-xs text-ink-400">{{ j.isCustom ? 'custom' : `stok ${formatNumber(j.productStock)}` }}</div>
               </td>
               <td class="text-ink-500">{{ j.machineName || '—' }}</td>
               <td class="num">{{ j.quantityPlanned }}</td>
-              <td class="num">{{ j.quantityGood }}</td>
-              <td class="num">{{ j.quantityFailed }}</td>
-              <td><span class="badge" :class="statusBadge[j.status]">{{ statusLabel[j.status] }}</span></td>
+              <td class="num">{{ j.status === 'done' ? j.quantityGood : '—' }}</td>
+              <td class="num">{{ j.status === 'done' ? j.quantityFailed : '—' }}</td>
+              <td class="min-w-[10rem]">
+                <span class="badge" :class="statusBadge[j.status]">{{ statusLabel[j.status] }}</span>
+                <div v-if="jobProgress(j)" class="mt-1.5 space-y-1">
+                  <div class="h-1.5 rounded-full bg-ink-100 overflow-hidden">
+                    <div
+                      class="h-full rounded-full transition-[width] duration-300"
+                      :class="jobProgress(j).over ? 'bg-amber-500' : 'bg-accent-500'"
+                      :style="{ width: (jobProgress(j).unknown ? 40 : Math.max(jobProgress(j).pct, 2)) + '%' }"
+                    />
+                  </div>
+                  <div class="text-[11px] text-ink-400">{{ jobProgress(j).label }}</div>
+                </div>
+              </td>
               <td class="whitespace-nowrap text-right">
                 <button v-if="j.status === 'queued'" class="btn-secondary !py-1 !px-2 text-xs" @click="setStatus(j, 'in_progress')">Mulai</button>
                 <button
                   v-if="j.status === 'queued' || j.status === 'in_progress'"
                   class="btn-primary !py-1 !px-2 text-xs ml-1"
-                  @click="setStatus(j, 'done')"
+                  @click="openComplete(j)"
                 >
                   Selesai
                 </button>
@@ -321,14 +512,19 @@ async function remove(j) {
           </div>
         </div>
         <div>
-          <label class="label">Produk</label>
-          <select v-model="form.productId" class="input" required>
+          <label class="label">{{ form.customOrderId ? 'Pesanan custom' : 'Produk' }}</label>
+          <p v-if="form.customOrderId" class="input bg-ink-50">Custom — lihat halaman pesanan</p>
+          <select v-else v-model="form.productId" class="input" required>
             <option v-for="p in products" :key="p.id" :value="p.id">
               {{ p.name }} · stok {{ formatNumber(p.stockQuantity) }}{{ p.hasRecipe ? '' : ' (belum recipe)' }}
             </option>
           </select>
           <p v-if="selectedProduct && !selectedProduct.hasRecipe" class="text-xs text-amber-600 mt-1">
             Belum ada recipe — stok produk tetap bertambah saat selesai, material tidak terpotong.
+          </p>
+          <p v-else-if="selectedProduct" class="text-xs text-ink-500 mt-1">
+            Durasi recipe {{ formatMinutes(selectedProduct.printMinutesPerUnit) }} / unit
+            · estimasi {{ formatMinutes(formEstimateMinutes) }} untuk {{ form.quantityPlanned || 1 }} unit
           </p>
         </div>
         <div>
@@ -338,22 +534,24 @@ async function remove(j) {
             <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.name }}</option>
           </select>
         </div>
-        <div class="grid grid-cols-3 gap-3">
+        <div :class="form.status === 'done' ? 'grid grid-cols-3 gap-3' : ''">
           <div>
             <label class="label">Rencana</label>
             <input v-model.number="form.quantityPlanned" type="number" min="1" class="input-num" required />
           </div>
-          <div>
-            <label class="label">Jadi</label>
-            <input v-model.number="form.quantityGood" type="number" min="0" class="input-num" />
-          </div>
-          <div>
-            <label class="label">Gagal</label>
-            <input v-model.number="form.quantityFailed" type="number" min="0" class="input-num" />
-          </div>
+          <template v-if="form.status === 'done'">
+            <div>
+              <label class="label">Jadi</label>
+              <input v-model.number="form.quantityGood" type="number" min="0" class="input-num" />
+            </div>
+            <div>
+              <label class="label">Gagal</label>
+              <input v-model.number="form.quantityFailed" type="number" min="0" class="input-num" />
+            </div>
+          </template>
         </div>
-        <p class="text-xs text-ink-500">
-          Unit jadi masuk stok saat status Selesai. Gagal cetak tetap memotong material, tidak menambah stok produk.
+        <p v-if="form.status === 'done'" class="text-xs text-ink-500">
+          {{ form.customOrderId ? 'Unit jadi untuk pelanggan, tidak masuk stok produk.' : 'Unit jadi masuk stok. Gagal cetak tetap memotong material.' }}
         </p>
         <div>
           <label class="label">Catatan</label>
@@ -367,6 +565,44 @@ async function remove(j) {
           </button>
         </div>
       </form>
+    </AppModal>
+
+    <AppModal v-if="completeTarget" title="Hasil produksi" @close="completeTarget = null">
+      <div class="space-y-3">
+        <p class="text-sm text-ink-700">
+          <span class="font-medium">{{ jobTitle(completeTarget) }}</span>
+          · rencana {{ completeTarget.quantityPlanned }} unit
+        </p>
+        <p class="text-xs text-ink-500">
+          Estimasi cetak {{ formatMinutes(completeTarget.durationMinutes || completeTarget.printMinutesPerUnit * completeTarget.quantityPlanned) }}.
+          {{ completeTarget.isCustom ? 'Unit jadi untuk pelanggan, tidak masuk stok produk.' : 'Dari durasi recipe.' }}
+        </p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label">Unit jadi</label>
+            <input v-model.number="completeForm.good" type="number" min="0" class="input-num" />
+            <p class="text-[11px] text-ink-400 mt-1">{{ completeTarget.isCustom ? 'Untuk pelanggan' : 'Masuk stok produk' }}</p>
+          </div>
+          <div>
+            <label class="label">Unit gagal</label>
+            <input v-model.number="completeForm.failed" type="number" min="0" class="input-num" />
+            <p class="text-[11px] text-ink-400 mt-1">Material tetap terpotong</p>
+          </div>
+        </div>
+        <p
+          v-if="completeTotal !== completeTarget.quantityPlanned"
+          class="text-xs text-amber-700"
+        >
+          Total {{ completeTotal }} berbeda dari rencana {{ completeTarget.quantityPlanned }}.
+        </p>
+        <p v-if="completeError" class="text-sm text-red-600">{{ completeError }}</p>
+        <div class="flex justify-end gap-2 pt-1">
+          <button type="button" class="btn-secondary" @click="completeTarget = null"><XMarkIcon class="w-4 h-4" />Batal</button>
+          <button type="button" class="btn-primary" :disabled="completeSaving" @click="submitComplete">
+            <CheckIcon class="w-4 h-4" />{{ completeSaving ? 'Menyimpan…' : 'Konfirmasi selesai' }}
+          </button>
+        </div>
+      </div>
     </AppModal>
   </div>
 </template>

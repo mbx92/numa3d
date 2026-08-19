@@ -127,6 +127,27 @@
       "when": 1787200000000,
       "tag": "0017_production_stock",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787300000000,
+      "tag": "0018_production_progress",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787400000000,
+      "tag": "0019_custom_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787500000000,
+      "tag": "0020_sale_invoices",
+      "breakpoints": true
     }
   ]
 }

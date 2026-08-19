@@ -18,7 +18,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <div class="panel-header">
           <span class="panel-title">{{ state.title }}</span>
         </div>
-        <div class="p-4 text-sm text-ink-700">{{ state.message }}</div>
+        <div class="p-4 text-sm text-ink-700 whitespace-pre-line">{{ state.message }}</div>
         <div class="px-4 pb-4 flex justify-end gap-2">
           <button class="btn-secondary" @click="respond(false)"><XMarkIcon class="w-4 h-4" />{{ state.cancelText }}</button>
           <button

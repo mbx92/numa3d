@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
+import { allocateInvoiceNumber } from '../../utils/invoice.js'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -9,13 +10,16 @@ export default defineEventHandler(async (event) => {
   }
   const qty = Math.max(Math.round(Number(body.quantity) || 1), 1)
   const productId = Number(body.productId)
+  const customerName = String(body.customerName || '').trim() || null
   const db = useDb()
   const rows = await db.transaction(async (tx) => {
+    const invoiceNumber = await allocateInvoiceNumber(tx, schema, body.date)
     const created = await tx
       .insert(schema.sales)
       .values({
         date: body.date,
         productId,
+        customOrderId: null,
         quantity: qty,
         salePricePerUnit: Math.round(Number(body.salePricePerUnit) || 0),
         channel: body.channel || 'direct',
@@ -23,7 +27,9 @@ export default defineEventHandler(async (event) => {
           body.marketplaceFeePercent !== null && body.marketplaceFeePercent !== ''
             ? Number(body.marketplaceFeePercent)
             : null,
-        notes: body.notes || null
+        notes: body.notes || null,
+        customerName,
+        invoiceNumber
       })
       .returning()
     await tx

@@ -2,7 +2,13 @@
 import { CheckIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
 
 const { data: settings, refresh } = await useFetch('/api/settings')
-const form = ref({ ...settings.value })
+const form = ref({
+  invoiceBusinessName: 'Numa3D',
+  invoiceAddress: '',
+  invoicePhone: '',
+  invoiceFooter: '',
+  ...settings.value
+})
 const savedMsg = ref('')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
@@ -54,6 +60,27 @@ function formatBytes(bytes) {
         <div>
           <label class="label">Target margin default (%)</label>
           <input v-model.number="form.defaultMarginPercent" type="number" min="0" max="95" class="input-num" required :disabled="!isAdmin" />
+        </div>
+        <div class="pt-2 border-t border-ink-200">
+          <div class="panel-title mb-3">Identitas invoice</div>
+          <div class="space-y-3">
+            <div>
+              <label class="label">Nama usaha</label>
+              <input v-model="form.invoiceBusinessName" class="input" :disabled="!isAdmin" placeholder="Numa3D" />
+            </div>
+            <div>
+              <label class="label">Alamat</label>
+              <textarea v-model="form.invoiceAddress" class="input min-h-[4.5rem]" :disabled="!isAdmin" placeholder="opsional" />
+            </div>
+            <div>
+              <label class="label">Telepon / WhatsApp</label>
+              <input v-model="form.invoicePhone" class="input" :disabled="!isAdmin" placeholder="opsional" />
+            </div>
+            <div>
+              <label class="label">Catatan kaki invoice</label>
+              <input v-model="form.invoiceFooter" class="input" :disabled="!isAdmin" placeholder="Terima kasih telah berbelanja." />
+            </div>
+          </div>
         </div>
         <div v-if="isAdmin" class="flex items-center gap-3">
           <button type="submit" class="btn-primary"><CheckIcon class="w-4 h-4" />Simpan</button>
