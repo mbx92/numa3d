@@ -173,6 +173,23 @@ async function main() {
     }
   ])
 
+  const { seedProductionsAndCustom } = await import('./lib/seedProductions.js')
+  await seedProductionsAndCustom(db, schema, {
+    vas,
+    gantungan,
+    miniatur,
+    pla,
+    plaPutih,
+    petg,
+    resin,
+    ender,
+    photon,
+    boxKecil,
+    bubble,
+    stiker,
+    kartu
+  })
+
   console.log('Seed selesai.')
   await pool.end()
 }

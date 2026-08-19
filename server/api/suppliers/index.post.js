@@ -1,6 +1,6 @@
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
-import { sanitizeText } from '../../../utils/sanitizeText.js'
+import { sanitizeText } from '../../utils/sanitizeText.js'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)

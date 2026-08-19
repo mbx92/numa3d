@@ -3,6 +3,7 @@ import { useDb, schema } from '../db/index.js'
 import { getSettings } from '../utils/settings.js'
 import { requireAdmin } from '../utils/rbac.js'
 import { logAudit } from '../utils/audit.js'
+import { clampShareTtlDays } from '../utils/invoice.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -18,7 +19,8 @@ export default defineEventHandler(async (event) => {
       invoiceBusinessName: String(body.invoiceBusinessName || '').trim() || 'Numa3D',
       invoiceAddress: String(body.invoiceAddress || '').trim() || null,
       invoicePhone: String(body.invoicePhone || '').trim() || null,
-      invoiceFooter: String(body.invoiceFooter || '').trim() || null
+      invoiceFooter: String(body.invoiceFooter || '').trim() || null,
+      invoiceShareTtlDays: clampShareTtlDays(body.invoiceShareTtlDays)
     })
     .where(eq(schema.appSettings.id, current.id))
     .returning()

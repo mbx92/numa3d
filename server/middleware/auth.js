@@ -4,7 +4,14 @@ import { verifySessionToken, SESSION_COOKIE } from '../utils/session.js'
 // event.context.auth = { id, role } dipakai handler untuk cek RBAC (lihat utils/rbac.js).
 export default defineEventHandler((event) => {
   const path = event.path || ''
-  if (!path.startsWith('/api/') || path.startsWith('/api/auth/') || path.startsWith('/api/health')) return
+  if (
+    !path.startsWith('/api/') ||
+    path.startsWith('/api/auth/') ||
+    path.startsWith('/api/health') ||
+    path.startsWith('/api/public/')
+  ) {
+    return
+  }
 
   const config = useRuntimeConfig()
   const token = getCookie(event, SESSION_COOKIE)

@@ -1,5 +1,6 @@
 import { and, eq, gte, lte, desc, or, exists, sql, inArray } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
+import { purchaseItemLabelsByExpenseIds } from '../../utils/expenseProducts.js'
 
 // Filter query: category, productId, dateFrom, dateTo
 export default defineEventHandler(async (event) => {
@@ -67,10 +68,18 @@ export default defineEventHandler(async (event) => {
     ;(namesByExp[r.expenseId] ||= []).push(r.productName)
   }
 
+  const purchaseLabels = await purchaseItemLabelsByExpenseIds(
+    db,
+    schema,
+    list.map((r) => r.id)
+  )
+
   return list.map((e) => {
-    const names = namesByExp[e.id]
     const fromMachine = Boolean(e.fromMachine)
-    if (names?.length) return { ...e, productName: names.join(', '), fromMachine }
-    return { ...e, fromMachine }
+    const bought = purchaseLabels.get(e.id)
+    if (bought?.length) return { ...e, productName: bought.join(', '), fromPurchase: true, fromMachine }
+    const names = namesByExp[e.id]
+    if (names?.length) return { ...e, productName: names.join(', '), fromPurchase: false, fromMachine }
+    return { ...e, fromPurchase: false, fromMachine }
   })
 })

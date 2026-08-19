@@ -156,7 +156,7 @@ async function remove(e) {
           <span class="badge" :class="categoryBadgeClass(e.category)">{{ e.categoryName || catName(e.category) }}</span>
           <span class="font-mono text-xs text-ink-500">{{ formatDate(e.date) }}</span>
         </div>
-        <div v-if="e.productName" class="text-xs text-ink-400">Produk: {{ e.productName }}</div>
+        <div v-if="e.productName" class="text-xs text-ink-400">Item: {{ e.productName }}</div>
         <p v-if="e.fromMachine" class="text-xs text-ink-400">Dari halaman Mesin — ubah di sana.</p>
         <div v-if="!e.fromMachine" class="flex flex-wrap gap-1 pt-1">
           <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
@@ -184,7 +184,7 @@ async function remove(e) {
               <th>Tanggal</th>
               <th>Kategori</th>
               <th>Deskripsi</th>
-              <th>Produk terkait</th>
+              <th>Item terkait</th>
               <th class="text-right">Jumlah</th>
               <th></th>
             </tr>
@@ -263,6 +263,7 @@ async function remove(e) {
               <option value="">—</option>
               <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
+            <p class="text-xs text-ink-400 mt-1">Untuk R&amp;D / alokasi ke SKU katalog. Pembelian supplier menampilkan barang yang dibeli.</p>
           </div>
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>

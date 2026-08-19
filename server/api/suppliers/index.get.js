@@ -1,6 +1,6 @@
 import { asc } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
-import { sanitizeText } from '../../../utils/sanitizeText.js'
+import { sanitizeText } from '../../utils/sanitizeText.js'
 
 export default defineEventHandler(async () => {
   const db = useDb()

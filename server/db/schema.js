@@ -295,8 +295,26 @@ export const appSettings = pgTable('app_settings', {
   invoiceBusinessName: text('invoice_business_name').notNull().default('Numa3D'),
   invoiceAddress: text('invoice_address'),
   invoicePhone: text('invoice_phone'),
-  invoiceFooter: text('invoice_footer')
+  invoiceFooter: text('invoice_footer'),
+  invoiceShareTtlDays: integer('invoice_share_ttl_days').notNull().default(7)
 })
+
+// Tautan publik invoice: token acak, kadaluarsa sesuai pengaturan saat dibuat.
+export const invoiceShareLinks = pgTable(
+  'invoice_share_links',
+  {
+    id: serial('id').primaryKey(),
+    saleId: integer('sale_id')
+      .notNull()
+      .references(() => sales.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow()
+  },
+  (t) => ({
+    tokenUniq: uniqueIndex('invoice_share_links_token_uidx').on(t.token)
+  })
+)
 
 // Mutasi modal pemilik: setoran (deposit) & penarikan (withdrawal). Dipakai untuk
 // menghitung posisi modal = total setoran - total penarikan. Bukan bagian laba

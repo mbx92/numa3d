@@ -1,9 +1,8 @@
 import { eq, sql } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { logAudit } from '../../utils/audit.js'
-import { productIdsForPurchaseLines, setExpenseProducts } from '../../utils/expenseProducts.js'
 import { assertExpenseCategory } from '../../utils/expenseCategory.js'
-import { sanitizeText } from '../../../utils/sanitizeText.js'
+import { sanitizeText } from '../../utils/sanitizeText.js'
 
 function lineAmount(qty, unitPrice) {
   return Math.round((Number(qty) || 0) * (Number(unitPrice) || 0))
@@ -85,7 +84,6 @@ export default defineEventHandler(async (event) => {
     const requested = String(body.category || '').trim()
     const fallback = hasMaterial ? 'material' : hasPackaging ? 'packaging' : 'other'
     const cat = await assertExpenseCategory(tx, schema, requested || fallback)
-    const relatedProductIds = await productIdsForPurchaseLines(tx, schema, lines)
     const [expense] = await tx
       .insert(schema.expenses)
       .values({
@@ -93,10 +91,9 @@ export default defineEventHandler(async (event) => {
         category: cat.key,
         description: `Pembelian ke ${purchase.supplier}: ${names.join(', ')}`,
         amount: totalAmount,
-        relatedProductId: relatedProductIds[0] || null
+        relatedProductId: null
       })
       .returning()
-    await setExpenseProducts(tx, schema, expense.id, relatedProductIds)
 
     const [updated] = await tx
       .update(schema.supplierPurchases)

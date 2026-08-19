@@ -1,5 +1,5 @@
 export default defineNuxtRouteMiddleware(async (to) => {
-  if (to.path === '/login') return
+  if (to.path === '/login' || to.path.startsWith('/i/')) return
 
   const authUser = useState('authUser', () => null)
   if (!authUser.value) {

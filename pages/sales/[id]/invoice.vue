@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowLeftIcon, PrinterIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, PrinterIcon, ArrowDownTrayIcon, ShareIcon } from '@heroicons/vue/24/outline'
 
 definePageMeta({ layout: 'print' })
 
@@ -10,100 +10,110 @@ useHead({
   title: computed(() => (invoice.value ? `Invoice ${invoice.value.invoiceNumber}` : 'Invoice'))
 })
 
+const pdfBusy = ref(false)
+const shareBusy = ref(false)
+const shareInfo = ref(null)
+
 function printInvoice() {
   if (import.meta.client) window.print()
+}
+
+async function downloadPdf(url, filename) {
+  pdfBusy.value = true
+  try {
+    const blob = await $fetch(url, { responseType: 'blob' })
+    const href = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = href
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(href)
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal mengunduh PDF')
+  } finally {
+    pdfBusy.value = false
+  }
+}
+
+async function shareInvoice() {
+  shareBusy.value = true
+  try {
+    const res = await $fetch(`/api/sales/${route.params.id}/share`, { method: 'POST' })
+    const url = `${window.location.origin}${res.path}`
+    shareInfo.value = { url, expiresAt: res.expiresAt, reused: res.reused }
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Invoice ${invoice.value?.invoiceNumber || ''}`,
+          text: `Invoice ${invoice.value?.invoiceNumber || ''}`,
+          url
+        })
+        return
+      } catch (e) {
+        if (e?.name === 'AbortError') return
+      }
+    }
+    await navigator.clipboard.writeText(url)
+    useToast().success('Tautan invoice disalin.')
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal membuat tautan')
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+function formatShareExpiry(value) {
+  const dt = new Date(value)
+  if (Number.isNaN(dt.getTime())) return formatDate(value)
+  return dt.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+async function copyShareUrl() {
+  if (!shareInfo.value?.url) return
+  await navigator.clipboard.writeText(shareInfo.value.url)
+  useToast().success('Tautan disalin.')
 }
 </script>
 
 <template>
   <div class="min-h-screen bg-ink-100 print:bg-white">
-    <div class="no-print sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 bg-ink-900 text-ink-100 print:hidden">
+    <div class="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-ink-900 text-ink-100 print:hidden">
       <NuxtLink to="/sales" class="inline-flex items-center gap-1 text-sm hover:text-white">
         <ArrowLeftIcon class="w-4 h-4" /> Penjualan
       </NuxtLink>
-      <button class="btn-primary" @click="printInvoice">
-        <PrinterIcon class="w-4 h-4" />Cetak / PDF
-      </button>
+      <div class="flex flex-wrap items-center gap-2">
+        <button class="btn-secondary !text-ink-800" type="button" @click="printInvoice">
+          <PrinterIcon class="w-4 h-4" />Cetak
+        </button>
+        <button
+          class="btn-secondary !text-ink-800"
+          type="button"
+          :disabled="pdfBusy || !invoice"
+          @click="downloadPdf(`/api/sales/${route.params.id}/pdf`, `${invoice?.invoiceNumber || 'invoice'}.pdf`)"
+        >
+          <ArrowDownTrayIcon class="w-4 h-4" />{{ pdfBusy ? 'Mengunduh…' : 'PDF' }}
+        </button>
+        <button class="btn-primary" type="button" :disabled="shareBusy || !invoice" @click="shareInvoice">
+          <ShareIcon class="w-4 h-4" />{{ shareBusy ? 'Membuat…' : 'Bagikan' }}
+        </button>
+      </div>
     </div>
 
     <p v-if="error" class="p-6 text-sm text-red-600">{{ error.data?.statusMessage || 'Invoice tidak ditemukan' }}</p>
 
-    <article v-else-if="invoice" class="invoice-sheet mx-auto my-6 w-[210mm] max-w-full bg-white p-8 shadow-sm print:my-0 print:shadow-none print:w-full">
-      <header class="flex items-start justify-between gap-4 border-b border-ink-200 pb-4">
-        <div class="flex items-start gap-3">
-          <img src="/logo-mark.svg" alt="" class="w-10 h-10" />
-          <div>
-            <h1 class="text-lg font-bold tracking-wide">{{ invoice.business.name }}</h1>
-            <p v-if="invoice.business.address" class="text-sm text-ink-600 whitespace-pre-line">{{ invoice.business.address }}</p>
-            <p v-if="invoice.business.phone" class="text-sm text-ink-600">{{ invoice.business.phone }}</p>
-          </div>
+    <div v-if="shareInfo" class="no-print mx-auto mt-4 w-[210mm] max-w-full px-4 print:hidden">
+      <div class="rounded-panel border border-ink-200 bg-white p-3 text-sm space-y-2">
+        <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Tautan publik</div>
+        <div class="flex gap-2">
+          <input :value="shareInfo.url" readonly class="input font-mono text-xs" @focus="$event.target.select()" />
+          <button type="button" class="btn-secondary shrink-0" @click="copyShareUrl">Salin</button>
         </div>
-        <div class="text-right">
-          <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Invoice</div>
-          <div class="font-mono text-lg font-semibold">{{ invoice.invoiceNumber }}</div>
-          <div class="text-sm text-ink-600 mt-1">{{ formatDate(invoice.date) }}</div>
-        </div>
-      </header>
-
-      <section class="grid grid-cols-2 gap-4 py-4 text-sm">
-        <div>
-          <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Kepada</div>
-          <div class="font-medium mt-1">{{ invoice.customerName }}</div>
-        </div>
-        <div class="text-right">
-          <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Channel</div>
-          <div class="mt-1">{{ invoice.channelLabel }}</div>
-        </div>
-      </section>
-
-      <table class="w-full text-sm border-t border-ink-200">
-        <thead>
-          <tr class="text-left text-xs uppercase tracking-wide text-ink-500">
-            <th class="py-2 pr-2">Item</th>
-            <th class="py-2 px-2 text-right">Qty</th>
-            <th class="py-2 px-2 text-right">Harga</th>
-            <th class="py-2 pl-2 text-right">Jumlah</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="border-t border-ink-100">
-            <td class="py-3 pr-2">
-              {{ invoice.item.name }}
-              <span v-if="invoice.isCustom" class="text-xs text-ink-400"> · custom</span>
-            </td>
-            <td class="py-3 px-2 text-right font-mono">{{ invoice.item.quantity }}</td>
-            <td class="py-3 px-2 text-right font-mono">{{ formatIDR(invoice.item.unitPrice) }}</td>
-            <td class="py-3 pl-2 text-right font-mono">{{ formatIDR(invoice.item.amount) }}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="flex justify-end pt-4">
-        <dl class="w-56 text-sm space-y-1">
-          <div class="flex justify-between gap-4">
-            <dt class="text-ink-500">Subtotal</dt>
-            <dd class="font-mono">{{ formatIDR(invoice.subtotal) }}</dd>
-          </div>
-          <div class="flex justify-between gap-4 border-t border-ink-200 pt-2 font-semibold">
-            <dt>Total</dt>
-            <dd class="font-mono text-base">{{ formatIDR(invoice.total) }}</dd>
-          </div>
-        </dl>
+        <p class="text-xs text-ink-500">Berlaku sampai {{ formatShareExpiry(shareInfo.expiresAt) }}.</p>
       </div>
+    </div>
 
-      <p v-if="invoice.notes" class="mt-6 text-xs text-ink-500">Catatan: {{ invoice.notes }}</p>
-      <p class="mt-8 text-sm text-ink-600">{{ invoice.business.footer }}</p>
-    </article>
+    <InvoiceSheet v-if="invoice" :invoice="invoice" />
   </div>
 </template>
-
-<style scoped>
-@media print {
-  .invoice-sheet {
-    margin: 0;
-    box-shadow: none;
-    width: auto;
-    max-width: none;
-  }
-}
-</style>
