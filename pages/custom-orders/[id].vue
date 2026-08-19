@@ -55,6 +55,9 @@ const errorMsg = ref('')
 const files = computed(() => order.value?.files || [])
 const job = computed(() => order.value?.production)
 const canEdit = computed(() => order.value && order.value.status !== 'delivered')
+const selectedMaterial = computed(() =>
+  (materials.value || []).find((m) => Number(m.id) === Number(form.value.materialId))
+)
 
 function isModel(name) {
   return /\.(stl|obj|3mf|glb|gltf)$/i.test(name || '')
@@ -297,34 +300,78 @@ async function deliver() {
           <p v-if="order.notes" class="text-xs text-ink-400 pt-2">{{ order.notes }}</p>
         </div>
         <form v-else class="p-4 space-y-3" @submit.prevent="saveEdit">
-          <input v-model="form.customerName" class="input" required placeholder="Pelanggan" />
-          <input v-model="form.title" class="input" required placeholder="Judul desain" />
-          <div class="grid grid-cols-2 gap-2">
-            <input v-model="form.date" type="date" class="input" required />
-            <select v-model="form.channel" class="input">
-              <option v-for="(label, key) in channelLabel" :key="key" :value="key">{{ label }}</option>
-            </select>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Tanggal</label>
+              <input v-model="form.date" type="date" class="input" required />
+            </div>
+            <div>
+              <label class="label">Channel</label>
+              <select v-model="form.channel" class="input">
+                <option v-for="(label, key) in channelLabel" :key="key" :value="key">{{ label }}</option>
+              </select>
+            </div>
           </div>
-          <div class="grid grid-cols-2 gap-2">
-            <input v-model.number="form.quantity" type="number" min="1" class="input-num" />
-            <IdrInput v-model="form.pricePerUnit" />
+          <div>
+            <label class="label">Nama pelanggan</label>
+            <input v-model="form.customerName" class="input" required placeholder="nama / toko" />
           </div>
-          <select v-model="form.materialId" class="input">
-            <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }}</option>
-          </select>
-          <input v-model.number="form.materialQuantityUsed" type="number" min="0" step="0.1" class="input-num" />
-          <div class="grid grid-cols-2 gap-2">
-            <select v-model="form.machineId" class="input">
-              <option value="">Mesin —</option>
-              <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.name }}</option>
-            </select>
-            <input v-model.number="form.printTimeMinutes" type="number" min="0" class="input-num" />
+          <div>
+            <label class="label">Judul desain</label>
+            <input v-model="form.title" class="input" required placeholder="mis. gantungan kunci inisial R" />
           </div>
-          <select v-model="form.packagingId" class="input">
-            <option value="">Packaging —</option>
-            <option v-for="p in packagingItems" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-          <input v-model="form.notes" class="input" placeholder="Catatan" />
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Jumlah</label>
+              <input v-model.number="form.quantity" type="number" min="1" class="input-num" required />
+            </div>
+            <div>
+              <label class="label">Harga / unit</label>
+              <IdrInput v-model="form.pricePerUnit" required />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Material</label>
+              <select v-model="form.materialId" class="input" required>
+                <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Pakai / unit ({{ selectedMaterial?.unit || 'satuan' }})</label>
+              <input v-model.number="form.materialQuantityUsed" type="number" min="0" step="0.1" class="input-num" required />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Packaging (opsional)</label>
+              <select v-model="form.packagingId" class="input">
+                <option value="">—</option>
+                <option v-for="p in packagingItems" :key="p.id" :value="p.id">{{ p.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Packaging / unit jadi</label>
+              <input v-model.number="form.packagingQuantityUsed" type="number" min="0" step="0.1" class="input-num" />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Mesin</label>
+              <select v-model="form.machineId" class="input">
+                <option value="">—</option>
+                <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Durasi cetak / unit (mnt)</label>
+              <input v-model.number="form.printTimeMinutes" type="number" min="0" class="input-num" required />
+            </div>
+          </div>
+          <div>
+            <label class="label">Catatan</label>
+            <input v-model="form.notes" class="input" placeholder="opsional — nozzle, infill, warna…" />
+          </div>
           <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
           <div class="flex justify-end gap-2">
             <button type="button" class="btn-secondary" @click="editing = false"><XMarkIcon class="w-4 h-4" />Batal</button>
