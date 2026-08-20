@@ -7,6 +7,11 @@ import {
   CheckIcon,
   PlayIcon,
   PencilSquareIcon,
+  PrinterIcon,
+  QueueListIcon,
+  TruckIcon,
+  ArrowPathIcon,
+  PlusIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline'
 
@@ -54,6 +59,19 @@ const errorMsg = ref('')
 
 const files = computed(() => order.value?.files || [])
 const job = computed(() => order.value?.production)
+const jobs = computed(() => order.value?.productions || [])
+const totalGood = computed(() =>
+  jobs.value.filter((p) => p.status === 'done').reduce((a, p) => a + (p.quantityGood || 0), 0)
+)
+const retryable = computed(() =>
+  jobs.value.filter((p) => p.status === 'done' && p.quantityFailed > 0 && !p.retried)
+)
+const canDeliver = computed(
+  () =>
+    order.value?.status === 'ready' &&
+    totalGood.value > 0 &&
+    !jobs.value.some((p) => p.status === 'queued' || p.status === 'in_progress')
+)
 const canEdit = computed(() => order.value && order.value.status !== 'delivered')
 const selectedMaterial = computed(() =>
   (materials.value || []).find((m) => Number(m.id) === Number(form.value.materialId))
@@ -240,6 +258,25 @@ async function submitComplete() {
   }
 }
 
+async function retryFailed(j) {
+  const n = j.quantityFailed || 0
+  if (
+    !(await useConfirm().confirm(
+      `Buat antrian baru ${n} unit untuk mengulang cetak yang gagal?`,
+      { title: 'Ulang cetak gagal', confirmText: 'Buat antrian', danger: false }
+    ))
+  ) {
+    return
+  }
+  try {
+    await $fetch(`/api/productions/${j.id}/retry`, { method: 'POST' })
+    await refresh()
+    useToast().success(`Antrian ulang ${n} unit dibuat.`)
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal membuat antrian ulang')
+  }
+}
+
 async function recreateProduction() {
   try {
     await $fetch(`/api/custom-orders/${id}/production`, { method: 'POST' })
@@ -251,7 +288,7 @@ async function recreateProduction() {
 
 async function deliver() {
   const ok = await useConfirm().confirm(
-    `Serahkan ke ${order.value.customerName}? ${job.value.quantityGood} unit tercatat sebagai penjualan jasa cetak, stok produk tidak berubah.`,
+    `Serahkan ke ${order.value.customerName}? ${totalGood.value} unit jadi tercatat sebagai penjualan jasa cetak, stok produk tidak berubah.`,
     { title: 'Serah terima', confirmText: 'Ya, serahkan', danger: false }
   )
   if (!ok) return
@@ -271,7 +308,7 @@ async function deliver() {
 <template>
   <div v-if="order" class="space-y-4">
     <div class="flex items-start gap-3">
-      <NuxtLink to="/custom-orders" class="btn-secondary !p-2 mt-0.5"><ArrowLeftIcon class="w-4 h-4" /></NuxtLink>
+      <NuxtLink to="/custom-orders" class="btn-secondary mt-0.5"><ArrowLeftIcon class="w-4 h-4" /></NuxtLink>
       <div class="min-w-0 flex-1">
         <h1 class="text-xl font-bold break-words">{{ order.title }}</h1>
         <p class="text-sm text-ink-500">{{ order.customerName }} · {{ formatDate(order.date) }} · {{ channelLabel[order.channel] }}</p>
@@ -285,7 +322,7 @@ async function deliver() {
       <div class="panel">
         <div class="panel-header flex items-center justify-between">
           <span class="panel-title">Data pesanan</span>
-          <button v-if="canEdit && !editing" class="btn-secondary !py-1 !px-2 text-xs" @click="startEdit">
+          <button v-if="canEdit && !editing" class="btn-secondary" @click="startEdit">
             <PencilSquareIcon class="w-3.5 h-3.5" />Edit
           </button>
         </div>
@@ -389,37 +426,45 @@ async function deliver() {
             <div v-if="job.status === 'done'" class="flex justify-between"><span class="text-ink-500">Jadi / gagal</span><span class="font-mono">{{ job.quantityGood }} / {{ job.quantityFailed }}</span></div>
             <p class="text-xs text-ink-400">Estimasi {{ formatMinutes(job.durationMinutes) }}. Unit jadi tidak masuk stok produk.</p>
             <div class="flex flex-wrap gap-1">
-              <button v-if="job.status === 'queued'" class="btn-secondary !py-1 !px-2 text-xs" @click="setStatus('in_progress')">
+              <button v-if="job.status === 'queued'" class="btn-secondary" @click="setStatus('in_progress')">
                 <PlayIcon class="w-3.5 h-3.5" />Mulai
               </button>
               <button
                 v-if="job.status === 'queued' || job.status === 'in_progress'"
-                class="btn-primary !py-1 !px-2 text-xs"
+                class="btn-primary"
                 @click="openComplete"
               >
                 <CheckIcon class="w-3.5 h-3.5" />Selesai
               </button>
-              <NuxtLink to="/production" class="btn-secondary !py-1 !px-2 text-xs">Lihat antrian</NuxtLink>
               <button
-                v-if="order.status === 'ready' && job.quantityGood > 0"
-                class="btn-primary !py-1 !px-2 text-xs"
+                v-for="p in retryable"
+                :key="'retry-' + p.id"
+                class="btn-secondary"
+                @click="retryFailed(p)"
+              >
+                <ArrowPathIcon class="w-4 h-4" />Ulang {{ p.quantityFailed }} gagal
+              </button>
+              <NuxtLink to="/production" class="btn-secondary"><QueueListIcon class="w-4 h-4" />Lihat antrian</NuxtLink>
+              <button
+                v-if="canDeliver"
+                class="btn-primary"
                 :disabled="delivering"
                 @click="deliver"
               >
-                Serah terima
+                <TruckIcon class="w-4 h-4" />Serah terima
               </button>
               <NuxtLink
                 v-if="order.sale"
                 :to="`/sales/${order.sale.id}/invoice`"
-                class="btn-secondary !py-1 !px-2 text-xs"
+                class="btn-secondary"
               >
-                Invoice
+                <PrinterIcon class="w-4 h-4" />Invoice
               </NuxtLink>
             </div>
           </template>
           <template v-else>
             <p class="text-ink-500">Belum ada job produksi.</p>
-            <button v-if="canEdit" class="btn-primary !py-1 !px-2 text-xs" @click="recreateProduction">Buat produksi</button>
+            <button v-if="canEdit" class="btn-primary" @click="recreateProduction"><PlusIcon class="w-4 h-4" />Buat produksi</button>
           </template>
         </div>
       </div>
@@ -428,7 +473,7 @@ async function deliver() {
     <div class="panel">
       <div class="panel-header flex items-center justify-between">
         <span class="panel-title">File desain</span>
-        <label class="btn-secondary !py-1 !px-2 text-xs cursor-pointer">
+        <label class="btn-secondary cursor-pointer">
           <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ uploading ? 'Mengunggah…' : 'Unggah' }}
           <input ref="fileInput" type="file" multiple class="hidden" :disabled="uploading" @change="uploadFiles" />
         </label>
@@ -478,8 +523,10 @@ async function deliver() {
         </div>
         <p v-if="completeError" class="text-sm text-red-600">{{ completeError }}</p>
         <div class="flex justify-end gap-2">
-          <button class="btn-secondary" type="button" @click="completeOpen = false">Batal</button>
-          <button class="btn-primary" type="button" :disabled="completeSaving" @click="submitComplete">Konfirmasi selesai</button>
+          <button class="btn-secondary" type="button" @click="completeOpen = false"><XMarkIcon class="w-4 h-4" />Batal</button>
+          <button class="btn-primary" type="button" :disabled="completeSaving" @click="submitComplete">
+            <CheckIcon class="w-4 h-4" />Konfirmasi selesai
+          </button>
         </div>
       </div>
     </AppModal>

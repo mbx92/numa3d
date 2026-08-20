@@ -91,9 +91,9 @@ function monthLabel(key) {
         </div>
       </div>
       <div class="flex gap-2 w-full">
-        <button class="btn-secondary !py-1.5 text-xs flex-1" @click="setThisMonth"><CalendarDaysIcon class="w-3.5 h-3.5" />Bulan ini</button>
-        <button class="btn-secondary !py-1.5 text-xs flex-1" @click="setLast30"><ArrowPathIcon class="w-3.5 h-3.5" />30 hari</button>
-        <button class="btn-secondary !py-1.5 text-xs flex-1" @click="setThisYear">Tahun ini</button>
+        <button class="btn-secondary flex-1" @click="setThisMonth"><CalendarDaysIcon class="w-3.5 h-3.5" />Bulan ini</button>
+        <button class="btn-secondary flex-1" @click="setLast30"><ArrowPathIcon class="w-3.5 h-3.5" />30 hari</button>
+        <button class="btn-secondary flex-1" @click="setThisYear"><CalendarDaysIcon class="w-4 h-4" />Tahun ini</button>
       </div>
     </div>
 

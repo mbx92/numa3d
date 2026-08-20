@@ -1,5 +1,5 @@
 <script setup>
-import { PlusIcon, TrashIcon, CheckIcon, XMarkIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, TrashIcon, CheckIcon, XMarkIcon, ArrowUpTrayIcon, EyeIcon } from '@heroicons/vue/24/outline'
 
 const statusLabel = {
   open: 'Proses',
@@ -171,18 +171,18 @@ const selectedMaterial = computed(() =>
     <div class="panel p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
       <div>
         <label class="label">Status</label>
-        <select v-model="filters.status" class="input !py-1.5">
+        <select v-model="filters.status" class="input">
           <option value="">Semua</option>
           <option v-for="(label, key) in statusLabel" :key="key" :value="key">{{ label }}</option>
         </select>
       </div>
       <div>
         <label class="label">Dari</label>
-        <input v-model="filters.dateFrom" type="date" class="input !py-1.5" />
+        <input v-model="filters.dateFrom" type="date" class="input" />
       </div>
       <div>
         <label class="label">Sampai</label>
-        <input v-model="filters.dateTo" type="date" class="input !py-1.5" />
+        <input v-model="filters.dateTo" type="date" class="input" />
       </div>
     </div>
 
@@ -235,10 +235,10 @@ const selectedMaterial = computed(() =>
               <td class="num">{{ formatIDR(row.pricePerUnit) }}</td>
               <td><span class="badge" :class="statusBadge[row.status]">{{ statusLabel[row.status] }}</span></td>
               <td class="text-right whitespace-nowrap">
-                <NuxtLink :to="`/custom-orders/${row.id}`" class="btn-secondary !py-1 !px-2 text-xs">Detail</NuxtLink>
+                <NuxtLink :to="`/custom-orders/${row.id}`" class="btn-secondary"><EyeIcon class="w-4 h-4" />Detail</NuxtLink>
                 <button
                   v-if="row.status !== 'delivered'"
-                  class="btn-danger !py-1 !px-2 text-xs ml-1"
+                  class="btn-danger ml-1"
                   @click="remove(row)"
                 >
                   <TrashIcon class="w-3.5 h-3.5" />Hapus
@@ -338,7 +338,7 @@ const selectedMaterial = computed(() =>
         </div>
         <div>
           <label class="label">File desain (opsional)</label>
-          <label class="btn-secondary !py-1.5 !px-3 text-sm cursor-pointer inline-flex items-center gap-1.5">
+          <label class="btn-secondary cursor-pointer">
             <ArrowUpTrayIcon class="w-4 h-4" />Pilih file
             <input
               ref="fileInput"

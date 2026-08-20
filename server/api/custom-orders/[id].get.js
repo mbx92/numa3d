@@ -1,6 +1,11 @@
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { hppForCustomOrder } from '../../utils/customOrders.js'
+
+function pickProduction(jobs) {
+  const rank = { in_progress: 3, queued: 2, done: 1, cancelled: 0 }
+  return [...jobs].sort((a, b) => (rank[b.status] || 0) - (rank[a.status] || 0) || b.id - a.id)[0] || null
+}
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -19,10 +24,13 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.customOrders.id, id))
   if (!row) throw createError({ statusCode: 404, statusMessage: 'Pesanan custom tidak ditemukan' })
 
-  const [production] = await db
+  const productions = await db
     .select()
     .from(schema.productions)
     .where(eq(schema.productions.customOrderId, id))
+    .orderBy(desc(schema.productions.id))
+  const retried = new Set(productions.filter((p) => p.retryOfId).map((p) => p.retryOfId))
+  const jobs = productions.map((p) => ({ ...p, retried: retried.has(p.id) }))
   const [sale] = await db.select().from(schema.sales).where(eq(schema.sales.customOrderId, id))
   const files = await db
     .select()
@@ -42,7 +50,8 @@ export default defineEventHandler(async (event) => {
     packagingName: row.packaging?.name || null,
     hpp: hpp.total,
     hppBreakdown: hpp.breakdown,
-    production: production || null,
+    production: pickProduction(jobs),
+    productions: jobs,
     sale: sale || null,
     files
   }

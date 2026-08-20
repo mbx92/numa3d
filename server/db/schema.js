@@ -121,6 +121,16 @@ export const products = pgTable('products', {
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 
+export const productImages = pgTable('product_images', {
+  id: serial('id').primaryKey(),
+  productId: integer('product_id')
+    .notNull()
+    .references(() => products.id, { onDelete: 'cascade' }),
+  objectKey: text('object_key').notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+})
+
 export const expenseCategories = pgTable('expense_categories', {
   id: serial('id').primaryKey(),
   key: text('key').notNull().unique(),
@@ -361,10 +371,11 @@ export const productions = pgTable(
   stockApplied: boolean('stock_applied').notNull().default(false),
   startedAt: timestamp('started_at'),
   durationMinutes: integer('duration_minutes').notNull().default(0),
+  retryOfId: integer('retry_of_id'),
   createdAt: timestamp('created_at').notNull().defaultNow()
 },
   (t) => ({
-    customOrderProductionUniq: uniqueIndex('productions_custom_order_id_uidx').on(t.customOrderId)
+    retryOfUniq: uniqueIndex('productions_retry_of_id_uidx').on(t.retryOfId)
   })
 )
 

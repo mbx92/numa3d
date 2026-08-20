@@ -12,9 +12,17 @@ export default defineEventHandler(async (event) => {
     if (order.status === 'delivered' || order.status === 'cancelled') {
       throw createError({ statusCode: 400, statusMessage: 'Pesanan ini tidak bisa diproduksi ulang' })
     }
-    const [existing] = await tx.select().from(schema.productions).where(eq(schema.productions.customOrderId, id))
+    const [existing] = await tx
+      .select()
+      .from(schema.productions)
+      .where(eq(schema.productions.customOrderId, id))
     if (existing) {
-      throw createError({ statusCode: 400, statusMessage: 'Produksi untuk pesanan ini sudah ada' })
+      throw createError({
+        statusCode: 400,
+        statusMessage: existing.status === 'done' && existing.quantityFailed
+          ? 'Produksi sudah ada. Unit gagal diulang dari tombol Ulang.'
+          : 'Produksi untuk pesanan ini sudah ada'
+      })
     }
     const [created] = await tx
       .insert(schema.productions)

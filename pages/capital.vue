@@ -184,8 +184,8 @@ async function remove(t) {
         </div>
         <div v-if="t.notes" class="text-xs text-ink-400 break-words">{{ t.notes }}</div>
         <div v-if="isAdmin" class="flex flex-wrap gap-1 pt-1">
-          <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-          <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+          <button class="btn-secondary" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+          <button class="btn-danger" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada mutasi modal.</p>
@@ -229,8 +229,8 @@ async function remove(t) {
                 {{ t.type === 'deposit' ? '+' : '−' }}{{ formatIDR(t.amount) }}
               </td>
               <td v-if="isAdmin" class="whitespace-nowrap text-right">
-                <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-                <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                <button class="btn-secondary" @click="openEdit(t)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                <button class="btn-danger ml-1" @click="remove(t)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
               </td>
               <td v-else></td>
             </tr>

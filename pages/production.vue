@@ -6,7 +6,8 @@ import {
   CheckIcon,
   XMarkIcon,
   PlayIcon,
-  PhotoIcon
+  PhotoIcon,
+  ArrowPathIcon
 } from '@heroicons/vue/24/outline'
 
 const statusLabel = {
@@ -136,11 +137,14 @@ function jobProgress(j) {
   if (!totalMs) {
     return { pct: 0, label: `berjalan ${formatElapsed(elapsed)}`, over: false, unknown: true }
   }
+  const over = elapsed > totalMs
   const pct = Math.min(100, Math.round((elapsed / totalMs) * 100))
   return {
     pct,
-    label: `${formatElapsed(elapsed)} / ${formatMinutes(j.durationMinutes)}`,
-    over: elapsed > totalMs,
+    label: over
+      ? `lewat ${formatElapsed(elapsed - totalMs)} · estimasi ${formatMinutes(j.durationMinutes)}`
+      : `${formatElapsed(elapsed)} / ${formatMinutes(j.durationMinutes)}`,
+    over,
     unknown: false
   }
 }
@@ -288,6 +292,26 @@ async function submitComplete() {
   }
 }
 
+async function retryFailed(j) {
+  const n = j.quantityFailed || 0
+  if (
+    !(await useConfirm().confirm(
+      `Buat antrian baru ${n} unit untuk mengulang cetak yang gagal? Job lama tetap tercatat selesai.`,
+      { title: 'Ulang cetak gagal', confirmText: 'Buat antrian', danger: false }
+    ))
+  ) {
+    return
+  }
+  try {
+    await $fetch(`/api/productions/${j.id}/retry`, { method: 'POST' })
+    await refresh()
+    await refreshProducts()
+    useToast().success(`Antrian ulang ${n} unit dibuat.`)
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal membuat antrian ulang')
+  }
+}
+
 async function remove(j) {
   const extra = j.stockApplied ? ' Stok produk dan material akan dikembalikan.' : ''
   if (!(await useConfirm().confirm(`Hapus produksi "${jobTitle(j)}"?${extra}`))) return
@@ -312,6 +336,7 @@ async function remove(j) {
     <p class="text-xs text-ink-500">
       Progress mengikuti durasi cetak (recipe atau pesanan custom) sejak produksi dimulai. Katalog: unit jadi masuk stok.
       Custom: unit jadi untuk pelanggan, tidak masuk stok produk.
+      Unit gagal: job tetap selesai (material sudah terpotong); tombol Ulang membuat antrian baru.
     </p>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
@@ -337,14 +362,14 @@ async function remove(j) {
     <div class="panel p-3 grid grid-cols-1 sm:grid-cols-5 gap-2">
       <div>
         <label class="label">Status</label>
-        <select v-model="filters.status" class="input !py-1.5">
+        <select v-model="filters.status" class="input">
           <option value="">Semua</option>
           <option v-for="(label, key) in statusLabel" :key="key" :value="key">{{ label }}</option>
         </select>
       </div>
       <div>
         <label class="label">Jenis</label>
-        <select v-model="filters.custom" class="input !py-1.5">
+        <select v-model="filters.custom" class="input">
           <option value="">Semua</option>
           <option value="0">Katalog</option>
           <option value="1">Custom</option>
@@ -352,18 +377,18 @@ async function remove(j) {
       </div>
       <div>
         <label class="label">Produk</label>
-        <select v-model="filters.productId" class="input !py-1.5">
+        <select v-model="filters.productId" class="input">
           <option value="">Semua</option>
           <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
       </div>
       <div>
         <label class="label">Dari</label>
-        <input v-model="filters.dateFrom" type="date" class="input !py-1.5" />
+        <input v-model="filters.dateFrom" type="date" class="input" />
       </div>
       <div>
         <label class="label">Sampai</label>
-        <input v-model="filters.dateTo" type="date" class="input !py-1.5" />
+        <input v-model="filters.dateTo" type="date" class="input" />
       </div>
     </div>
 
@@ -387,7 +412,7 @@ async function remove(j) {
             <div v-if="j.isCustom" class="text-xs text-ink-400">custom · tidak masuk stok</div>
             <div v-else-if="j.machineName" class="text-xs text-ink-400">{{ j.machineName }}</div>
             <div v-if="jobProgress(j)" class="mt-2 space-y-1">
-              <div class="flex justify-between gap-2 text-[11px] text-ink-500">
+              <div class="flex justify-between gap-2 text-[11px]" :class="jobProgress(j).over ? 'text-amber-700' : 'text-ink-500'">
                 <span>{{ jobProgress(j).label }}</span>
                 <span v-if="!jobProgress(j).unknown" class="font-mono">{{ jobProgress(j).pct }}%</span>
               </div>
@@ -402,14 +427,21 @@ async function remove(j) {
           </div>
         </div>
         <div class="flex flex-wrap gap-1">
-          <button v-if="j.status === 'queued'" class="btn-secondary !py-1 !px-2 text-xs" @click="setStatus(j, 'in_progress')">
+          <button v-if="j.status === 'queued'" class="btn-secondary" @click="setStatus(j, 'in_progress')">
             <PlayIcon class="w-3.5 h-3.5" />Mulai
           </button>
-          <button v-if="j.status === 'queued' || j.status === 'in_progress'" class="btn-primary !py-1 !px-2 text-xs" @click="openComplete(j)">
+          <button v-if="j.status === 'queued' || j.status === 'in_progress'" class="btn-primary" @click="openComplete(j)">
             <CheckIcon class="w-3.5 h-3.5" />Selesai
           </button>
-          <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(j)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-          <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(j)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+          <button
+            v-if="j.status === 'done' && j.quantityFailed > 0 && !j.retried"
+            class="btn-secondary"
+            @click="retryFailed(j)"
+          >
+            <ArrowPathIcon class="w-4 h-4" />Ulang
+          </button>
+          <button class="btn-secondary" @click="openEdit(j)"><PencilSquareIcon class="w-4 h-4" />Edit</button>
+          <button class="btn-danger" @click="remove(j)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada produksi.</p>
@@ -457,27 +489,45 @@ async function remove(j) {
               <td class="min-w-[10rem]">
                 <span class="badge" :class="statusBadge[j.status]">{{ statusLabel[j.status] }}</span>
                 <div v-if="jobProgress(j)" class="mt-1.5 space-y-1">
-                  <div class="h-1.5 rounded-full bg-ink-100 overflow-hidden">
-                    <div
-                      class="h-full rounded-full transition-[width] duration-300"
-                      :class="jobProgress(j).over ? 'bg-amber-500' : 'bg-accent-500'"
-                      :style="{ width: (jobProgress(j).unknown ? 40 : Math.max(jobProgress(j).pct, 2)) + '%' }"
-                    />
+                  <div class="flex items-center gap-2">
+                    <div class="h-1.5 flex-1 rounded-full bg-ink-100 overflow-hidden">
+                      <div
+                        class="h-full rounded-full transition-[width] duration-300"
+                        :class="jobProgress(j).over ? 'bg-amber-500' : 'bg-accent-500'"
+                        :style="{ width: (jobProgress(j).unknown ? 40 : Math.max(jobProgress(j).pct, 2)) + '%' }"
+                      />
+                    </div>
+                    <span
+                      v-if="!jobProgress(j).unknown"
+                      class="font-mono text-[11px] tabular-nums shrink-0 w-10 text-right"
+                      :class="jobProgress(j).over ? 'text-amber-700' : 'text-ink-500'"
+                    >{{ jobProgress(j).pct }}%</span>
                   </div>
-                  <div class="text-[11px] text-ink-400">{{ jobProgress(j).label }}</div>
+                  <div class="text-[11px]" :class="jobProgress(j).over ? 'text-amber-700' : 'text-ink-400'">
+                    {{ jobProgress(j).label }}
+                  </div>
                 </div>
               </td>
               <td class="whitespace-nowrap text-right">
-                <button v-if="j.status === 'queued'" class="btn-secondary !py-1 !px-2 text-xs" @click="setStatus(j, 'in_progress')">Mulai</button>
+                <button v-if="j.status === 'queued'" class="btn-secondary" @click="setStatus(j, 'in_progress')">
+                  <PlayIcon class="w-4 h-4" />Mulai
+                </button>
                 <button
                   v-if="j.status === 'queued' || j.status === 'in_progress'"
-                  class="btn-primary !py-1 !px-2 text-xs ml-1"
+                  class="btn-primary ml-1"
                   @click="openComplete(j)"
                 >
-                  Selesai
+                  <CheckIcon class="w-4 h-4" />Selesai
                 </button>
-                <button class="btn-secondary !py-1 !px-2 text-xs ml-1" @click="openEdit(j)">Edit</button>
-                <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(j)">Hapus</button>
+                <button
+                  v-if="j.status === 'done' && j.quantityFailed > 0 && !j.retried"
+                  class="btn-secondary ml-1"
+                  @click="retryFailed(j)"
+                >
+                  <ArrowPathIcon class="w-4 h-4" />Ulang
+                </button>
+                <button class="btn-secondary ml-1" @click="openEdit(j)"><PencilSquareIcon class="w-4 h-4" />Edit</button>
+                <button class="btn-danger ml-1" @click="remove(j)"><TrashIcon class="w-4 h-4" />Hapus</button>
               </td>
             </tr>
             <tr v-if="!total">

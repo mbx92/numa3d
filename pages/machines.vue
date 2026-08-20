@@ -8,7 +8,8 @@ import {
   MagnifyingGlassIcon,
   PhotoIcon,
   BoltIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  CloudIcon
 } from '@heroicons/vue/24/outline'
 
 const { data: machines, refresh } = await useFetch('/api/machines')
@@ -329,10 +330,10 @@ onUnmounted(() => {
         </dl>
 
         <div v-if="isAdmin" class="flex flex-wrap gap-1.5 border-t border-ink-100 pt-2">
-          <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(m)">
+          <button class="btn-secondary" @click="openEdit(m)">
             <PencilSquareIcon class="w-3.5 h-3.5" />Edit
           </button>
-          <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(m)">
+          <button class="btn-danger" @click="remove(m)">
             <TrashIcon class="w-3.5 h-3.5" />Hapus
           </button>
         </div>
@@ -398,8 +399,8 @@ onUnmounted(() => {
             <td class="num">{{ formatIDR(hourlyDepreciation(m)) }}</td>
             <td class="whitespace-nowrap text-right">
               <template v-if="isAdmin">
-                <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(m)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-                <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(m)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                <button class="btn-secondary" @click="openEdit(m)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                <button class="btn-danger ml-1" @click="remove(m)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
               </template>
               <span v-else class="text-ink-300 text-xs">—</span>
             </td>
@@ -488,15 +489,15 @@ onUnmounted(() => {
               </p>
             </div>
             <div class="flex gap-1">
-              <button type="button" class="btn-secondary !py-1 text-xs" :disabled="scanning" @click="scanLan">
-                {{ scanning ? 'Scan…' : 'Cari di Wi‑Fi' }}
+              <button type="button" class="btn-secondary" :disabled="scanning" @click="scanLan">
+                <MagnifyingGlassIcon class="w-4 h-4" />{{ scanning ? 'Scan…' : 'Cari di Wi‑Fi' }}
               </button>
             </div>
           </div>
           <ul v-if="scanResults.length" class="text-xs border border-ink-100 rounded-panel divide-y max-h-32 overflow-y-auto">
             <li v-for="d in scanResults" :key="d.id" class="flex items-center gap-2 px-2 py-1.5">
               <span class="font-mono truncate flex-1">{{ d.ip }} · {{ d.id }} · v{{ d.version }}</span>
-              <button type="button" class="btn-secondary !py-0.5 !px-2" @click="applyScan(d)">Pakai</button>
+              <button type="button" class="btn-secondary" @click="applyScan(d)"><CheckIcon class="w-4 h-4" />Pakai</button>
             </li>
           </ul>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -544,14 +545,14 @@ onUnmounted(() => {
             {{ tuyaReady.cloudConfigured ? '· cloud siap' : '· cloud belum diisi di .env' }}
           </p>
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="btn-secondary !py-1 text-xs" :disabled="probing" @click="probePlug">
-              {{ probing ? 'Menguji…' : 'Uji koneksi' }}
+            <button type="button" class="btn-secondary" :disabled="probing" @click="probePlug">
+              <BoltIcon class="w-4 h-4" />{{ probing ? 'Menguji…' : 'Uji koneksi' }}
             </button>
-            <button type="button" class="btn-secondary !py-1 text-xs" :disabled="fetchingCloud" @click="fillFromCloud">
-              {{ fetchingCloud ? 'Cloud…' : 'Ambil local key dari cloud' }}
+            <button type="button" class="btn-secondary" :disabled="fetchingCloud" @click="fillFromCloud">
+              <CloudIcon class="w-4 h-4" />{{ fetchingCloud ? 'Cloud…' : 'Ambil local key dari cloud' }}
             </button>
-            <button v-if="editing?.tuyaConfigured" type="button" class="btn-danger !py-1 text-xs" @click="clearTuya">
-              Putuskan plug
+            <button v-if="editing?.tuyaConfigured" type="button" class="btn-danger" @click="clearTuya">
+              <XMarkIcon class="w-4 h-4" />Putuskan plug
             </button>
           </div>
           <p v-if="probeMsg" class="text-xs" :class="probeMsg.startsWith('Terhubung') ? 'text-teal-700' : 'text-ink-600'">{{ probeMsg }}</p>

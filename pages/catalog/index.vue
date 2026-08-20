@@ -106,10 +106,10 @@ async function remove(s) {
           <div class="flex items-start justify-between gap-2">
             <span class="font-medium leading-snug break-words">{{ s.name }}</span>
             <div v-if="isAdmin" class="flex gap-1 shrink-0" @click.prevent>
-              <button class="btn-secondary !py-1 !px-1.5 text-xs" title="Edit" @click="openEdit(s)">
+              <button class="btn-secondary" title="Edit" @click="openEdit(s)">
                 <PencilSquareIcon class="w-3.5 h-3.5" />
               </button>
-              <button class="btn-danger !py-1 !px-1.5 text-xs" title="Hapus" @click="remove(s)">
+              <button class="btn-danger" title="Hapus" @click="remove(s)">
                 <TrashIcon class="w-3.5 h-3.5" />
               </button>
             </div>

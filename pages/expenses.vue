@@ -159,8 +159,8 @@ async function remove(e) {
         <div v-if="e.productName" class="text-xs text-ink-400">Item: {{ e.productName }}</div>
         <p v-if="e.fromMachine" class="text-xs text-ink-400">Dari halaman Mesin — ubah di sana.</p>
         <div v-if="!e.fromMachine" class="flex flex-wrap gap-1 pt-1">
-          <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-          <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+          <button class="btn-secondary" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+          <button class="btn-danger" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Tidak ada pengeluaran.</p>
@@ -201,8 +201,8 @@ async function remove(e) {
                   <span class="text-xs text-ink-400">Dari Mesin</span>
                 </template>
                 <template v-else>
-                  <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-                  <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                  <button class="btn-secondary" @click="openEdit(e)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                  <button class="btn-danger ml-1" @click="remove(e)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
                 </template>
               </td>
             </tr>
@@ -297,7 +297,7 @@ async function remove(e) {
               <button
                 v-if="!c.isSystem"
                 type="button"
-                class="btn-danger !py-1 !px-2 text-xs ml-auto"
+                class="btn-danger ml-auto"
                 @click="removeCategory(c)"
               >
                 <TrashIcon class="w-3.5 h-3.5" />

@@ -179,7 +179,7 @@ watch(
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">MinIO (file 3D)</span>
-          <button class="btn-secondary !py-1 text-xs" :disabled="minioFetchStatus === 'pending'" @click="refreshMinio">
+          <button class="btn-secondary" :disabled="minioFetchStatus === 'pending'" @click="refreshMinio">
             <ArrowPathIcon class="w-3.5 h-3.5" />Cek ulang
           </button>
         </div>
@@ -219,7 +219,7 @@ watch(
           <span class="panel-title">Tuya (smart plug)</span>
           <button
             v-if="isAdmin"
-            class="btn-secondary !py-1 text-xs"
+            class="btn-secondary"
             :disabled="tuyaFetchStatus === 'pending'"
             @click="refreshTuya"
           >

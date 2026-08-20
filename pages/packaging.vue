@@ -97,8 +97,8 @@ async function remove(p) {
           </div>
           <div class="text-xs text-ink-400">{{ p.supplier || 'tanpa supplier' }}</div>
           <div v-if="isAdmin" class="flex flex-wrap gap-1 pt-1">
-            <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(p)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-            <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+            <button class="btn-secondary" @click="openEdit(p)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+            <button class="btn-danger" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
           </div>
         </div>
       </div>
@@ -146,8 +146,8 @@ async function remove(p) {
               <td class="text-ink-500">{{ p.supplier || '-' }}</td>
               <td class="whitespace-nowrap text-right">
                 <template v-if="isAdmin">
-                  <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(p)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-                  <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                  <button class="btn-secondary" @click="openEdit(p)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                  <button class="btn-danger ml-1" @click="remove(p)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
                 </template>
                 <span v-else class="text-ink-300 text-xs">—</span>
               </td>

@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowPathIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/vue/24/outline'
+import { ArrowPathIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, ChartBarIcon } from '@heroicons/vue/24/outline'
 import { categoryBadgeClass } from '~/utils/expenseCategory.js'
 
 const { data, refresh, status } = await useFetch('/api/dashboard')
@@ -44,9 +44,9 @@ function signedPct(n) {
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <NuxtLink to="/reports" class="btn-secondary !py-1.5 text-xs">Laporan</NuxtLink>
-        <button class="btn-secondary !py-1.5" :disabled="status === 'pending'" @click="refresh()">
-          <ArrowPathIcon class="w-4 h-4" />
+        <NuxtLink to="/reports" class="btn-secondary"><ChartBarIcon class="w-4 h-4" />Laporan</NuxtLink>
+        <button class="btn-secondary" :disabled="status === 'pending'" @click="refresh()">
+          <ArrowPathIcon class="w-4 h-4" />Muat ulang
         </button>
       </div>
     </div>

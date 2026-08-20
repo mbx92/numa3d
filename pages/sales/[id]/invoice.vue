@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowLeftIcon, PrinterIcon, ArrowDownTrayIcon, ShareIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, PrinterIcon, ArrowDownTrayIcon, ShareIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline'
 
 definePageMeta({ layout: 'print' })
 
@@ -108,7 +108,7 @@ async function copyShareUrl() {
         <div class="text-xs font-semibold uppercase tracking-wide text-ink-500">Tautan publik</div>
         <div class="flex gap-2">
           <input :value="shareInfo.url" readonly class="input font-mono text-xs" @focus="$event.target.select()" />
-          <button type="button" class="btn-secondary shrink-0" @click="copyShareUrl">Salin</button>
+          <button type="button" class="btn-secondary shrink-0" @click="copyShareUrl"><ClipboardDocumentIcon class="w-4 h-4" />Salin</button>
         </div>
         <p class="text-xs text-ink-500">Berlaku sampai {{ formatShareExpiry(shareInfo.expiresAt) }}.</p>
       </div>

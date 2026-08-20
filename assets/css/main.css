@@ -43,9 +43,13 @@
   .panel-title {
     @apply text-sm font-semibold uppercase tracking-wide text-ink-600;
   }
+  /* Tinggi kontrol seragam: tombol, select, date, input = 2.5rem */
   .btn {
-    @apply inline-flex items-center gap-1.5 px-3 py-2 rounded-panel text-sm font-medium
-      transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-1.5 px-3 rounded-panel text-sm font-medium
+      h-10 min-h-10 box-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn svg {
+    @apply !h-4 !w-4 shrink-0;
   }
   .btn-primary {
     @apply btn bg-accent-500 text-white hover:bg-accent-600;
@@ -58,14 +62,22 @@
   }
   .input {
     /* text-base (16px): cegah iOS/PWA zoom otomatis saat fokus field */
-    @apply w-full px-3 py-2 rounded-panel border border-ink-300 bg-white text-base sm:text-sm
-      focus:outline-none focus:ring-2 focus:ring-accent-400 focus:border-accent-400;
+    @apply w-full h-10 min-h-10 px-3 rounded-panel border border-ink-300 bg-white text-base sm:text-sm
+      box-border focus:outline-none focus:ring-2 focus:ring-accent-400 focus:border-accent-400;
+  }
+  textarea.input {
+    @apply h-auto min-h-[4.5rem] py-2;
   }
   .input-num {
     @apply input font-mono text-right;
   }
   select.input {
-    @apply text-base sm:text-sm;
+    @apply text-base sm:text-sm pr-9;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+    background-position: right 0.65rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem 1rem;
   }
 
   /*
@@ -81,12 +93,12 @@
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
-    min-height: 2.75rem;
+    height: 2.5rem;
+    min-height: 2.5rem;
     line-height: 1.25;
     color-scheme: light;
     -webkit-appearance: none;
     appearance: none;
-    /* Cegah intrinsic content-size mendorong parent */
     field-sizing: fixed;
   }
 
@@ -157,7 +169,7 @@
     text-align: right;
   }
   .table-std tbody td {
-    @apply px-3 py-2 border-b border-ink-100 align-top;
+    @apply px-3 py-2 border-b border-ink-100 align-middle;
   }
   .num {
     @apply font-mono tabular-nums text-right whitespace-nowrap;

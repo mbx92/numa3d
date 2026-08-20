@@ -38,7 +38,7 @@ function go(p) {
       <span class="whitespace-nowrap">{{ rangeStart }}–{{ rangeEnd }} dari {{ total }}</span>
       <select
         :value="pageSize"
-        class="input !py-1 !px-2 !w-auto text-xs"
+        class="input !px-2 !w-auto text-xs"
         @change="emit('update:pageSize', Number($event.target.value))"
       >
         <option v-for="n in pageSizeOptions" :key="n" :value="n">{{ n }} / hal</option>
@@ -47,7 +47,7 @@ function go(p) {
 
     <div v-if="totalPages > 1" class="flex items-center gap-1 order-1 sm:order-2">
       <button
-        class="btn-secondary !py-1 !px-2"
+        class="btn-secondary"
         :disabled="page === 1"
         aria-label="Halaman sebelumnya"
         @click="go(page - 1)"
@@ -57,14 +57,14 @@ function go(p) {
       <button
         v-for="n in pageNumbers"
         :key="n"
-        class="!py-1 !px-3 rounded-panel text-sm font-medium transition-colors"
+        class="h-10 min-w-10 px-3 rounded-panel text-sm font-medium transition-colors"
         :class="n === page ? 'bg-accent-500 text-white' : 'text-ink-600 hover:bg-ink-100'"
         @click="go(n)"
       >
         {{ n }}
       </button>
       <button
-        class="btn-secondary !py-1 !px-2"
+        class="btn-secondary"
         :disabled="page === totalPages"
         aria-label="Halaman berikutnya"
         @click="go(page + 1)"

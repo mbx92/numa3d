@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
       stockApplied: schema.productions.stockApplied,
       startedAt: schema.productions.startedAt,
       durationMinutes: schema.productions.durationMinutes,
+      retryOfId: schema.productions.retryOfId,
       createdAt: schema.productions.createdAt,
       printMinutesPerUnit: schema.customOrders.printTimeMinutes
     })
@@ -57,11 +58,13 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return rows.map((r) => {
+  const mapped = rows.map((r) => {
     const printMinutesPerUnit = r.customOrderId
       ? r.printMinutesPerUnit || 0
       : printMap.get(r.productId) || 0
     const durationMinutes = r.durationMinutes || printMinutesPerUnit * (r.quantityPlanned || 0)
     return { ...r, printMinutesPerUnit, durationMinutes, isCustom: !!r.customOrderId }
   })
+  const retried = new Set(mapped.filter((r) => r.retryOfId).map((r) => r.retryOfId))
+  return mapped.map((r) => ({ ...r, retried: retried.has(r.id) }))
 })

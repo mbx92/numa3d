@@ -63,7 +63,7 @@ function formatTime(value) {
   <div class="space-y-4">
     <div class="flex items-center justify-between flex-wrap gap-2">
       <h1 class="text-xl font-bold">Log Aktivitas</h1>
-      <select v-model="entityFilter" class="input !py-1.5 w-full sm:w-44">
+      <select v-model="entityFilter" class="input w-full sm:w-44">
         <option value="">Semua kategori</option>
         <option v-for="(label, key) in entityLabel" :key="key" :value="key">{{ label }}</option>
       </select>

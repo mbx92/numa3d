@@ -109,10 +109,10 @@ async function removeFromSeries(p) {
           <button
             v-if="isAdmin"
             type="button"
-            class="btn-danger !py-1 !px-2 text-xs mt-auto self-start"
+            class="btn-danger mt-auto self-start"
             @click="removeFromSeries(p)"
           >
-            Lepas dari series
+            <XMarkIcon class="w-4 h-4" />Lepas dari series
           </button>
         </div>
       </div>

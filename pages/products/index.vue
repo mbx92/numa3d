@@ -127,10 +127,10 @@ async function remove(p) {
                 <span v-else class="text-ink-400 text-xs">belum ada recipe</span>
               </td>
               <td class="whitespace-nowrap text-right">
-                <NuxtLink :to="`/products/${p.id}`" class="btn-secondary !py-1 !px-2 text-xs">
+                <NuxtLink :to="`/products/${p.id}?tab=recipe`" class="btn-secondary">
                   <PencilSquareIcon class="w-3.5 h-3.5" />{{ isAdmin ? 'Recipe & HPP' : 'Lihat' }}
                 </NuxtLink>
-                <button v-if="isAdmin" class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(p)">
+                <button v-if="isAdmin" class="btn-danger ml-1" @click="remove(p)">
                   <TrashIcon class="w-3.5 h-3.5" />Hapus
                 </button>
               </td>
@@ -174,10 +174,10 @@ async function remove(p) {
             <span v-else class="text-ink-400 text-xs"> · belum ada recipe</span>
           </div>
           <div class="flex flex-wrap gap-1 pt-1">
-            <NuxtLink :to="`/products/${p.id}`" class="btn-secondary !py-1 !px-2 text-xs">
-              <PencilSquareIcon class="w-3.5 h-3.5" />{{ isAdmin ? 'Recipe & HPP' : 'Lihat' }}
-            </NuxtLink>
-            <button v-if="isAdmin" class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)">
+                <NuxtLink :to="`/products/${p.id}?tab=recipe`" class="btn-secondary">
+                  <PencilSquareIcon class="w-3.5 h-3.5" />{{ isAdmin ? 'Recipe & HPP' : 'Lihat' }}
+                </NuxtLink>
+            <button v-if="isAdmin" class="btn-danger" @click="remove(p)">
               <TrashIcon class="w-3.5 h-3.5" />Hapus
             </button>
           </div>

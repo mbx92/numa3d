@@ -46,8 +46,8 @@ onMounted(() => {
       <div class="text-sm font-semibold">Versi baru Numa3D</div>
       <p class="text-xs text-ink-500 mt-0.5">Muat ulang untuk memakai pembaruan.</p>
       <div class="flex gap-2 mt-2">
-        <button type="button" class="btn-primary !py-1 !px-2 text-xs" @click="reloadApp">Muat ulang</button>
-        <button type="button" class="btn-secondary !py-1 !px-2 text-xs" @click="$pwa?.cancelPrompt?.()">Nanti</button>
+        <button type="button" class="btn-primary" @click="reloadApp">Muat ulang</button>
+        <button type="button" class="btn-secondary" @click="$pwa?.cancelPrompt?.()">Nanti</button>
       </div>
     </div>
 
@@ -68,10 +68,10 @@ onMounted(() => {
             lalu <span class="font-medium">Add to Home Screen</span>.
           </p>
           <div class="flex flex-wrap gap-2 mt-2">
-            <button v-if="canNativeInstall" type="button" class="btn-primary !py-1 !px-2 text-xs" @click="install">
+            <button v-if="canNativeInstall" type="button" class="btn-primary" @click="install">
               <ArrowDownTrayIcon class="w-3.5 h-3.5" />Pasang
             </button>
-            <button type="button" class="btn-secondary !py-1 !px-2 text-xs" @click="dismiss">Nanti</button>
+            <button type="button" class="btn-secondary" @click="dismiss">Nanti</button>
           </div>
         </div>
         <button type="button" class="text-ink-400 hover:text-ink-700 p-0.5" aria-label="Tutup" @click="dismiss">

@@ -201,7 +201,7 @@ async function remove(p) {
               </td>
               <td class="num">{{ formatIDR(p.totalAmount) }}</td>
               <td class="text-right">
-                <button type="button" class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)">Hapus</button>
+                <button type="button" class="btn-danger" @click="remove(p)"><TrashIcon class="w-4 h-4" />Hapus</button>
               </td>
             </tr>
             <tr v-if="!total">
@@ -232,7 +232,7 @@ async function remove(p) {
         <div class="text-xs text-ink-500">
           <div v-for="l in p.lines" :key="l.id">{{ l.itemName }} - {{ formatNumber(l.quantity, 1) }} {{ l.unit }}</div>
         </div>
-        <button type="button" class="btn-danger !py-1 !px-2 text-xs" @click="remove(p)">Hapus</button>
+        <button type="button" class="btn-danger" @click="remove(p)"><TrashIcon class="w-4 h-4" />Hapus</button>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada pembelian.</p>
     </div>
@@ -276,7 +276,7 @@ async function remove(p) {
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <span class="label !mb-0">Barang</span>
-            <button type="button" class="btn-secondary !py-1 text-xs" @click="form.lines.push(emptyLine())">
+            <button type="button" class="btn-secondary" @click="form.lines.push(emptyLine())">
               <PlusIcon class="w-3.5 h-3.5" />Baris
             </button>
           </div>
@@ -285,7 +285,7 @@ async function remove(p) {
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1">
                 <div>
                   <label class="label">Jenis</label>
-                  <select v-model="line.itemType" class="input !py-1" @change="onTypeChange(line)">
+                  <select v-model="line.itemType" class="input" @change="onTypeChange(line)">
                     <option value="material">Material</option>
                     <option value="packaging">Packaging</option>
                   </select>
@@ -295,7 +295,7 @@ async function remove(p) {
                   <select
                     v-if="line.itemType === 'material'"
                     v-model="line.materialId"
-                    class="input !py-1"
+                    class="input"
                     required
                     @change="onItemChange(line)"
                   >
@@ -305,7 +305,7 @@ async function remove(p) {
                   <select
                     v-else
                     v-model="line.packagingId"
-                    class="input !py-1"
+                    class="input"
                     required
                     @change="onItemChange(line)"
                   >
@@ -326,15 +326,15 @@ async function remove(p) {
             <div class="grid grid-cols-3 gap-2">
               <div>
                 <label class="label">Qty ({{ selectedItem(line)?.unit || 'unit' }})</label>
-                <input v-model.number="line.quantity" type="number" min="0" step="0.1" class="input-num !py-1 w-full" required />
+                <input v-model.number="line.quantity" type="number" min="0" step="0.1" class="input-num w-full" required />
               </div>
               <div>
                 <label class="label">Harga / unit</label>
-                <IdrInput v-model="line.unitPrice" required input-class="!py-1 w-full" />
+                <IdrInput v-model="line.unitPrice" required input-class="w-full" />
               </div>
               <div>
                 <label class="label">Subtotal</label>
-                <div class="input-num !py-1 bg-ink-50">{{ formatIDR(lineTotal(line)) }}</div>
+                <div class="input-num bg-ink-50">{{ formatIDR(lineTotal(line)) }}</div>
               </div>
             </div>
           </div>
@@ -381,7 +381,7 @@ async function remove(p) {
                 <div class="font-medium text-sm truncate">{{ s.name }}</div>
                 <div v-if="s.notes" class="text-xs text-ink-400 truncate">{{ s.notes }}</div>
               </div>
-              <button type="button" class="btn-danger !py-1 !px-2 text-xs" @click="removeSupplier(s)">
+              <button type="button" class="btn-danger" @click="removeSupplier(s)">
                 <TrashIcon class="w-3.5 h-3.5" />
               </button>
             </li>
@@ -414,7 +414,7 @@ async function remove(p) {
               <button
                 v-if="!c.isSystem"
                 type="button"
-                class="btn-danger !py-1 !px-2 text-xs ml-auto"
+                class="btn-danger ml-auto"
                 @click="removeCategory(c)"
               >
                 <TrashIcon class="w-3.5 h-3.5" />

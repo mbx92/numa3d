@@ -8,8 +8,14 @@ export default defineEventHandler(async (event) => {
   const rows = await db.select().from(schema.products).where(eq(schema.products.id, id))
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
   const hpp = await getHppForProduct(id)
+  const images = await db
+    .select()
+    .from(schema.productImages)
+    .where(eq(schema.productImages.productId, id))
+    .orderBy(schema.productImages.sortOrder, schema.productImages.id)
   return {
     ...rows[0],
+    images,
     hpp: hpp.total,
     breakdown: hpp.breakdown,
     materialLines: hpp.materialLines,

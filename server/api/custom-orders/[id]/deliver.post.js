@@ -5,7 +5,7 @@ import { allocateInvoiceNumber } from '../../../utils/invoice.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
-  const body = await readBody(event)
+  const body = (await readBody(event).catch(() => null)) || {}
   const db = useDb()
   const row = await db.transaction(async (tx) => {
     const [order] = await tx.select().from(schema.customOrders).where(eq(schema.customOrders.id, id))
@@ -13,8 +13,15 @@ export default defineEventHandler(async (event) => {
     if (order.status === 'delivered') {
       throw createError({ statusCode: 400, statusMessage: 'Pesanan ini sudah diserahkan' })
     }
-    const [job] = await tx.select().from(schema.productions).where(eq(schema.productions.customOrderId, id))
-    if (!job || job.status !== 'done' || job.quantityGood < 1) {
+    const jobs = await tx.select().from(schema.productions).where(eq(schema.productions.customOrderId, id))
+    if (jobs.some((j) => j.status === 'queued' || j.status === 'in_progress')) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Selesaikan atau hapus antrian produksi dulu sebelum serah terima'
+      })
+    }
+    const totalGood = jobs.filter((j) => j.status === 'done').reduce((a, j) => a + (j.quantityGood || 0), 0)
+    if (totalGood < 1) {
       throw createError({
         statusCode: 400,
         statusMessage: 'Selesaikan produksi dan pastikan ada unit jadi sebelum menyerahkan'
@@ -24,7 +31,7 @@ export default defineEventHandler(async (event) => {
     if (existingSale) {
       throw createError({ statusCode: 400, statusMessage: 'Penjualan untuk pesanan ini sudah tercatat' })
     }
-    const qty = job.quantityGood
+    const qty = totalGood
     const price =
       body.salePricePerUnit != null && body.salePricePerUnit !== ''
         ? Math.max(Math.round(Number(body.salePricePerUnit) || 0), 0)

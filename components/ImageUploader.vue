@@ -71,7 +71,7 @@ watch(
       <PhotoIcon v-else class="w-8 h-8 text-ink-300" />
     </div>
     <div v-if="editable" class="flex items-center gap-2">
-      <label class="btn-secondary !py-1 text-xs cursor-pointer">
+      <label class="btn-secondary cursor-pointer">
         <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ busy ? 'Memproses…' : present ? 'Ganti' : 'Upload' }}
         <input
           ref="input"
@@ -82,8 +82,8 @@ watch(
           @change="onPick"
         />
       </label>
-      <button v-if="present" type="button" class="btn-danger !py-1 !px-2 text-xs" :disabled="busy" @click="removeImage">
-        <TrashIcon class="w-3.5 h-3.5" />
+      <button v-if="present" type="button" class="btn-danger" :disabled="busy" @click="removeImage">
+        <TrashIcon class="w-4 h-4" />Hapus
       </button>
     </div>
     <p v-if="errorMsg" class="text-xs text-red-600">{{ errorMsg }}</p>

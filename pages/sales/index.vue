@@ -51,8 +51,8 @@ const totals = computed(() => {
   return {
     units: rows.reduce((a, r) => a + r.quantity, 0),
     gross: rows.reduce((a, r) => a + r.grossRevenue, 0),
-    net: rows.reduce((a, r) => a + r.netRevenue, 0),
-    margin: rows.reduce((a, r) => a + r.netMargin, 0)
+    fee: rows.reduce((a, r) => a + (r.grossRevenue - r.netRevenue), 0),
+    net: rows.reduce((a, r) => a + r.netRevenue, 0)
   }
 })
 
@@ -178,10 +178,10 @@ async function remove(s) {
           </div>
         </div>
         <div class="flex gap-2 col-span-full lg:col-auto">
-          <button type="button" class="btn-secondary !py-1.5 text-xs flex-1 lg:flex-none" @click="setThisMonth">
+          <button type="button" class="btn-secondary flex-1 lg:flex-none" @click="setThisMonth">
             <CalendarDaysIcon class="w-3.5 h-3.5" />Bulan ini
           </button>
-          <button type="button" class="btn-secondary !py-1.5 text-xs flex-1 lg:flex-none" @click="clearFilters">
+          <button type="button" class="btn-secondary flex-1 lg:flex-none" @click="clearFilters">
             <ArrowPathIcon class="w-3.5 h-3.5" />Reset
           </button>
         </div>
@@ -199,14 +199,12 @@ async function remove(s) {
         <div class="font-mono text-lg sm:text-xl font-semibold">{{ formatIDR(totals.gross) }}</div>
       </div>
       <div class="panel p-3">
-        <div class="text-xs text-ink-500 uppercase font-semibold">Revenue bersih</div>
-        <div class="font-mono text-lg sm:text-xl font-semibold text-teal-600">{{ formatIDR(totals.net) }}</div>
+        <div class="text-xs text-ink-500 uppercase font-semibold">Fee marketplace</div>
+        <div class="font-mono text-lg sm:text-xl font-semibold text-red-600">{{ formatIDR(totals.fee) }}</div>
       </div>
       <div class="panel p-3">
-        <div class="text-xs text-ink-500 uppercase font-semibold">Margin bersih</div>
-        <div class="font-mono text-lg sm:text-xl font-semibold" :class="totals.margin >= 0 ? 'text-green-600' : 'text-red-600'">
-          {{ formatIDR(totals.margin) }}
-        </div>
+        <div class="text-xs text-ink-500 uppercase font-semibold">Revenue bersih</div>
+        <div class="font-mono text-lg sm:text-xl font-semibold text-teal-600">{{ formatIDR(totals.net) }}</div>
       </div>
     </div>
 
@@ -230,15 +228,15 @@ async function remove(s) {
           <div class="flex justify-between"><dt class="text-ink-500">Harga</dt><dd class="font-mono">{{ formatIDR(s.salePricePerUnit) }}</dd></div>
           <div class="flex justify-between"><dt class="text-ink-500">Fee</dt><dd class="font-mono">{{ s.marketplaceFeePercent ? s.marketplaceFeePercent + '%' : '–' }}</dd></div>
           <div class="flex justify-between">
-            <dt class="text-ink-500">Margin</dt>
-            <dd class="font-mono" :class="s.netMargin >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatIDR(s.netMargin) }}</dd>
+            <dt class="text-ink-500">Bersih</dt>
+            <dd class="font-mono">{{ formatIDR(s.netRevenue) }}</dd>
           </div>
         </dl>
         <div class="pt-1 flex flex-wrap gap-1">
-          <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-secondary !py-1 !px-2 text-xs">
+          <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-secondary">
             <PrinterIcon class="w-3.5 h-3.5" />Invoice
           </NuxtLink>
-          <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+          <button class="btn-danger" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">Belum ada penjualan pada filter ini.</p>
@@ -266,7 +264,6 @@ async function remove(s) {
               <th class="text-right">Harga/unit</th>
               <th class="text-right">Fee</th>
               <th class="text-right">Bersih/unit</th>
-              <th class="text-right">Margin bersih</th>
               <th></th>
             </tr>
           </thead>
@@ -284,14 +281,15 @@ async function remove(s) {
               <td class="num">{{ formatIDR(s.salePricePerUnit) }}</td>
               <td class="num text-ink-500">{{ s.marketplaceFeePercent ? s.marketplaceFeePercent + '%' : '-' }}</td>
               <td class="num">{{ formatIDR(s.netPricePerUnit) }}</td>
-              <td class="num" :class="s.netMargin >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatIDR(s.netMargin) }}</td>
               <td class="text-right whitespace-nowrap">
-                <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-secondary !py-1 !px-2 text-xs">Invoice</NuxtLink>
-                <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                <NuxtLink :to="`/sales/${s.id}/invoice`" class="btn-secondary">
+                  <PrinterIcon class="w-4 h-4" />Invoice
+                </NuxtLink>
+                <button class="btn-danger ml-1" @click="remove(s)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
               </td>
             </tr>
             <tr v-if="!total">
-              <td colspan="9" class="text-center text-ink-500 py-6">Belum ada penjualan pada filter ini.</td>
+              <td colspan="8" class="text-center text-ink-500 py-6">Belum ada penjualan pada filter ini.</td>
             </tr>
           </tbody>
         </table>
@@ -306,7 +304,7 @@ async function remove(s) {
       />
     </div>
 
-    <!-- Form catat penjualan: input di kiri, ringkasan margin hidup di kanan -->
+    <!-- Form catat penjualan: input di kiri, ringkasan revenue di kanan -->
     <AppModal v-if="showForm" title="Catat Penjualan" size="lg" @close="showForm = false">
       <form class="grid grid-cols-1 lg:grid-cols-5 gap-4" @submit.prevent="save">
         <div class="lg:col-span-3 space-y-3">
@@ -341,7 +339,7 @@ async function remove(s) {
                 <PhotoIcon v-else class="w-4 h-4 text-ink-300" />
               </div>
               <p v-if="!selectedProduct.hasRecipe" class="text-xs text-amber-600">
-                Produk ini belum punya recipe — margin tidak bisa dihitung.
+                Produk ini belum punya recipe — harga saran tidak tersedia.
               </p>
               <p v-else class="text-xs text-ink-500">
                 HPP {{ formatIDR(selectedProduct.hpp) }} / unit · stok {{ formatNumber(selectedProduct.stockQuantity) }}
@@ -408,25 +406,6 @@ async function remove(s) {
               <div class="flex justify-between gap-2 pt-1.5 border-t border-ink-200">
                 <dt class="text-ink-600 font-medium">Revenue bersih</dt>
                 <dd class="font-mono font-semibold text-teal-600">{{ formatIDR(preview.net) }}</dd>
-              </div>
-              <div class="flex justify-between gap-2">
-                <dt class="text-ink-500">HPP ({{ preview.qty }} unit)</dt>
-                <dd class="font-mono text-red-600">
-                  <span v-if="preview.hasHpp">− {{ formatIDR(preview.cogs) }}</span>
-                  <span v-else class="text-ink-400">—</span>
-                </dd>
-              </div>
-              <div class="flex justify-between gap-2 pt-1.5 border-t border-ink-200">
-                <dt class="font-medium">Margin bersih</dt>
-                <dd class="font-mono font-bold" :class="preview.margin >= 0 ? 'text-green-600' : 'text-red-600'">
-                  {{ formatIDR(preview.margin) }}
-                </dd>
-              </div>
-              <div v-if="preview.hasHpp && preview.net" class="flex justify-between gap-2">
-                <dt class="text-ink-500">Margin %</dt>
-                <dd class="font-mono" :class="preview.margin >= 0 ? 'text-green-600' : 'text-red-600'">
-                  {{ preview.marginPercent }}%
-                </dd>
               </div>
             </dl>
             <div v-if="belowCost" class="flex gap-2 rounded bg-red-50 border border-red-200 p-2 text-xs text-red-700">

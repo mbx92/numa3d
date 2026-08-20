@@ -41,5 +41,18 @@ export default defineEventHandler(async (event) => {
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(schema.customOrders.date), desc(schema.customOrders.id))
 
-  return rows
+  const rank = { in_progress: 3, queued: 2, done: 1, cancelled: 0 }
+  const byId = new Map()
+  for (const r of rows) {
+    const prev = byId.get(r.id)
+    if (!prev) {
+      byId.set(r.id, r)
+      continue
+    }
+    const better =
+      (rank[r.productionStatus] || 0) > (rank[prev.productionStatus] || 0) ||
+      ((rank[r.productionStatus] || 0) === (rank[prev.productionStatus] || 0) && (r.productionId || 0) > (prev.productionId || 0))
+    if (better) byId.set(r.id, r)
+  }
+  return [...byId.values()]
 })

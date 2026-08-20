@@ -144,9 +144,9 @@ async function saveAdjust() {
               <td class="text-ink-500">{{ m.supplier || '-' }}</td>
               <td class="whitespace-nowrap text-right">
                 <template v-if="isAdmin">
-                  <button class="btn-secondary !py-1 !px-2 text-xs" @click="openAdjust(m)"><ArrowsUpDownIcon class="w-3.5 h-3.5" />Stok ±</button>
-                  <button class="btn-secondary !py-1 !px-2 text-xs ml-1" @click="openEdit(m)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-                  <button class="btn-danger !py-1 !px-2 text-xs ml-1" @click="remove(m)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+                  <button class="btn-secondary" @click="openAdjust(m)"><ArrowsUpDownIcon class="w-3.5 h-3.5" />Stok ±</button>
+                  <button class="btn-secondary ml-1" @click="openEdit(m)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                  <button class="btn-danger ml-1" @click="remove(m)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
                 </template>
                 <span v-else class="text-ink-300 text-xs">—</span>
               </td>
@@ -189,9 +189,9 @@ async function saveAdjust() {
           </div>
           <div class="text-xs text-ink-400">{{ m.supplier || 'tanpa supplier' }}</div>
           <div v-if="isAdmin" class="flex flex-wrap gap-1 pt-1">
-            <button class="btn-secondary !py-1 !px-2 text-xs" @click="openAdjust(m)"><ArrowsUpDownIcon class="w-3.5 h-3.5" />Stok ±</button>
-            <button class="btn-secondary !py-1 !px-2 text-xs" @click="openEdit(m)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
-            <button class="btn-danger !py-1 !px-2 text-xs" @click="remove(m)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
+            <button class="btn-secondary" @click="openAdjust(m)"><ArrowsUpDownIcon class="w-3.5 h-3.5" />Stok ±</button>
+            <button class="btn-secondary" @click="openEdit(m)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+            <button class="btn-danger" @click="remove(m)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
           </div>
         </div>
       </div>
