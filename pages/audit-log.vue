@@ -9,6 +9,7 @@ const entityLabel = {
   product: 'Produk',
   product_recipe: 'Recipe',
   product_file: 'File 3D',
+  library_file: 'Galeri 3D',
   settings: 'Pengaturan',
   user: 'User',
   expense: 'Pengeluaran',

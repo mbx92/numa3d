@@ -19,12 +19,18 @@ export default defineEventHandler(async () => {
   const latencyMs = Date.now() - started
 
   const db = useDb()
-  const [stats] = await db
+  const [productStats] = await db
     .select({
       fileCount: sql`count(*)`,
       totalBytes: sql`coalesce(sum(${schema.productFiles.sizeBytes}), 0)`
     })
     .from(schema.productFiles)
+  const [libraryStats] = await db
+    .select({
+      fileCount: sql`count(*)`,
+      totalBytes: sql`coalesce(sum(${schema.libraryFiles.sizeBytes}), 0)`
+    })
+    .from(schema.libraryFiles)
 
   return {
     reachable,
@@ -34,7 +40,7 @@ export default defineEventHandler(async () => {
     endpoint: `${cfg.endPoint}:${cfg.port}`,
     useSSL: cfg.useSSL,
     bucket: cfg.bucket,
-    fileCount: Number(stats?.fileCount || 0),
-    totalBytes: Number(stats?.totalBytes || 0)
+    fileCount: Number(productStats?.fileCount || 0) + Number(libraryStats?.fileCount || 0),
+    totalBytes: Number(productStats?.totalBytes || 0) + Number(libraryStats?.totalBytes || 0)
   }
 })

@@ -282,6 +282,16 @@ export const productFiles = pgTable('product_files', {
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 
+// File 3D lepas (bukan milik produk). Sama seperti product_files: isi di MinIO.
+export const libraryFiles = pgTable('library_files', {
+  id: serial('id').primaryKey(),
+  filename: text('filename').notNull(),
+  objectKey: text('object_key').notNull(),
+  sizeBytes: integer('size_bytes').notNull().default(0),
+  contentType: text('content_type'),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+})
+
 // Jejak audit untuk aksi mutasi (siapa mengubah apa). username didenormalisasi
 // agar tetap terbaca meski user penulisnya kemudian dihapus.
 export const auditLogs = pgTable('audit_logs', {
