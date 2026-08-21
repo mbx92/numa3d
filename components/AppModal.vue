@@ -1,12 +1,16 @@
 <script setup>
 const props = defineProps({
   title: { type: String, default: '' },
-  size: { type: String, default: 'md' }, // md | lg
+  size: { type: String, default: 'md' }, // md | lg | xl
   nested: { type: Boolean, default: false }
 })
 defineEmits(['close'])
 
-const widthClass = computed(() => (props.size === 'lg' ? 'sm:max-w-3xl' : 'sm:max-w-lg'))
+const widthClass = computed(() => {
+  if (props.size === 'xl') return 'sm:max-w-5xl'
+  if (props.size === 'lg') return 'sm:max-w-3xl'
+  return 'sm:max-w-lg'
+})
 const zClass = computed(() => (props.nested ? 'z-[110]' : 'z-[100]'))
 const panelRef = ref(null)
 

@@ -18,7 +18,7 @@ const uploading = ref(false)
 const uploadProgress = ref('')
 const uploadPercent = ref(0)
 const uploadError = ref('')
-const previewFile = ref(files.value?.[0] || null)
+const previewFile = ref(null)
 
 const FILE_VIEW_KEY = 'numa3d-library-files-view'
 const filesView = ref('grid')
@@ -40,12 +40,8 @@ const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } 
 watch(search, reset)
 
 watch(filtered, (rows) => {
-  if (!rows.length) {
+  if (previewFile.value && !rows.some((f) => f.id === previewFile.value.id)) {
     previewFile.value = null
-    return
-  }
-  if (!previewFile.value || !rows.some((f) => f.id === previewFile.value.id)) {
-    previewFile.value = rows[0]
   }
 })
 
@@ -118,7 +114,6 @@ async function uploadFile(event) {
       }
     }
     await refreshFiles()
-    if (lastUploaded) previewFile.value = lastUploaded
     if (errors.length) {
       uploadError.value =
         errors.length === totalFiles
@@ -171,9 +166,7 @@ async function deleteFile(f) {
       </label>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
-      <div class="lg:col-span-4">
-        <div class="panel overflow-hidden flex flex-col lg:sticky lg:top-3">
+    <div class="panel overflow-hidden">
           <div class="panel-header !flex-wrap gap-2 sticky top-0 z-10 bg-white">
             <span class="panel-title">{{ total }} file</span>
             <div class="inline-flex rounded-panel border border-ink-200 overflow-hidden ml-auto">
@@ -219,7 +212,7 @@ async function deleteFile(f) {
           </div>
           <p v-if="uploadError" class="px-3 sm:px-4 pt-3 text-sm text-red-600 whitespace-pre-line">{{ uploadError }}</p>
 
-          <div v-if="paged.length && filesView === 'list'" class="max-h-[18.75rem] lg:max-h-[28rem] overflow-y-auto overscroll-contain">
+          <div v-if="paged.length && filesView === 'list'" class="overflow-y-auto overscroll-contain">
             <ul class="divide-y divide-ink-100">
               <li
                 v-for="f in paged"
@@ -257,8 +250,8 @@ async function deleteFile(f) {
             </ul>
           </div>
 
-          <div v-else-if="paged.length && filesView === 'grid'" class="max-h-[18.75rem] lg:max-h-[28rem] overflow-y-auto overscroll-contain p-2">
-            <div class="grid grid-cols-2 gap-2">
+          <div v-else-if="paged.length && filesView === 'grid'" class="overflow-y-auto overscroll-contain p-2">
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
               <button
                 v-for="f in paged"
                 :key="f.id"
@@ -314,26 +307,17 @@ async function deleteFile(f) {
             />
           </div>
         </div>
-      </div>
 
-      <div class="panel lg:col-span-8 overflow-hidden">
-        <div class="panel-header">
-          <span class="panel-title truncate min-w-0">{{ previewFile ? previewFile.filename : 'Preview 3D' }}</span>
-        </div>
-        <div class="h-[42vh] sm:h-[50vh] lg:h-[70vh]">
-          <ClientOnly>
-            <ModelViewer
-              v-if="previewFile"
-              :key="previewFile.id"
-              :src="`/api/library-files/${previewFile.id}`"
-              :filename="previewFile.filename"
-            />
-            <div v-else class="w-full h-full flex items-center justify-center text-sm text-ink-500 bg-ink-50 px-4 text-center">
-              Pilih file di galeri untuk melihat preview.
-            </div>
-          </ClientOnly>
-        </div>
+    <AppModal v-if="previewFile" :title="previewFile.filename" size="xl" @close="previewFile = null">
+      <div class="h-[60vh] -m-4">
+        <ClientOnly>
+          <ModelViewer
+            :key="previewFile.id"
+            :src="`/api/library-files/${previewFile.id}`"
+            :filename="previewFile.filename"
+          />
+        </ClientOnly>
       </div>
-    </div>
+    </AppModal>
   </div>
 </template>
