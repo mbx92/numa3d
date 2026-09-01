@@ -23,7 +23,8 @@ export const KEYCHAIN_THEMES = {
       cavityEdge: '#0f1419'
     },
     defaults: {
-      text: 'SHAREN 77',
+      text: 'NUMA 3D',
+      accentIndices: [],
       attachmentType: 'hole',
       targetWidthMm: 68,
       targetHeightMm: 21,
@@ -63,15 +64,15 @@ export function themeToGeneratorOptions(themeId, overrides = {}) {
     defaults.plateInnerBridgeMm = defaults.plateGapBridgeMm
   }
   if (defaults.eyeletOverlapMm == null && defaults.eyeletInsetMm != null) {
-    const outerR = (defaults.eyeletOuterDiameterMm ?? 8) / 2
-    defaults.eyeletOverlapMm = 2 * outerR - defaults.eyeletInsetMm
+    defaults.eyeletOverlapMm = defaults.eyeletInsetMm
   }
+  const colors = { ...theme.colors, ...(overrides.colors || {}) }
   return {
     themeId: theme.id,
     fontUrl: theme.fontUrl,
     insertMode: theme.insertMode || 'plate',
-    colors: theme.colors,
     ...defaults,
-    ...overrides
+    ...overrides,
+    colors
   }
 }

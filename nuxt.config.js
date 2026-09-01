@@ -1,8 +1,38 @@
+import { fileURLToPath } from 'node:url'
+
+const isProduction = process.env.NODE_ENV === 'production'
+const devAppManifestModule = '\0numa3d-dev-app-manifest'
+const devAppManifestAlias =
+  isProduction
+    ? {}
+    : { '#app-manifest': fileURLToPath(new URL('./.nuxt/manifest/meta/dev.json', import.meta.url)) }
+
+function devAppManifestPlugin() {
+  return {
+    name: 'numa3d-dev-app-manifest',
+    enforce: 'pre',
+    resolveId(id) {
+      if (id === '#app-manifest') return devAppManifestModule
+      return null
+    },
+    load(id) {
+      if (id !== devAppManifestModule) return null
+      return `export default { id: 'dev', timestamp: ${Date.now()}, prerendered: [] }`
+    }
+  }
+}
+
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: false },
   modules: ['@nuxtjs/tailwindcss', '@vite-pwa/nuxt'],
   css: ['~/assets/css/main.css'],
+  vite: {
+    plugins: isProduction ? [] : [devAppManifestPlugin()],
+    resolve: {
+      alias: devAppManifestAlias
+    }
+  },
   devServer: {
     host: '0.0.0.0',
     port: 3000

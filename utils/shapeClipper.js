@@ -244,6 +244,40 @@ function clipperPathToThreePath(path, outerShape = null) {
   return pathFromPoints(pts, false)
 }
 
+export function cloneShapes(shapes) {
+  return (shapes || []).map((s) => cloneThreeShape(s))
+}
+
+/** Perbaiki winding semua lubang agar ExtrudeGeometry memotong benar. */
+export function normalizeShapeHoles(shapes) {
+  return (shapes || []).map((shape) => {
+    const next = cloneThreeShape(shape)
+    next.holes = (next.holes || []).map((h) =>
+      holePathOppositeToOuter(next, h.getPoints(SHAPE_CURVE_SEGS))
+    )
+    return next
+  })
+}
+
+function holeCentroid(holePts) {
+  return {
+    x: holePts.reduce((s, p) => s + p.x, 0) / holePts.length,
+    y: holePts.reduce((s, p) => s + p.y, 0) / holePts.length
+  }
+}
+
+function shapeHasHoleNear(shapes, cx, cy, maxDist) {
+  for (const s of shapes || []) {
+    for (const h of s.holes || []) {
+      const pts = h.getPoints(SHAPE_CURVE_SEGS)
+      if (pts.length < 3) continue
+      const { x, y } = holeCentroid(pts)
+      if (Math.hypot(x - cx, y - cy) <= maxDist) return true
+    }
+  }
+  return false
+}
+
 function cloneThreeShape(shape) {
   const pts = shape.getPoints(SHAPE_CURVE_SEGS)
   const next = new THREE.Shape()
@@ -332,7 +366,10 @@ export function transferHoles(fromShapes, toShapes) {
       const pts = hole.getPoints(SHAPE_CURVE_SEGS)
       if (pts.length < 3) continue
       const host = findShapeForHole(result, pts)
-      if (host) host.holes.push(holePathOppositeToOuter(host, pts))
+      if (!host) continue
+      const { x, y } = holeCentroid(pts)
+      if (shapeHasHoleNear([host], x, y, 0.35)) continue
+      host.holes.push(holePathOppositeToOuter(host, pts))
     }
   }
   return result
@@ -354,8 +391,8 @@ export function subtractShapes2D(outerShapes, innerShapes) {
   const outerUnited = runClip(ClipperLib.ClipType.ctUnion, outerPaths)
   const innerUnited = runClip(ClipperLib.ClipType.ctUnion, innerPaths)
   const solution = runClip(ClipperLib.ClipType.ctDifference, outerUnited, innerUnited)
-  if (!solution.length) return shapesWithHoles(outerShapes, innerShapes)
-  return solutionToShapes(solution)
+  if (!solution.length) return transferHoles(outerShapes, shapesWithHoles(outerShapes, innerShapes))
+  return transferHoles(outerShapes, solutionToShapes(solution))
 }
 
 /** Layout eyelet — satu sumber kebenaran untuk posisi & offset teks. */
@@ -433,6 +470,28 @@ function circleToThreePath(cx, cy, radius, segments = 20) {
   return pts
 }
 
+/** Shape cincin (annulus) — lubang keyring via extrude, winding eksplisit. */
+export function buildAnnulusShape(cx, cy, outerR, innerR, segments = 32) {
+  const shape = new THREE.Shape()
+  shape.absarc(cx, cy, outerR, 0, Math.PI * 2, false)
+  const hole = new THREE.Path()
+  hole.absarc(cx, cy, innerR, 0, Math.PI * 2, true)
+  shape.holes.push(hole)
+  return shape
+}
+
+function circleFootprint(cx, cy, radius, segments = 24) {
+  const shape = new THREE.Shape()
+  shape.absarc(cx, cy, radius, 0, Math.PI * 2, false)
+  return shape
+}
+
+/** Buang area disk dari shapes — eyelet jadi part ring terpisah tanpa overlap. */
+export function subtractDiskFromShapes(shapes, cx, cy, radius) {
+  if (!shapes?.length || radius <= 0) return shapes
+  return subtractShapes2D(shapes, [circleFootprint(cx, cy, radius)])
+}
+
 function shapeArea(shape) {
   const pts = shape.getPoints(8)
   if (pts.length < 3) return 0
@@ -478,6 +537,23 @@ function findShapeForHole(shapes, holePts) {
   return shapes.reduce((a, b) => (shapeArea(a) > shapeArea(b) ? a : b))
 }
 
+function shapeOverlapsEyelet(shape, eyelet) {
+  const pts = shape.getPoints(8)
+  if (!pts.length) return false
+  const xs = pts.map((p) => p.x)
+  const ys = pts.map((p) => p.y)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  return !(
+    eyelet.cx + eyelet.outerR < minX ||
+    eyelet.cx - eyelet.outerR > maxX ||
+    eyelet.cy + eyelet.outerR < minY ||
+    eyelet.cy - eyelet.outerR > maxY
+  )
+}
+
 function addHoleToContainingShape(shapes, cx, cy, holeR) {
   const holePts = circleToThreePath(cx, cy, holeR)
   const host = findShapeForHole(shapes, holePts)
@@ -487,7 +563,16 @@ function addHoleToContainingShape(shapes, cx, cy, holeR) {
 /** Tambahkan lubang eyelet ke shape rim setelah subtract. */
 export function applyEyeletHole(shapes, eyelet) {
   if (!eyelet || !shapes?.length) return shapes
-  addHoleToContainingShape(shapes, eyelet.cx, eyelet.cy, eyelet.innerR)
+  if (shapeHasHoleNear(shapes, eyelet.cx, eyelet.cy, eyelet.innerR * 0.85)) return shapes
+
+  const holePts = circleToThreePath(eyelet.cx, eyelet.cy, eyelet.innerR)
+  let added = false
+  for (const shape of shapes) {
+    if (!shapeOverlapsEyelet(shape, eyelet)) continue
+    shape.holes.push(holePathOppositeToOuter(shape, holePts))
+    added = true
+  }
+  if (!added) addHoleToContainingShape(shapes, eyelet.cx, eyelet.cy, eyelet.innerR)
   return shapes
 }
 

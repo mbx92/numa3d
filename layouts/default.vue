@@ -6,7 +6,7 @@ import {
   ArchiveBoxIcon,
   CubeIcon,
   CubeTransparentIcon,
-  SparklesIcon,
+  WrenchScrewdriverIcon,
   PrinterIcon,
   PuzzlePieceIcon,
   BuildingStorefrontIcon,
@@ -32,7 +32,7 @@ const baseNav = [
   { to: '/packaging', label: 'Packaging', icon: ArchiveBoxIcon },
   { to: '/products', label: 'Produk & HPP', icon: CubeIcon },
   { to: '/gallery', label: 'Galeri 3D', icon: CubeTransparentIcon },
-  { to: '/keychain', label: 'Gen Keychain', icon: SparklesIcon },
+  { to: '/tools', label: 'Tools', icon: WrenchScrewdriverIcon },
   { to: '/production', label: 'Produksi', icon: PrinterIcon },
   { to: '/custom-orders', label: 'Custom', icon: PuzzlePieceIcon },
   { to: '/catalog', label: 'Katalog', icon: BuildingStorefrontIcon },
@@ -44,13 +44,18 @@ const baseNav = [
   { to: '/settings', label: 'Pengaturan', icon: Cog6ToothIcon }
 ]
 const nav = baseNav
+const route = useRoute()
+
+function isNavActive(to) {
+  if (to === '/') return route.path === '/'
+  return route.path === to || route.path.startsWith(`${to}/`)
+}
 
 const roleLabel = { admin: 'Admin', staff: 'Staff' }
 
 // Daftar menu sudah terlalu panjang untuk topbar geser di layar kecil,
 // jadi di mobile dipakai drawer yang tertutup otomatis saat pindah halaman.
 const drawerOpen = ref(false)
-const route = useRoute()
 watch(() => route.fullPath, () => (drawerOpen.value = false))
 watch(drawerOpen, (open) => {
   if (import.meta.client) document.body.style.overflow = open ? 'hidden' : ''
@@ -98,7 +103,7 @@ async function logout() {
               :key="item.to"
               :to="item.to"
               class="flex items-center gap-3 px-4 py-3 text-sm border-l-2 border-transparent text-ink-300 hover:text-white hover:bg-ink-800 transition-colors"
-              active-class="!border-accent-500 !text-white bg-ink-800"
+              :class="isNavActive(item.to) ? '!border-accent-500 !text-white bg-ink-800' : ''"
             >
               <component :is="item.icon" class="w-5 h-5 shrink-0" />
               {{ item.label }}
@@ -147,7 +152,7 @@ async function logout() {
           :key="item.to"
           :to="item.to"
           class="flex items-center gap-2.5 px-4 py-3 text-sm whitespace-nowrap border-l-2 border-transparent text-ink-300 hover:text-white hover:bg-ink-800 transition-colors"
-          active-class="!border-accent-500 !text-white bg-ink-800"
+          :class="isNavActive(item.to) ? '!border-accent-500 !text-white bg-ink-800' : ''"
         >
           <component :is="item.icon" class="w-5 h-5 shrink-0" />
           {{ item.label }}

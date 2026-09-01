@@ -1,14 +1,15 @@
 // Logika generate keychain — bisa di worker (tanpa DOM).
 import * as THREE from 'three'
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { parse, Path } from 'opentype.js'
+import { opentypePathToShapes } from './opentypeToShapes.js'
 import {
-  applyEyeletHole,
   buildBaseSilhouette,
   buildInsertPlateFootprint,
+  cloneShapes,
   getAttachmentReach,
+  normalizeShapeHoles,
   offsetShapes,
   shapesWithHoles,
   subtractShapes2D
@@ -16,7 +17,6 @@ import {
 import { getKeychainTheme, themeToGeneratorOptions } from './keychainThemes.js'
 
 const fontCache = new Map()
-const svgLoader = new SVGLoader()
 const EXTRUDE_OPTS = (depth) => ({ depth, bevelEnabled: false, curveSegments: 5 })
 
 export function packGeometry(geo) {
@@ -85,25 +85,20 @@ function getTextPath(font, text, x, y, fontSize, letterSpacingMm = 0) {
 }
 
 function pathToShapes(otPath) {
-  const bbox = otPath.getBoundingBox()
-  const d = otPath.toPathData(2)
-  const flipY = -bbox.y1 - bbox.y2
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg"><path transform="scale(1,-1) translate(0,${flipY})" d="${d}"/></svg>`
-  const { paths } = svgLoader.parse(svg)
-  if (!paths?.length) return []
-  return SVGLoader.createShapes(paths[0])
+  return opentypePathToShapes(otPath)
 }
 
-function getCharacterGroups(font, text, fontSize, letterSpacingMm = 0) {
+function getCharacterGroups(font, text, fontSize, letterSpacingMm = 0, accentIndices = new Set()) {
   const groups = []
   let cursor = 0
   const scale = fontSize / font.unitsPerEm
-  for (const ch of text) {
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
     const glyph = font.charToGlyph(ch)
     const advance = glyph.advanceWidth * scale
     if (ch !== ' ') {
       const shapes = pathToShapes(glyph.getPath(cursor, 0, fontSize))
-      if (shapes.length) groups.push({ char: ch, shapes, accent: /\d/.test(ch) })
+      if (shapes.length) groups.push({ char: ch, shapes, accent: accentIndices.has(i) })
     }
     cursor += advance + letterSpacingMm
   }
@@ -163,46 +158,46 @@ export function resolveInsertFit(opts) {
   }
 }
 
-function buildRimShapes(outerShapes, cavityOuter, eyelet) {
+function buildRimShapes(outerShapes, cavityOuter) {
   const rimRingShapes = subtractShapes2D(outerShapes, cavityOuter)
-  const rimShapes = rimRingShapes.length
+  return rimRingShapes.length
     ? rimRingShapes
     : shapesWithHoles(outerShapes, cavityOuter)
-  if (eyelet) applyEyeletHole(rimShapes, eyelet)
-  return rimShapes
 }
 
-/** Dasar belakang base: slab penuh silhouette (lubang eyelet saja), flat dari bawah. */
+/** Dasar belakang base — eyelet menyatu di siluet, lubangnya tetap tembus. */
 function buildBaseBottomCap(outerShapes) {
-  return outerShapes
+  return normalizeShapeHoles(cloneShapes(outerShapes))
 }
 
-function buildTrayMeshes(outerShapes, cavityShapes, baseThickness, floorThickness, ledgeMm = 0.55, eyelet = null) {
+function buildTrayMeshes(outerShapes, cavityShapes, baseThickness, floorThickness, ledgeMm = 0.55) {
   const cavityOuter = offsetShapes(cavityShapes, ledgeMm)
-  const floorGeo = extrudeShapes(cavityShapes, floorThickness)
+  const wallH = Math.max(baseThickness - floorThickness, 0.5)
+
+  const bottomCapGeo = extrudeShapes(buildBaseBottomCap(outerShapes), floorThickness)
 
   const wallShapes = subtractShapes2D(cavityOuter, cavityShapes)
-  const wallH = Math.max(baseThickness - floorThickness, 0.5)
   let wallGeo = null
   if (wallShapes.length) {
     wallGeo = extrudeShapes(wallShapes, wallH)
     wallGeo.translate(0, 0, floorThickness)
   }
 
-  const rimShapes = buildRimShapes(outerShapes, cavityOuter, eyelet)
-  const rimGeo = extrudeShapes(rimShapes, baseThickness)
+  const rimShapes = buildRimShapes(outerShapes, cavityOuter)
+  const rimGeo = extrudeShapes(rimShapes, wallH)
+  rimGeo.translate(0, 0, floorThickness)
 
-  const geos = [floorGeo, rimGeo]
+  const geos = [bottomCapGeo, rimGeo]
   if (wallGeo) geos.push(wallGeo)
-  return { floorGeo, wallGeo, rimGeo, cavityOuter, merged: safeMergeGeometries(geos) }
+  return { bottomCapGeo, wallGeo, rimGeo, cavityOuter, merged: safeMergeGeometries(geos) }
 }
 
-function buildTrayBaseGeometry(outerShapes, cavityShapes, baseThickness, floorThickness, ledgeMm = 0.55, eyelet = null) {
-  return buildTrayMeshes(outerShapes, cavityShapes, baseThickness, floorThickness, ledgeMm, eyelet).merged
+function buildTrayBaseGeometry(outerShapes, cavityShapes, baseThickness, floorThickness, ledgeMm = 0.55) {
+  return buildTrayMeshes(outerShapes, cavityShapes, baseThickness, floorThickness, ledgeMm).merged
 }
 
 /** Preview base: bottom cap flat + dinding cavity + rim luar. */
-function buildTrayBasePreviewParts(outerShapes, cavityShapes, baseThickness, floorThickness, colors, ledgeMm = 0.55, eyelet = null) {
+function buildTrayBasePreviewParts(outerShapes, cavityShapes, baseThickness, floorThickness, colors, ledgeMm = 0.55) {
   const cavityOuter = offsetShapes(cavityShapes, ledgeMm)
   const parts = []
   const wallH = Math.max(baseThickness - floorThickness, 0.5)
@@ -222,8 +217,9 @@ function buildTrayBasePreviewParts(outerShapes, cavityShapes, baseThickness, flo
     parts.push({ geometry: wallGeo, color: colors.cavityWall || '#5c6570', role: 'cavityWall' })
   }
 
-  const rimShapes = buildRimShapes(outerShapes, cavityOuter, eyelet)
-  const rimGeo = extrudeShapes(rimShapes, baseThickness)
+  const rimShapes = buildRimShapes(outerShapes, cavityOuter)
+  const rimGeo = extrudeShapes(rimShapes, wallH)
+  rimGeo.translate(0, 0, floorThickness)
   parts.push({ geometry: rimGeo, color: colors.baseHighlight || colors.base || '#a3a9b1', role: 'rim' })
 
   const topEdgeGeo = shapesToEdgeGeometry(cavityOuter, baseThickness - 0.02)
@@ -325,19 +321,23 @@ function buildInsertGeometry(groups, shapes, thickness, outerMarginMm, innerBrid
   const plateOuterColor = colors.plateOuter || plateColor
   const previewParts = []
   if (previewBuckets.plateInner.length) {
-    previewParts.push({ geometry: safeMergeGeometries(previewBuckets.plateInner), color: plateColor })
+    previewParts.push({ geometry: safeMergeGeometries(previewBuckets.plateInner), color: plateColor, role: 'plateInner' })
     previewBuckets.plateInner.forEach((g) => g.dispose())
   }
   if (previewBuckets.plateOuter.length) {
-    previewParts.push({ geometry: safeMergeGeometries(previewBuckets.plateOuter), color: plateOuterColor })
+    previewParts.push({
+      geometry: safeMergeGeometries(previewBuckets.plateOuter),
+      color: plateOuterColor,
+      role: 'plateOuter'
+    })
     previewBuckets.plateOuter.forEach((g) => g.dispose())
   }
   if (previewBuckets.letter.length) {
-    previewParts.push({ geometry: safeMergeGeometries(previewBuckets.letter), color: colors.letter })
+    previewParts.push({ geometry: safeMergeGeometries(previewBuckets.letter), color: colors.letter, role: 'letter' })
     previewBuckets.letter.forEach((g) => g.dispose())
   }
   if (previewBuckets.accent.length) {
-    previewParts.push({ geometry: safeMergeGeometries(previewBuckets.accent), color: colors.accent })
+    previewParts.push({ geometry: safeMergeGeometries(previewBuckets.accent), color: colors.accent, role: 'accent' })
     previewBuckets.accent.forEach((g) => g.dispose())
   }
 
@@ -348,10 +348,11 @@ function meshToStlArrayBuffer(mesh) {
   mesh.updateMatrixWorld(true)
   const exporter = new STLExporter()
   const data = exporter.parse(mesh, { binary: true })
-  if (data instanceof DataView) {
+  if (data instanceof ArrayBuffer) return data.slice(0)
+  if (ArrayBuffer.isView(data)) {
     return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
   }
-  return new TextEncoder().encode(data).buffer
+  return new TextEncoder().encode(String(data)).buffer
 }
 
 function computeBoundsFromShapes(shapes) {
@@ -387,11 +388,18 @@ export async function generateKeychainCore(userOpts = {}) {
   const probeSize = 100
   const probePath = getTextPath(font, text, 0, 0, probeSize, letterSpacing)
   const probeBox = probePath.getBoundingBox()
-  const probeWidth = Math.max(probeBox.x2 - probeBox.x1, 1)
-  const probeHeight = Math.max(probeBox.y2 - probeBox.y1, 1)
-  const fontSize = probeSize * Math.min(opts.targetWidthMm / probeWidth, opts.targetHeightMm / probeHeight)
+  const probeWidth = Math.max(probeBox.x2 - probeBox.x1, 0.001)
+  const probeHeight = Math.max(probeBox.y2 - probeBox.y1, 0.001)
+  const scale = Math.min(opts.targetWidthMm / probeWidth, opts.targetHeightMm / probeHeight)
+  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Ukuran teks tidak valid — periksa lebar/tinggi (mm)')
+  const fontSize = probeSize * scale
+  if (fontSize < 0.05) throw new Error('Teks terlalu kecil — perbesar ukuran tag atau pendekkan teks')
 
-  let groups = getCharacterGroups(font, text, fontSize, letterSpacing)
+  const accentSet = new Set(
+    (Array.isArray(opts.accentIndices) ? opts.accentIndices : [])
+      .filter((i) => Number.isInteger(i) && i >= 0 && i < text.length)
+  )
+  let groups = getCharacterGroups(font, text, fontSize, letterSpacing, accentSet)
   if (!groups.length) throw new Error('Gagal mengonversi teks ke bentuk 2D')
 
   const rawBounds = computeBoundsFromShapes(flattenGroupShapes(groups))
@@ -428,10 +436,11 @@ export async function generateKeychainCore(userOpts = {}) {
     cavityShapes,
     fit.base,
     fit.floor,
-    ledgeMm,
-    eyelet
+    ledgeMm
   )
   baseGeo.computeVertexNormals()
+  const baseMergedExportGeometry = packGeometry(baseGeo.clone())
+  const baseMergedExportColor = colors.base || colors.baseBottom || '#8b9199'
 
   const basePreviewParts = buildTrayBasePreviewParts(
     baseShapes,
@@ -439,8 +448,7 @@ export async function generateKeychainCore(userOpts = {}) {
     fit.base,
     fit.floor,
     colors,
-    ledgeMm,
-    eyelet
+    ledgeMm
   )
 
   const assemblyTextClones = textPreviewParts.map((p) => p.geometry.clone())
@@ -483,14 +491,21 @@ export async function generateKeychainCore(userOpts = {}) {
     basePreviewParts: basePreviewParts.map((p) => ({
       geometry: packGeometry(p.geometry),
       color: p.color,
-      line: !!p.line
+      line: !!p.line,
+      role: p.role || null
     })),
-    textPreviewParts: textPreviewParts.map((p) => ({ geometry: packGeometry(p.geometry), color: p.color })),
+    textPreviewParts: textPreviewParts.map((p) => ({
+      geometry: packGeometry(p.geometry),
+      color: p.color,
+      role: p.role || null
+    })),
     assemblyPreviewParts: assemblyPreviewParts.map((p) => ({
       geometry: packGeometry(p.geometry),
       color: p.color,
       line: !!p.line
     })),
+    baseMergedExportGeometry,
+    baseMergedExportColor,
     baseStlBuffer: meshToStlArrayBuffer(baseMesh),
     textStlBuffer: meshToStlArrayBuffer(textMesh)
   }

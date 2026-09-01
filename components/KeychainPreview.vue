@@ -56,6 +56,7 @@ function clearScene() {
   if (!rootGroup) return
   scene.remove(rootGroup)
   rootGroup.traverse((o) => {
+    o.geometry?.dispose()
     o.material?.dispose()
   })
   rootGroup = null
@@ -68,9 +69,10 @@ function mountParts() {
   for (let i = 0; i < (props.parts || []).length; i++) {
     const part = props.parts[i]
     if (!part?.geometry?.attributes?.position?.count) continue
+    const geo = part.geometry.clone()
     if (part.line) {
       const mat = new THREE.LineBasicMaterial({ color: part.color || '#1f2937' })
-      const line = new THREE.LineSegments(part.geometry, mat)
+      const line = new THREE.LineSegments(geo, mat)
       line.renderOrder = i + 1
       rootGroup.add(line)
       continue
@@ -79,7 +81,7 @@ function mountParts() {
       color: part.color || '#f97316',
       side: THREE.FrontSide
     })
-    const mesh = new THREE.Mesh(part.geometry, mat)
+    const mesh = new THREE.Mesh(geo, mat)
     mesh.renderOrder = i + 1
     rootGroup.add(mesh)
   }
@@ -112,12 +114,16 @@ function resize() {
 function scheduleMount() {
   requestAnimationFrame(() => {
     resize()
-    if (props.parts?.length) {
-      try {
-        mountParts()
-      } catch (e) {
-        error.value = e?.message || 'Gagal memuat preview'
-      }
+    if (!props.parts?.length) {
+      clearScene()
+      render()
+      return
+    }
+    try {
+      mountParts()
+      error.value = ''
+    } catch (e) {
+      error.value = e?.message || 'Gagal memuat preview'
     }
   })
 }
