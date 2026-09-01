@@ -18,7 +18,8 @@ import {
 } from '@heroicons/vue/24/outline'
 import { CLICKER_DEFAULTS } from '~/utils/clickerPresets.js'
 import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExport.js'
-import { generateClicker, downloadBlob } from '~/utils/clickerGenerator.js'
+import { generateClicker } from '~/utils/clickerGenerator.js'
+import { downloadBlob } from '~/utils/downloadBlob.js'
 import { getSwitchPreset } from '~/utils/clickerPresets.js'
 
 const COLOR_FIELDS = [
@@ -312,6 +313,7 @@ function restartWizard() {
             </KeychainCompactField>
             <ClickerDesignPicker
               v-model:shape-mode="form.shapeMode"
+              v-model:base-shape="form.baseShape"
               v-model:text="form.text"
               v-model:font-url="form.fontUrl"
               v-model:svg-content="form.svgContent"
@@ -322,8 +324,13 @@ function restartWizard() {
           </template>
 
           <template v-else-if="activeToolPanel === 'switch'">
-            <ClickerSwitchPicker v-model="form.switchPresetId" />
-            <KeychainCompactField label="Toleransi fit" unit="mm">
+            <ClickerSwitchPicker
+              v-model="form.switchPresetId"
+              v-model:stem-fit-pct="form.stemFitPct"
+              v-model:socket-fit-pct="form.socketFitPct"
+              v-model:slip-tolerance-mm="form.slipToleranceMm"
+            />
+            <KeychainCompactField label="Toleransi pocket" unit="mm">
               <input v-model.number="form.fitToleranceMm" type="number" min="0" max="0.5" step="0.02" class="input-num w-full text-sm" />
             </KeychainCompactField>
           </template>
@@ -358,9 +365,13 @@ function restartWizard() {
                 <input v-model.number="form.wallThicknessMm" type="number" min="1.5" max="8" step="0.1" class="input-num w-full text-sm" />
               </KeychainCompactField>
             </div>
+            <KeychainCompactField label="Cap proud (travel)">
+              <input v-model.number="form.capProudMm" type="number" min="0.4" max="6" step="0.2" class="input-num w-full text-sm" />
+            </KeychainCompactField>
             <p class="text-[10px] text-ink-400 font-mono">
-              Pocket: {{ activePreset.housingOuterMm + form.fitToleranceMm * 2 }} mm ·
-              {{ activePreset.bodyDepthMm + form.fitToleranceMm }} mm deep
+              Plate {{ result?.dimensions?.plateWidthMm || '—' }}×{{ result?.dimensions?.plateDepthMm || '—' }} mm ·
+              Well {{ result?.dimensions?.wellWidthMm || '—' }} mm ·
+              Pocket {{ activePreset.housingOuterMm + form.fitToleranceMm * 2 }} mm
             </p>
           </template>
 
@@ -370,7 +381,8 @@ function restartWizard() {
               <div class="flex justify-between"><dt class="text-ink-400">Housing</dt><dd>{{ activePreset.housingOuterMm }} mm</dd></div>
               <div class="flex justify-between"><dt class="text-ink-400">Plate cutout</dt><dd>{{ activePreset.plateCutoutMm }} mm</dd></div>
               <div class="flex justify-between"><dt class="text-ink-400">Body depth</dt><dd>{{ activePreset.bodyDepthMm }} mm</dd></div>
-              <div class="flex justify-between"><dt class="text-ink-400">Pin spacing</dt><dd>{{ activePreset.pinSpacingMm }} mm</dd></div>
+              <div class="flex justify-between"><dt class="text-ink-400">Stem boss</dt><dd>{{ activePreset.stemBossMm }} mm</dd></div>
+              <div v-if="result" class="flex justify-between"><dt class="text-ink-400">Body</dt><dd>{{ result.dimensions.widthMm }}×{{ result.dimensions.depthMm }} mm</dd></div>
             </dl>
           </template>
 

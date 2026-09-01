@@ -5,25 +5,9 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { resolveLightboxOptions, validateLightboxSize } from './lightboxPresets.js'
 import { computeOuterSize, resolveDesignLayers } from './lightboxFootprint.js'
 import { subtractShapes2D } from './shapeClipper.js'
+import { packGeometry } from './geometryPack.js'
 
 const EXTRUDE = { bevelEnabled: false, curveSegments: 6 }
-
-export function packGeometry(geo) {
-  const pos = geo.attributes.position
-  const norm = geo.attributes.normal
-  return {
-    positions: new Float32Array(pos.array),
-    normals: norm ? new Float32Array(norm.array) : null
-  }
-}
-
-export function unpackGeometry(data) {
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3))
-  if (data.normals) geo.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3))
-  else geo.computeVertexNormals()
-  return geo
-}
 
 function slugify(text) {
   return (

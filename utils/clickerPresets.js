@@ -1,5 +1,6 @@
 /**
  * Preset dimensi switch keyboard — nilai nominal industri (mm).
+ * Parameter mekanik mengikuti referensi Vostok Labs clicker-generator.
  */
 
 export const SHAPE_MODES = [
@@ -8,9 +9,21 @@ export const SHAPE_MODES = [
   { id: 'text', label: 'Teks', description: 'Huruf atau kata sebagai lid' }
 ]
 
+export const BASE_SHAPES = [
+  { id: 'outline', label: 'Outline', description: 'Base mengikuti siluet desain' },
+  { id: 'circle', label: 'Lingkaran', description: 'Base bulat mengelilingi desain' },
+  { id: 'square', label: 'Kotak', description: 'Persegi dengan sudut membulat' },
+  { id: 'rect', label: 'Persegi panjang', description: 'Proporsi mengikuti desain' },
+  { id: 'hexagon', label: 'Heksagon', description: 'Enam sisi' },
+  { id: 'heart', label: 'Hati', description: 'Bentuk hati' },
+  { id: 'star', label: 'Bintang', description: 'Bintang 5 sudut' },
+  { id: 'egg', label: 'Telur', description: 'Oval telur' }
+]
+
 export const DISPLAY_MODES = [
-  { id: 'preview', label: 'Preview', description: 'Tampilan perakitan — lid di atas base' },
-  { id: 'print', label: 'Print', description: 'Lid dibalik — wajah cetak menghadap bawah' }
+  { id: 'preview', label: 'Preview', description: 'Lid terpasang di dalam well' },
+  { id: 'exploded', label: 'Exploded', description: 'Lid terangkat untuk melihat detail' },
+  { id: 'print', label: 'Print', description: 'Layout plat — lid dibalik di samping base' }
 ]
 
 export const SWITCH_PRESETS = {
@@ -22,6 +35,7 @@ export const SWITCH_PRESETS = {
     bodyDepthMm: 11.5,
     plateCutoutMm: 14.0,
     stemBossMm: 5.6,
+    stemHeightMm: 4.0,
     clipEngageDepthMm: 4.2,
     pinDiameterMm: 3.05,
     pinSpacingMm: 5.08
@@ -34,6 +48,7 @@ export const SWITCH_PRESETS = {
     bodyDepthMm: 11.3,
     plateCutoutMm: 14.0,
     stemBossMm: 5.4,
+    stemHeightMm: 3.8,
     clipEngageDepthMm: 4.0,
     pinDiameterMm: 3.0,
     pinSpacingMm: 5.08
@@ -46,6 +61,7 @@ export const SWITCH_PRESETS = {
     bodyDepthMm: 9.2,
     plateCutoutMm: 12.0,
     stemBossMm: 4.8,
+    stemHeightMm: 3.2,
     clipEngageDepthMm: 3.5,
     pinDiameterMm: 2.8,
     pinSpacingMm: 4.5
@@ -57,6 +73,7 @@ export const SWITCH_PRESET_LIST = Object.values(SWITCH_PRESETS)
 export const CLICKER_DEFAULTS = {
   label: 'Clicker',
   shapeMode: 'rect',
+  baseShape: 'outline',
   text: 'CLICK',
   fontUrl: '/fonts/BarlowCondensed-BlackItalic.woff',
   svgContent: '',
@@ -64,10 +81,20 @@ export const CLICKER_DEFAULTS = {
   displayMode: 'preview',
   switchPresetId: 'cherry_mx',
   fitToleranceMm: 0.15,
-  outerWidthMm: 34,
-  outerDepthMm: 34,
+  slipToleranceMm: 0.4,
+  stemFitPct: 0,
+  socketFitPct: 0,
+  capProudMm: 4.0,
+  travelMm: 4.0,
+  imageMarginMm: 1.2,
+  borderWidthMm: 2.6,
+  topThicknessMm: 1.5,
+  imageDepthMm: 0.8,
+  skirtThicknessMm: 1.4,
+  outerWidthMm: 35,
+  outerDepthMm: 35,
   outerHeightMm: 18,
-  floorThicknessMm: 2.0,
+  floorThicknessMm: 1.6,
   topRimMm: 2.5,
   wallThicknessMm: 2.5,
   bodyPaddingMm: 4,
@@ -75,8 +102,9 @@ export const CLICKER_DEFAULTS = {
   lidInsetMm: 1.2,
   stemHoleMm: 4.2,
   keyringEnabled: false,
-  keyringHoleMm: 4.5,
+  keyringHoleMm: 5.2,
   keyringTabMm: 10,
+  keyringAngleDeg: 90,
   pinReliefEnabled: false,
   colors: {
     base: '#2d3748',
@@ -91,18 +119,35 @@ export function getSwitchPreset(id) {
 
 export function resolveClickerOptions(userOpts = {}) {
   const preset = getSwitchPreset(userOpts.switchPresetId)
-  const tol = Number(userOpts.fitToleranceMm)
-  const fitToleranceMm = Number.isFinite(tol) ? tol : CLICKER_DEFAULTS.fitToleranceMm
+  const fitToleranceMm = Number.isFinite(Number(userOpts.fitToleranceMm))
+    ? Number(userOpts.fitToleranceMm)
+    : CLICKER_DEFAULTS.fitToleranceMm
+  const slipToleranceMm = Number(userOpts.slipToleranceMm) || CLICKER_DEFAULTS.slipToleranceMm
+  const stemFitPct = Number(userOpts.stemFitPct) || 0
+  const socketFitPct = Number(userOpts.socketFitPct) || 0
 
   const floorThicknessMm = Number(userOpts.floorThicknessMm) || CLICKER_DEFAULTS.floorThicknessMm
   const topRimMm = Number(userOpts.topRimMm) || CLICKER_DEFAULTS.topRimMm
   const wallThicknessMm = Number(userOpts.wallThicknessMm) || CLICKER_DEFAULTS.wallThicknessMm
-  const housingPocketMm = preset.housingOuterMm + fitToleranceMm * 2
-  const minOuterH = floorThicknessMm + preset.bodyDepthMm + topRimMm
+  const travelMm = Number(userOpts.travelMm) || CLICKER_DEFAULTS.travelMm
+  const capProudMm = Number(userOpts.capProudMm) || CLICKER_DEFAULTS.capProudMm
+
+  const socketScale = 1 + socketFitPct / 100
+  const housingPocketMm = preset.housingOuterMm * socketScale + fitToleranceMm * 2
+  const plateOpeningMm = preset.plateCutoutMm * socketScale + fitToleranceMm * 2
+  const switchDepthMm = preset.bodyDepthMm + fitToleranceMm
+  const stemBossMm = preset.stemBossMm * (1 + stemFitPct / 100)
+  const stemHeightMm = preset.stemHeightMm || 4.0
+
+  const minOuterH = floorThicknessMm + switchDepthMm + topRimMm + travelMm * 0.25
   const outerHeightMm = Math.max(Number(userOpts.outerHeightMm) || CLICKER_DEFAULTS.outerHeightMm, minOuterH)
 
   const colors = { ...CLICKER_DEFAULTS.colors, ...(userOpts.colors || {}) }
   if (userOpts.colors?.accent && !userOpts.colors?.lid) colors.lid = userOpts.colors.accent
+
+  const isText = userOpts.shapeMode === 'text'
+  const imageMarginMm = Number(userOpts.imageMarginMm) || (isText ? 2.5 : CLICKER_DEFAULTS.imageMarginMm)
+  const borderWidthMm = Number(userOpts.borderWidthMm) || (isText ? 3.5 : CLICKER_DEFAULTS.borderWidthMm)
 
   return {
     ...CLICKER_DEFAULTS,
@@ -110,21 +155,31 @@ export function resolveClickerOptions(userOpts = {}) {
     switchPresetId: preset.id,
     preset,
     fitToleranceMm,
+    slipToleranceMm,
+    stemFitPct,
+    socketFitPct,
     floorThicknessMm,
     topRimMm,
     wallThicknessMm,
+    travelMm,
+    capProudMm,
+    imageMarginMm,
+    borderWidthMm,
     outerHeightMm,
     housingPocketMm,
-    switchDepthMm: preset.bodyDepthMm + fitToleranceMm,
-    plateOpeningMm: preset.plateCutoutMm + fitToleranceMm * 2,
+    switchDepthMm,
+    plateOpeningMm,
+    stemBossMm,
+    stemHeightMm,
     colors
   }
 }
 
 export function validateOuterSize(opts) {
   const pocket = opts.housingPocketMm
-  const wall = opts.wallThicknessMm
-  const minW = pocket + wall * 2 + (opts.bodyPaddingMm || 4) * 2
+  const border = opts.borderWidthMm || 2.6
+  const tol = opts.slipToleranceMm || 0.4
+  const minW = pocket + border * 2 + tol * 2 + 2
   if (opts.outerWidthMm < minW - 0.01 || opts.outerDepthMm < minW - 0.01) {
     throw new Error(`Ukuran base terlalu kecil — minimal ${minW.toFixed(1)} mm untuk preset ini`)
   }

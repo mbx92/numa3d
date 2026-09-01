@@ -8,6 +8,11 @@ import {
   scaleShapes,
   translateSvgShapes
 } from './svgToShapes.js'
+import {
+  boundsFromShape,
+  fitShapeRadius,
+  shapeForKind
+} from './clickerBaseShapes.js'
 
 const fontCache = new Map()
 
@@ -77,7 +82,55 @@ function rectFootprint(widthMm, depthMm) {
   shape.lineTo(-hw, hd)
   shape.closePath()
   const bounds = { minX: -hw, maxX: hw, minY: -hd, maxY: hd, width: widthMm, height: depthMm }
-  return { shapes: [shape], bounds, source: 'rect' }
+  return { shapes: [shape], plateShapes: [shape], bounds, source: 'rect' }
+}
+
+function offsetBounds(bounds, margin) {
+  return {
+    minX: bounds.minX - margin,
+    maxX: bounds.maxX + margin,
+    minY: bounds.minY - margin,
+    maxY: bounds.maxY + margin,
+    width: bounds.width + margin * 2,
+    height: bounds.height + margin * 2
+  }
+}
+
+function resolvePlateShapes(artwork, opts) {
+  const margin = Number(opts.imageMarginMm) || 1.2
+  const baseShape = opts.baseShape || 'outline'
+  const artBounds = artwork.bounds
+
+  if (baseShape === 'outline' || opts.shapeMode === 'rect') {
+    if (opts.shapeMode === 'rect') {
+      return rectFootprint(
+        Number(opts.outerWidthMm) || 35,
+        Number(opts.outerDepthMm) || 35
+      )
+    }
+    const padded = offsetBounds(artBounds, margin)
+    return {
+      shapes: artwork.shapes,
+      plateShapes: artwork.shapes,
+      bounds: padded,
+      artworkBounds: artBounds,
+      source: artwork.source
+    }
+  }
+
+  const halfW = Math.max(artBounds.width / 2 + margin, 8)
+  const halfH = Math.max(artBounds.height / 2 + margin, 8)
+  const aspect = artBounds.height > 0.01 ? artBounds.width / artBounds.height : 1
+  const radius = fitShapeRadius(baseShape, halfW, halfH)
+  const plateShape = shapeForKind(baseShape, radius, aspect)
+  const bounds = boundsFromShape(plateShape)
+  return {
+    shapes: artwork.shapes,
+    plateShapes: [plateShape],
+    bounds,
+    artworkBounds: artBounds,
+    source: artwork.source
+  }
 }
 
 /** Resolve bentuk lid & ukuran base dari rect / SVG / teks. */
@@ -91,7 +144,7 @@ export async function resolveFootprint(opts) {
     let shapes = opts.svgShapes?.length ? deserializeShapes(opts.svgShapes) : parseSvgToShapes(raw)
     if (!shapes.length) throw new Error('SVG tidak punya area fill solid')
     const scaled = scaleToMaxSize(shapes, maxSizeMm)
-    return { ...scaled, source: 'svg' }
+    return resolvePlateShapes({ ...scaled, source: 'svg' }, opts)
   }
 
   if (mode === 'text') {
@@ -102,23 +155,40 @@ export async function resolveFootprint(opts) {
     const shapes = textToShapes(text, font)
     if (!shapes.length) throw new Error('Teks tidak menghasilkan bentuk')
     const scaled = scaleToMaxSize(shapes, maxSizeMm)
-    return { ...scaled, source: 'text' }
+    return resolvePlateShapes({ ...scaled, source: 'text' }, opts)
   }
 
-  const widthMm = Number(opts.outerWidthMm) || 34
-  const depthMm = Number(opts.outerDepthMm) || 34
-  return rectFootprint(widthMm, depthMm)
+  return rectFootprint(Number(opts.outerWidthMm) || 35, Number(opts.outerDepthMm) || 35)
 }
 
+/** Vostok-style: body = well + border, well = plate + slip tolerance. */
 export function footprintToOuterSize(footprint, opts) {
-  const pad = Number(opts.bodyPaddingMm) || 4
-  const wall = Number(opts.wallThicknessMm) || 2.5
+  const tol = Number(opts.slipToleranceMm) || 0.4
+  const border = Number(opts.borderWidthMm) || 2.6
   const pocket = opts.housingPocketMm
-  const minW = footprint.bounds.width + pad * 2 + wall * 2
-  const minD = footprint.bounds.height + pad * 2 + wall * 2
-  const minOuter = Math.max(minW, minD, pocket + wall * 2 + pad * 2)
+  const switchClear = pocket + 3
+
+  let plateW = footprint.bounds.width
+  let plateD = footprint.bounds.height
+  const minCap = switchClear + 1
+  if (Math.min(plateW, plateD) < minCap) {
+    const scale = minCap / Math.min(plateW, plateD)
+    plateW *= scale
+    plateD *= scale
+  }
+
+  const wellW = plateW + tol * 2
+  const wellD = plateD + tol * 2
+  const outerW = wellW + border * 2
+  const outerD = wellD + border * 2
+  const minOuter = Math.max(outerW, outerD, pocket + border * 2 + tol * 2 + 2)
+
   return {
     outerWidthMm: Math.max(Number(opts.outerWidthMm) || minOuter, minOuter),
-    outerDepthMm: Math.max(Number(opts.outerDepthMm) || minOuter, minOuter)
+    outerDepthMm: Math.max(Number(opts.outerDepthMm) || minOuter, minOuter),
+    plateWidthMm: plateW,
+    plateDepthMm: plateD,
+    wellWidthMm: wellW,
+    wellDepthMm: wellD
   }
 }

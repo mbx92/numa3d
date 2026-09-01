@@ -1,6 +1,7 @@
 // API generate keychain — offload ke Web Worker agar UI tidak freeze.
 import { getKeychainTheme } from './keychainThemes.js'
-import { generateKeychainCore, unpackGeometry } from './keychainCore.js'
+import { generateKeychainCore } from './keychainCore.js'
+import { unpackGeometry } from './geometryPack.js'
 import { parseSvgToShapes, serializeShapes } from './svgToShapes.js'
 
 import {
@@ -217,14 +218,4 @@ export async function generateKeychain(userOpts = {}) {
   const prepared = prepareWorkerOpts(userOpts)
   const raw = await generateKeychainCore(prepared)
   return buildLiveResult(raw)
-}
-
-export function downloadBlob(blob, filename) {
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
 }

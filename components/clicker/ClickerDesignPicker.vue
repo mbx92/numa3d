@@ -1,7 +1,8 @@
 <script setup>
-import { SHAPE_MODES, DISPLAY_MODES } from '~/utils/clickerPresets.js'
+import { SHAPE_MODES, DISPLAY_MODES, BASE_SHAPES } from '~/utils/clickerPresets.js'
 
 const shapeMode = defineModel('shapeMode', { type: String, default: 'rect' })
+const baseShape = defineModel('baseShape', { type: String, default: 'outline' })
 const text = defineModel('text', { type: String, default: '' })
 const fontUrl = defineModel('fontUrl', { type: String, default: '' })
 const svgContent = defineModel('svgContent', { type: String, default: '' })
@@ -10,6 +11,7 @@ const displayMode = defineModel('displayMode', { type: String, default: 'preview
 const keyringEnabled = defineModel('keyringEnabled', { type: Boolean, default: false })
 
 const modes = SHAPE_MODES
+const baseShapes = BASE_SHAPES
 const displayModes = DISPLAY_MODES
 </script>
 
@@ -36,6 +38,28 @@ const displayModes = DISPLAY_MODES
       </div>
     </div>
 
+    <div v-if="shapeMode !== 'rect'">
+      <span class="text-xs font-medium text-ink-700">Bentuk base</span>
+      <div class="grid grid-cols-4 gap-1 mt-1.5">
+        <button
+          v-for="s in baseShapes"
+          :key="s.id"
+          type="button"
+          class="rounded-md border px-1.5 py-1.5 text-center transition-colors"
+          :class="
+            baseShape === s.id
+              ? 'border-accent-400 bg-accent-50 ring-1 ring-accent-200'
+              : 'border-ink-200 hover:border-ink-300'
+          "
+          :title="s.description"
+          @click="baseShape = s.id"
+        >
+          <span class="block text-[10px] font-medium text-ink-800 leading-tight">{{ s.label }}</span>
+        </button>
+      </div>
+      <p class="text-[10px] text-ink-400 mt-1">Outline = siluet desain; Shape = preset mengelilingi artwork.</p>
+    </div>
+
     <template v-if="shapeMode === 'text'">
       <label class="block space-y-1">
         <span class="text-xs font-medium text-ink-700">Teks lid</span>
@@ -58,7 +82,7 @@ const displayModes = DISPLAY_MODES
         <input v-model.number="maxSizeMm" type="range" min="20" max="80" step="1" class="flex-1" />
         <span class="text-xs font-mono w-10 text-right">{{ maxSizeMm }}</span>
       </div>
-      <p class="text-[10px] text-ink-400">Seperti MakerWorld — skala otomatis 20–80 mm.</p>
+      <p class="text-[10px] text-ink-400">Skala artwork 20–80 mm — base menyesuaikan otomatis.</p>
     </label>
 
     <label class="block space-y-1">

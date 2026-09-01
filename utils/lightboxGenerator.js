@@ -1,6 +1,7 @@
 // API generate lightbox — offload ke Web Worker agar UI tidak freeze.
 
-import { generateLightboxCore, unpackGeometry } from './lightboxCore.js'
+import { generateLightboxCore } from './lightboxCore.js'
+import { unpackGeometry } from './geometryPack.js'
 
 import { parseSvgToShapes, serializeShapes } from './svgToShapes.js'
 
@@ -573,26 +574,5 @@ export async function generateLightbox(userOpts = {}) {
   const raw = await generateLightboxCore(prepared)
 
   return buildLiveResult(raw)
-
-}
-
-
-
-export function downloadBlob(blob, filename) {
-
-  const a = document.createElement('a')
-
-  a.href = URL.createObjectURL(blob)
-
-  a.download = filename
-
-  document.body.appendChild(a)
-
-  a.click()
-
-  a.remove()
-
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
-
 }
 

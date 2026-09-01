@@ -1,5 +1,6 @@
 // API generate clicker — offload ke Web Worker agar UI tidak freeze.
-import { generateClickerCore, unpackGeometry } from './clickerCore.js'
+import { generateClickerCore } from './clickerCore.js'
+import { unpackGeometry } from './geometryPack.js'
 import { parseSvgToShapes, serializeShapes } from './svgToShapes.js'
 import {
   EXPORT_FORMATS,
@@ -13,6 +14,9 @@ import {
 
 let worker = null
 let workerReady = null
+let manifoldWorker = null
+let manifoldInit = null
+let manifoldFailed = false
 
 function getWorker() {
   if (typeof Worker === 'undefined') return null
@@ -24,6 +28,53 @@ function getWorker() {
     })
   }
   return worker
+}
+
+async function getManifoldWorker() {
+  if (manifoldFailed || typeof Worker === 'undefined') return null
+  if (!manifoldWorker) {
+    manifoldWorker = new Worker(new URL('../workers/clicker.manifold.worker.js', import.meta.url), {
+      type: 'module'
+    })
+    manifoldInit = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Manifold worker timeout')), 30000)
+      const onMsg = (event) => {
+        const msg = event.data
+        if (msg?.type === 'ready') return
+        if (msg?.type === 'initDone') {
+          clearTimeout(timeout)
+          manifoldWorker.removeEventListener('message', onMsg)
+          resolve()
+        }
+        if (msg?.type === 'error') {
+          clearTimeout(timeout)
+          manifoldWorker.removeEventListener('message', onMsg)
+          reject(new Error(msg.message))
+        }
+      }
+      manifoldWorker.addEventListener('message', onMsg)
+      manifoldWorker.onerror = (e) => {
+        clearTimeout(timeout)
+        reject(e.error || new Error('Manifold worker error'))
+      }
+      Promise.all([
+        fetch('/assets/clicker/mx/mx-socket.3mf').then((r) => {
+          if (!r.ok) throw new Error('mx-socket.3mf tidak ditemukan')
+          return r.arrayBuffer()
+        }),
+        fetch('/assets/clicker/mx/mx-stem.3mf').then((r) => {
+          if (!r.ok) throw new Error('mx-stem.3mf tidak ditemukan')
+          return r.arrayBuffer()
+        })
+      ])
+        .then(([socket, stem]) => {
+          manifoldWorker.postMessage({ type: 'init', socket, stem }, [socket, stem])
+        })
+        .catch(reject)
+    })
+  }
+  await manifoldInit
+  return manifoldWorker
 }
 
 function mapPreviewPart(p, geos) {
@@ -191,6 +242,29 @@ function buildLiveResult(raw) {
   }
 }
 
+function generateViaManifoldWorker(opts) {
+  return getManifoldWorker().then((w) => {
+    if (!w) throw new Error('Manifold tidak tersedia')
+    const id = Math.random().toString(36).slice(2)
+    let prepared
+    try {
+      prepared = prepareWorkerOpts(opts)
+    } catch (e) {
+      return Promise.reject(e)
+    }
+    return new Promise((resolve, reject) => {
+      const handler = (event) => {
+        if (event.data?.id !== id) return
+        w.removeEventListener('message', handler)
+        if (event.data.error) reject(new Error(event.data.error))
+        else resolve(buildLiveResult(event.data.result))
+      }
+      w.addEventListener('message', handler)
+      w.postMessage({ id, opts: prepared })
+    })
+  })
+}
+
 function generateViaWorker(opts) {
   const w = getWorker()
   const id = Math.random().toString(36).slice(2)
@@ -217,19 +291,17 @@ function generateViaWorker(opts) {
 }
 
 export async function generateClicker(userOpts = {}) {
+  if (typeof window !== 'undefined' && typeof Worker !== 'undefined' && !manifoldFailed) {
+    try {
+      return await generateViaManifoldWorker(userOpts)
+    } catch (e) {
+      console.warn('[clicker] Manifold fallback ke clipper:', e?.message || e)
+      manifoldFailed = true
+    }
+  }
   if (typeof window !== 'undefined' && typeof Worker !== 'undefined') {
     return generateViaWorker(userOpts)
   }
   const raw = await generateClickerCore(prepareWorkerOpts(userOpts))
   return buildLiveResult(raw)
-}
-
-export function downloadBlob(blob, filename) {
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
 }

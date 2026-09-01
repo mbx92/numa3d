@@ -12,6 +12,7 @@ const error = ref('')
 const draft = reactive({
   label: CLICKER_DEFAULTS.label,
   shapeMode: CLICKER_DEFAULTS.shapeMode,
+  baseShape: CLICKER_DEFAULTS.baseShape,
   text: CLICKER_DEFAULTS.text,
   fontUrl: CLICKER_DEFAULTS.fontUrl,
   svgContent: '',
@@ -20,6 +21,10 @@ const draft = reactive({
   keyringEnabled: CLICKER_DEFAULTS.keyringEnabled,
   switchPresetId: CLICKER_DEFAULTS.switchPresetId,
   fitToleranceMm: CLICKER_DEFAULTS.fitToleranceMm,
+  slipToleranceMm: CLICKER_DEFAULTS.slipToleranceMm,
+  stemFitPct: CLICKER_DEFAULTS.stemFitPct,
+  socketFitPct: CLICKER_DEFAULTS.socketFitPct,
+  capProudMm: CLICKER_DEFAULTS.capProudMm,
   outerWidthMm: CLICKER_DEFAULTS.outerWidthMm,
   outerDepthMm: CLICKER_DEFAULTS.outerDepthMm,
   outerHeightMm: CLICKER_DEFAULTS.outerHeightMm,
@@ -94,6 +99,7 @@ function submit() {
   emit('complete', {
     label: String(draft.label).trim(),
     shapeMode: draft.shapeMode,
+    baseShape: draft.baseShape,
     text: String(draft.text || '').trim(),
     fontUrl: draft.fontUrl,
     svgContent: String(draft.svgContent || ''),
@@ -102,6 +108,10 @@ function submit() {
     keyringEnabled: !!draft.keyringEnabled,
     switchPresetId: draft.switchPresetId,
     fitToleranceMm: Number(draft.fitToleranceMm),
+    slipToleranceMm: Number(draft.slipToleranceMm),
+    stemFitPct: Number(draft.stemFitPct),
+    socketFitPct: Number(draft.socketFitPct),
+    capProudMm: Number(draft.capProudMm),
     outerWidthMm: Number(draft.outerWidthMm),
     outerDepthMm: Number(draft.outerDepthMm),
     outerHeightMm: Number(draft.outerHeightMm),
@@ -145,6 +155,7 @@ function submit() {
           </label>
           <ClickerDesignPicker
             v-model:shape-mode="draft.shapeMode"
+            v-model:base-shape="draft.baseShape"
             v-model:text="draft.text"
             v-model:font-url="draft.fontUrl"
             v-model:svg-content="draft.svgContent"
@@ -172,9 +183,14 @@ function submit() {
         </template>
 
         <template v-else-if="step === 2">
-          <ClickerSwitchPicker v-model="draft.switchPresetId" />
+          <ClickerSwitchPicker
+            v-model="draft.switchPresetId"
+            v-model:stem-fit-pct="draft.stemFitPct"
+            v-model:socket-fit-pct="draft.socketFitPct"
+            v-model:slip-tolerance-mm="draft.slipToleranceMm"
+          />
           <label class="block space-y-1.5">
-            <span class="text-xs font-medium text-ink-700">Toleransi fit switch</span>
+            <span class="text-xs font-medium text-ink-700">Toleransi pocket (mm)</span>
             <div class="flex items-center gap-2">
               <input v-model.number="draft.fitToleranceMm" type="range" min="0" max="0.4" step="0.02" class="flex-1" />
               <span class="text-xs font-mono text-ink-700 w-14 text-right">{{ draft.fitToleranceMm }} mm</span>

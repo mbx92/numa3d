@@ -21,9 +21,9 @@ import {
 import {
   ATTACHMENT_TYPES,
   KEYCHAIN_DEFAULTS,
-  generateKeychain,
-  downloadBlob
+  generateKeychain
 } from '~/utils/keychainGenerator.js'
+import { downloadBlob } from '~/utils/downloadBlob.js'
 import { resolveInsertFit } from '~/utils/keychainCore.js'
 import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExport.js'
 import { resolveEyeletLayout } from '~/utils/shapeClipper.js'

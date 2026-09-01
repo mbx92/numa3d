@@ -1,28 +1,19 @@
-// Logika generate clicker — base + lid (konsep MakerWorld).
+// Logika generate clicker — shape extrusion + clipper (referensi Vostok Labs).
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { resolveClickerOptions, validateOuterSize } from './clickerPresets.js'
 import { footprintToOuterSize, resolveFootprint } from './clickerFootprint.js'
+import {
+  buildSkirtRingShapes,
+  buildStemShapes,
+  resolveMechanicalFootprint
+} from './clickerShapes.js'
+import { offsetShapes, subtractShapes2D } from './shapeClipper.js'
+import { packGeometry } from './geometryPack.js'
 
-const EXTRUDE = { bevelEnabled: false, curveSegments: 6 }
-
-export function packGeometry(geo) {
-  const pos = geo.attributes.position
-  const norm = geo.attributes.normal
-  return {
-    positions: new Float32Array(pos.array),
-    normals: norm ? new Float32Array(norm.array) : null
-  }
-}
-
-export function unpackGeometry(data) {
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3))
-  if (data.normals) geo.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3))
-  else geo.computeVertexNormals()
-  return geo
-}
+const EXTRUDE = { bevelEnabled: false, curveSegments: 10 }
+const PLATE_GAP_MM = 5
 
 function slugify(text) {
   return (
@@ -33,109 +24,196 @@ function slugify(text) {
   )
 }
 
-function solidBox(w, d, h, x, y, z) {
-  const geo = new THREE.BoxGeometry(w, d, h)
-  geo.translate(x, y, z)
-  return geo
+function normalizeGeo(geo) {
+  if (!geo?.attributes?.position?.count) return null
+  const next = geo.index ? geo.toNonIndexed() : geo.clone()
+  if (next !== geo) geo.dispose()
+  next.computeVertexNormals()
+  return next
 }
 
 function mergeParts(parts) {
-  const usable = parts.filter((g) => g?.attributes?.position?.count)
+  const usable = parts.map(normalizeGeo).filter(Boolean)
   if (!usable.length) throw new Error('Geometry kosong')
-  const normalized = usable.map((g) => {
-    const next = g.index ? g.toNonIndexed() : g.clone()
-    if (next !== g) g.dispose()
-    return next
-  })
-  if (normalized.length === 1) return normalized[0]
-  const merged = mergeGeometries(normalized, false)
-  normalized.forEach((g) => g.dispose())
+  if (usable.length === 1) return usable[0]
+  const merged = mergeGeometries(usable, false)
+  usable.forEach((g) => g.dispose())
   if (!merged) throw new Error('Gagal menggabungkan geometry')
   merged.computeVertexNormals()
   return merged
 }
 
 function extrudeShapes(shapes, depth) {
+  if (!shapes?.length || depth <= 0.02) return null
   const parts = shapes.map((shape) => new THREE.ExtrudeGeometry(shape, { ...EXTRUDE, depth }))
-  return mergeParts(parts)
-}
-
-/** Lubang silinder vertikal — 4 dinding kotak mengelilingi sumbu Z. */
-function verticalHoleRing(outer, inner, height, x, y, z) {
-  const t = (outer - inner) / 2
-  if (t <= 0.05) return []
-  return [
-    solidBox(outer, t, height, x, y + (inner + t) / 2, z),
-    solidBox(outer, t, height, x, y - (inner + t) / 2, z),
-    solidBox(t, inner, height, x + (inner + t) / 2, y, z),
-    solidBox(t, inner, height, x - (inner + t) / 2, y, z)
-  ]
-}
-
-/** Base tray: lantai + dinding + pocket switch terbuka atas. */
-function buildBaseBody(opts) {
-  const { outerWidthMm: ow, outerDepthMm: od, outerHeightMm: oh, floorThicknessMm: floor } = opts
-  const pocket = opts.housingPocketMm
-  const halfW = ow / 2
-  const halfD = od / 2
-  const wallH = oh - floor
-  const wallZ = floor + wallH / 2
-
-  const parts = [solidBox(ow, od, floor, 0, 0, floor / 2)]
-
-  const sideDepth = (od - pocket) / 2
-  const sideWidth = (ow - pocket) / 2
-
-  if (sideDepth > 0.05) {
-    parts.push(solidBox(ow, sideDepth, wallH, 0, -halfD + sideDepth / 2, wallZ))
-    parts.push(solidBox(ow, sideDepth, wallH, 0, halfD - sideDepth / 2, wallZ))
+  try {
+    return mergeParts(parts)
+  } finally {
+    parts.forEach((g) => g.dispose())
   }
-  if (sideWidth > 0.05) {
-    parts.push(solidBox(sideWidth, pocket, wallH, -halfW + sideWidth / 2, 0, wallZ))
-    parts.push(solidBox(sideWidth, pocket, wallH, halfW - sideWidth / 2, 0, wallZ))
-  }
-
-  if (opts.keyringEnabled) {
-    const tab = Number(opts.keyringTabMm) || 10
-    const hole = Number(opts.keyringHoleMm) || 4.5
-    const tabZ = oh - 1.5
-    const tabX = -halfW - tab / 2 + 0.6
-    parts.push(solidBox(tab * 0.5, 2.5, 3, -halfW - tab * 0.25, 0, tabZ))
-    parts.push(...verticalHoleRing(tab, hole, 2.6, tabX, 0, tabZ))
-  }
-
-  return mergeParts(parts)
 }
 
-/** Lid: extrude bentuk + lubang stem + collar bawah. */
-function buildLid(opts, footprint) {
-  const lidH = Number(opts.lidHeightMm) || 10
-  const stemD = Number(opts.stemHoleMm) || 4.2
-  const collarH = Math.min(4, lidH * 0.35)
-  const capH = lidH - collarH
-
-  const cap = extrudeShapes(footprint.shapes, capH)
-  cap.translate(0, 0, collarH)
-
-  const collarOuter = stemD + 3.2
-  const collarParts = verticalHoleRing(collarOuter, stemD, collarH, 0, 0, collarH / 2)
-  const collar = mergeParts(collarParts)
-
-  return mergeParts([cap, collar])
+function bboxOfGeometry(geo) {
+  geo.computeBoundingBox()
+  const b = geo.boundingBox
+  return {
+    minX: b.min.x,
+    maxX: b.max.x,
+    minY: b.min.y,
+    maxY: b.max.y,
+    minZ: b.min.z,
+    maxZ: b.max.z,
+    width: b.max.x - b.min.x,
+    depth: b.max.y - b.min.y,
+    height: b.max.z - b.min.z,
+    centerX: (b.min.x + b.max.x) / 2,
+    centerY: (b.min.y + b.max.y) / 2,
+    centerZ: (b.min.z + b.max.z) / 2
+  }
 }
 
-function placeLidForAssembly(lidGeo, opts) {
+function buildBezelRing(outerShapes, innerShapes) {
+  const ring = subtractShapes2D(outerShapes, innerShapes)
+  return ring.length ? ring : subtractShapes2D(offsetShapes(outerShapes, 0.01), innerShapes)
+}
+
+function circleAt(cx, cy, r, segments = 32) {
+  const shape = new THREE.Shape()
+  shape.absarc(cx, cy, r, 0, Math.PI * 2, false)
+  return shape
+}
+
+/** Base button-in-bezel — siluet mengikuti bentuk desain. */
+function buildBaseBody(opts, mech) {
+  const floor = opts.floorThicknessMm
   const oh = opts.outerHeightMm
-  const lidH = Number(opts.lidHeightMm) || 10
-  const clone = lidGeo.clone()
-  const z = oh - lidH * 0.15
+  const switchDepth = opts.switchDepthMm
+  const topRim = opts.topRimMm
 
-  if (opts.displayMode === 'print') {
-    clone.rotateX(Math.PI)
-    clone.translate(0, 0, z - lidH / 2)
-  } else {
-    clone.translate(0, 0, z)
+  const wellFloorZ = floor + switchDepth
+  const wellTopZ = oh - topRim
+  const bezelH = Math.max(1, wellTopZ - wellFloorZ)
+
+  const parts = []
+
+  // Lantai solid mengikuti siluet body
+  const floorGeo = extrudeShapes(mech.bodyShapes, floor)
+  if (floorGeo) parts.push(floorGeo)
+
+  // Dinding pocket switch (ring antara body & pocket)
+  const pocketWallH = switchDepth
+  const pocketWalls = buildBezelRing(mech.bodyShapes, [mech.pocketShape])
+  const pocketWallGeo = extrudeShapes(pocketWalls, pocketWallH)
+  if (pocketWallGeo) {
+    pocketWallGeo.translate(0, 0, floor)
+    parts.push(pocketWallGeo)
   }
+
+  // Lantai well (ring antara well & pocket)
+  const wellFloorShapes = buildBezelRing(mech.wellShapes, [mech.pocketShape])
+  const wellFloorGeo = extrudeShapes(wellFloorShapes, 0.9)
+  if (wellFloorGeo) wellFloorGeo.translate(0, 0, wellFloorZ - 0.45)
+  if (wellFloorGeo) parts.push(wellFloorGeo)
+
+  // Bezel — border mengelilingi well (raised frame)
+  const bezelShapes = buildBezelRing(mech.bodyShapes, mech.wellShapes)
+  const bezelGeo = extrudeShapes(bezelShapes, bezelH)
+  if (bezelGeo) bezelGeo.translate(0, 0, wellFloorZ)
+  if (bezelGeo) parts.push(bezelGeo)
+
+  // Plate cutout ring di rim atas (MX plate opening)
+  const plateCutShapes = buildBezelRing(mech.wellShapes, [mech.plateOpeningShape])
+  const rimGeo = extrudeShapes(plateCutShapes, topRim)
+  if (rimGeo) rimGeo.translate(0, 0, wellTopZ)
+  if (rimGeo) parts.push(rimGeo)
+
+  // Keyring loop tab
+  if (opts.keyringEnabled) {
+    const hole = Number(opts.keyringHoleMm) || 5.2
+    const loopR = Math.max(3.2, hole / 2 + 1.8)
+    const tabThick = Math.max(2.5, Math.min(4, oh * 0.35))
+    const angle = ((Number(opts.keyringAngleDeg) || 90) * Math.PI) / 180
+    const reach = Math.max(mech.bodyBounds.width, mech.bodyBounds.height) / 2 + loopR * 0.5
+    const tabX = Math.sin(angle) * reach
+    const tabY = Math.cos(angle) * reach
+
+    const tabOuter = circleAt(tabX, tabY, loopR * 0.9)
+    const tabHole = circleAt(tabX, tabY, hole / 2)
+    const tabShapes = subtractShapes2D([tabOuter], [tabHole])
+    const tabGeo = extrudeShapes(tabShapes, tabThick)
+    if (tabGeo) tabGeo.translate(0, 0, oh - tabThick / 2 - 0.3)
+    if (tabGeo) parts.push(tabGeo)
+  }
+
+  return mergeParts(parts)
+}
+
+/** Lid — cap plate + stem MX + perimeter skirt. */
+function buildLid(opts, mech) {
+  const backing = Math.max(0.8, Number(opts.topThicknessMm) || 1.5)
+  const imageDepth = Math.max(0.2, Number(opts.imageDepthMm) || 0.8)
+  const capH = backing + imageDepth
+  const stemH = Number(opts.stemHeightMm) || opts.preset.stemHeightMm || 4
+
+  const parts = []
+
+  // Cap plate (siluet desain)
+  const capGeo = extrudeShapes(mech.plateShapes, capH)
+  if (capGeo) capGeo.translate(0, 0, stemH)
+  if (capGeo) parts.push(capGeo)
+
+  // Artwork layer — sedikit lebih tipis di atas backing (efek relief)
+  if (mech.shapes?.length && opts.shapeMode !== 'rect') {
+    const artGeo = extrudeShapes(mech.shapes, imageDepth * 0.85)
+    if (artGeo) artGeo.translate(0, 0, stemH + backing + imageDepth * 0.075)
+    if (artGeo) parts.push(artGeo)
+  }
+
+  // Stem MX
+  const stemShapes = buildStemShapes(opts)
+  const stemGeo = extrudeShapes(stemShapes, stemH)
+  if (stemGeo) parts.push(stemGeo)
+
+  // Perimeter skirt (ring offset — seperti Vostok)
+  const skirtShapes = buildSkirtRingShapes(mech.plateShapes, opts)
+  const skirtLen = stemH
+  if (skirtShapes.length && skirtLen > 0.4) {
+    const skirtGeo = extrudeShapes(skirtShapes, skirtLen + 0.3)
+    if (skirtGeo) parts.push(skirtGeo)
+  }
+
+  return mergeParts(parts)
+}
+
+function placeLidForAssembly(lidGeo, baseGeo, opts) {
+  const clone = lidGeo.clone()
+  const baseBox = bboxOfGeometry(baseGeo)
+  const lidBox = bboxOfGeometry(clone)
+
+  const floor = opts.floorThicknessMm
+  const switchDepth = opts.switchDepthMm
+  const capProud = Number(opts.capProudMm) || 4
+  const topRim = opts.topRimMm
+  const oh = opts.outerHeightMm
+
+  const wellFloorZ = floor + switchDepth
+  const wellTopZ = oh - topRim
+  const capTopTarget = wellTopZ + capProud
+  const seatedZ = capTopTarget - lidBox.maxZ
+
+  if (opts.displayMode === 'exploded') {
+    const lift = lidBox.height * 0.8 + 10
+    clone.translate(0, 0, seatedZ + lift)
+  } else if (opts.displayMode === 'print') {
+    clone.rotateX(Math.PI)
+    const tx = baseBox.maxX + PLATE_GAP_MM + lidBox.width / 2 - lidBox.centerX
+    const ty = lidBox.centerY * 2
+    const tz = lidBox.maxZ
+    clone.translate(tx, ty, tz)
+  } else {
+    clone.translate(0, 0, seatedZ)
+  }
+
   clone.computeVertexNormals()
   return clone
 }
@@ -155,16 +233,32 @@ export async function generateClickerCore(userOpts = {}) {
   let opts = resolveClickerOptions(userOpts)
   const footprint = await resolveFootprint(opts)
 
-  if (opts.shapeMode !== 'rect') {
-    const outer = footprintToOuterSize(footprint, opts)
-    opts = { ...opts, ...outer }
+  const outer = footprintToOuterSize(footprint, opts)
+  let mech = resolveMechanicalFootprint(footprint, opts)
+
+  if (mech.plateWidthMm < outer.plateWidthMm - 0.5) {
+    const grow = (outer.plateWidthMm - mech.plateWidthMm) / 2 + 0.1
+    const grown = offsetShapes(mech.plateShapes, grow)
+    if (grown.length) {
+      mech = resolveMechanicalFootprint({ ...footprint, plateShapes: grown, shapes: footprint.shapes }, opts)
+    }
+  }
+
+  opts = {
+    ...opts,
+    outerWidthMm: mech.outerWidthMm,
+    outerDepthMm: mech.outerDepthMm,
+    outerHeightMm: Math.max(
+      opts.outerHeightMm,
+      opts.floorThicknessMm + opts.switchDepthMm + opts.topRimMm + opts.travelMm * 0.25
+    )
   }
   validateOuterSize(opts)
 
   const colors = opts.colors
-  const baseGeo = buildBaseBody(opts)
-  const lidGeoRaw = buildLid(opts, footprint)
-  const lidGeoAssembly = placeLidForAssembly(lidGeoRaw, opts)
+  const baseGeo = buildBaseBody(opts, mech)
+  const lidGeoRaw = buildLid(opts, mech)
+  const lidGeoAssembly = placeLidForAssembly(lidGeoRaw, baseGeo, opts)
 
   const basePreviewParts = [{ geometry: baseGeo, color: colors.base, role: 'base' }]
   const lidPreviewParts = [{ geometry: lidGeoRaw, color: colors.lid, role: 'lid' }]
@@ -180,6 +274,7 @@ export async function generateClickerCore(userOpts = {}) {
   const result = {
     slug,
     shapeMode: opts.shapeMode,
+    baseShape: opts.baseShape,
     displayMode: opts.displayMode,
     switchPresetId: opts.switchPresetId,
     switchPresetName: opts.preset.name,
@@ -191,12 +286,18 @@ export async function generateClickerCore(userOpts = {}) {
       widthMm: Number(opts.outerWidthMm.toFixed(1)),
       depthMm: Number(opts.outerDepthMm.toFixed(1)),
       heightMm: Number(opts.outerHeightMm.toFixed(1)),
-      footprintWidthMm: Number(footprint.bounds.width.toFixed(1)),
-      footprintDepthMm: Number(footprint.bounds.height.toFixed(1)),
+      plateWidthMm: Number(mech.plateWidthMm.toFixed(1)),
+      plateDepthMm: Number(mech.plateDepthMm.toFixed(1)),
+      wellWidthMm: Number(mech.wellWidthMm.toFixed(1)),
+      wellDepthMm: Number(mech.wellDepthMm.toFixed(1)),
       housingPocketMm: Number(opts.housingPocketMm.toFixed(2)),
       switchDepthMm: Number(opts.switchDepthMm.toFixed(2)),
       plateOpeningMm: Number(opts.plateOpeningMm.toFixed(2)),
       fitToleranceMm: Number(opts.fitToleranceMm.toFixed(2)),
+      slipToleranceMm: Number(opts.slipToleranceMm.toFixed(2)),
+      stemFitPct: Number(opts.stemFitPct.toFixed(1)),
+      socketFitPct: Number(opts.socketFitPct.toFixed(1)),
+      capProudMm: Number(opts.capProudMm.toFixed(1)),
       lidHeightMm: Number(opts.lidHeightMm.toFixed(1)),
       maxSizeMm: Number(opts.maxSizeMm.toFixed(1))
     },

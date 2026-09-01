@@ -19,26 +19,10 @@ import { resolveTypography, resolveAccentTypography } from './keychainTypography
 import { applyTypographyLayout, scaleGroupsToFit } from './keychainTypographyLayout.js'
 import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import { buildLogoGroupFromShapes, deserializeShapes, parseSvgToShapes } from './svgToShapes.js'
+import { packGeometry } from './geometryPack.js'
 
 const fontCache = new Map()
 const EXTRUDE_OPTS = (depth) => ({ depth, bevelEnabled: false, curveSegments: 5 })
-
-export function packGeometry(geo) {
-  const pos = geo.attributes.position
-  const norm = geo.attributes.normal
-  return {
-    positions: new Float32Array(pos.array),
-    normals: norm ? new Float32Array(norm.array) : null
-  }
-}
-
-export function unpackGeometry(data) {
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3))
-  if (data.normals) geo.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3))
-  else geo.computeVertexNormals()
-  return geo
-}
 
 function slugify(text) {
   return (

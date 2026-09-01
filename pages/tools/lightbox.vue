@@ -17,7 +17,8 @@ import {
   PencilSquareIcon
 } from '@heroicons/vue/24/outline'
 import { LIGHTBOX_DEFAULTS } from '~/utils/lightboxPresets.js'
-import { generateLightbox, downloadBlob } from '~/utils/lightboxGenerator.js'
+import { generateLightbox } from '~/utils/lightboxGenerator.js'
+import { downloadBlob } from '~/utils/downloadBlob.js'
 import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExport.js'
 
 const COLOR_FIELDS = computed(() => {

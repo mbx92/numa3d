@@ -21,9 +21,20 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: false },
   modules: ['@nuxtjs/tailwindcss', '@vite-pwa/nuxt'],
+  // Hanya composables — utils di-import eksplisit (hindari duplicate export warnings).
+  imports: {
+    dirs: ['composables']
+  },
   css: ['~/assets/css/main.css'],
   vite: {
-    plugins: isProduction ? [] : [devAppManifestPlugin()]
+    plugins: isProduction ? [] : [devAppManifestPlugin()],
+    optimizeDeps: {
+      exclude: ['manifold-3d']
+    },
+    worker: {
+      format: 'es'
+    },
+    assetsInclude: ['**/*.wasm']
   },
   devServer: {
     host: '0.0.0.0',

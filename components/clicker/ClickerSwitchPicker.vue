@@ -2,6 +2,9 @@
 import { SWITCH_PRESET_LIST, getSwitchPreset } from '~/utils/clickerPresets.js'
 
 const modelValue = defineModel({ type: String, default: 'cherry_mx' })
+const stemFitPct = defineModel('stemFitPct', { type: Number, default: 0 })
+const socketFitPct = defineModel('socketFitPct', { type: Number, default: 0 })
+const slipToleranceMm = defineModel('slipToleranceMm', { type: Number, default: 0.4 })
 
 const presets = SWITCH_PRESET_LIST
 const active = computed(() => getSwitchPreset(modelValue.value))
@@ -37,5 +40,31 @@ const active = computed(() => getSwitchPreset(modelValue.value))
         </div>
       </dl>
     </div>
+
+    <label class="block space-y-1">
+      <span class="text-xs font-medium text-ink-700">Slip-fit lid ↔ well</span>
+      <div class="flex items-center gap-2">
+        <input v-model.number="slipToleranceMm" type="range" min="0.1" max="1" step="0.05" class="flex-1" />
+        <span class="text-xs font-mono w-12 text-right">{{ slipToleranceMm }} mm</span>
+      </div>
+    </label>
+
+    <label class="block space-y-1">
+      <span class="text-xs font-medium text-ink-700">Socket fit (pocket)</span>
+      <div class="flex items-center gap-2">
+        <input v-model.number="socketFitPct" type="range" min="-5" max="5" step="0.5" class="flex-1" />
+        <span class="text-xs font-mono w-12 text-right">{{ socketFitPct }}%</span>
+      </div>
+      <p class="text-[10px] text-ink-400">+ = pocket lebih longgar, − = lebih ketat.</p>
+    </label>
+
+    <label class="block space-y-1">
+      <span class="text-xs font-medium text-ink-700">Stem fit (lid)</span>
+      <div class="flex items-center gap-2">
+        <input v-model.number="stemFitPct" type="range" min="-5" max="5" step="0.5" class="flex-1" />
+        <span class="text-xs font-mono w-12 text-right">{{ stemFitPct }}%</span>
+      </div>
+      <p class="text-[10px] text-ink-400">+ = stem socket lebih longgar di switch.</p>
+    </label>
   </div>
 </template>
