@@ -21,7 +21,8 @@ import {
 const props = defineProps({
   src: { type: String, required: true },
   filename: { type: String, required: true },
-  compact: { type: Boolean, default: false }
+  compact: { type: Boolean, default: false },
+  defaultColor: { type: String, default: '' }
 })
 
 const container = ref(null)
@@ -52,10 +53,12 @@ const DEFAULT_MAT = {
 }
 
 function buildObject(ext, loader, data) {
+  const mat = { ...DEFAULT_MAT }
+  if (props.defaultColor) mat.color = new THREE.Color(props.defaultColor)
   if (ext === 'stl') {
     const geometry = loader.parse(data)
     geometry.computeVertexNormals()
-    return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ ...DEFAULT_MAT }))
+    return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ ...mat }))
   }
   if (ext === 'obj') return loader.parse(new TextDecoder().decode(data))
   if (ext === '3mf') return loader.parse(data)
@@ -500,6 +503,43 @@ watch(expanded, () => {
 
 watch(snap, applySnap)
 
+watch(
+  () => [props.src, props.filename, props.defaultColor],
+  async () => {
+    if (!renderer || !scene || !container.value) return
+    loading.value = true
+    error.value = ''
+    try {
+      if (rootGroup) {
+        scene.remove(rootGroup)
+        rootGroup.traverse((obj) => {
+          obj.geometry?.dispose()
+          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose())
+          else obj.material?.dispose()
+        })
+        rootGroup = null
+      }
+      history.length = 0
+      historyIndex = -1
+      syncHistoryUi()
+      const loaded = await loadModel()
+      rootGroup = new THREE.Group()
+      rootGroup.add(loaded)
+      scene.add(rootGroup)
+      groundAndFrame(rootGroup)
+      refreshParts()
+      color.value = props.defaultColor || firstColor(rootGroup)
+      if (props.defaultColor) tintObject(rootGroup, props.defaultColor)
+      updateDims()
+      attachGizmo()
+    } catch (e) {
+      error.value = e.message || 'Gagal memuat model'
+    } finally {
+      loading.value = false
+    }
+  }
+)
+
 onMounted(async () => {
   const el = container.value
   scene = new THREE.Scene()
@@ -564,7 +604,8 @@ onMounted(async () => {
     boxHelper.visible = false
     scene.add(boxHelper)
     refreshParts()
-    color.value = firstColor(rootGroup)
+    color.value = props.defaultColor || firstColor(rootGroup)
+    if (props.defaultColor) tintObject(rootGroup, props.defaultColor)
     updateDims()
     renderer.domElement.addEventListener('pointerdown', onPointerDown)
     renderer.domElement.addEventListener('pointerup', onPointerUp)
