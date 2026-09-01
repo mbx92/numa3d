@@ -56,7 +56,6 @@ const toast = useToast()
 const themes = KEYCHAIN_THEME_LIST
 const attachmentTypes = ATTACHMENT_TYPES
 const exportFormat = ref('3mf')
-const activeTheme = computed(() => getKeychainTheme(form.themeId))
 const activeAttachment = computed(
   () => attachmentTypes.find((t) => t.id === form.attachmentType) || attachmentTypes[0]
 )
@@ -105,6 +104,8 @@ function applyThemeDefaults(themeId) {
   const attachmentType = form.attachmentType
   const accentIndices = form.accentIndices
   Object.assign(form, { themeId: theme.id, ...theme.defaults, attachmentType, accentIndices })
+  form.fontUrl = theme.fontUrl
+  form.typographyId = theme.typographyId || 'straight'
   form.colors = { ...theme.colors }
 }
 
@@ -281,7 +282,12 @@ function onWizardComplete(payload) {
   const theme = getKeychainTheme(payload.themeId)
   Object.assign(form, { ...theme.defaults })
   form.themeId = payload.themeId
+  form.fontUrl = payload.fontUrl || theme.fontUrl
+  form.typographyId = payload.typographyId || theme.typographyId || 'straight'
   form.text = payload.text
+  form.svgContent = payload.svgContent || ''
+  form.svgSizeMm = payload.svgSizeMm ?? 14
+  form.svgGapMm = payload.svgGapMm ?? 2
   form.attachmentType = payload.attachmentType
   form.targetWidthMm = payload.targetWidthMm
   form.targetHeightMm = payload.targetHeightMm
@@ -366,7 +372,14 @@ function restartWizard() {
               <input v-model="form.text" class="input text-sm" maxlength="40" :placeholder="TEXT_PLACEHOLDER" />
             </KeychainCompactField>
 
+            <KeychainSvgUpload
+              v-model:svg-content="form.svgContent"
+              v-model:svg-size-mm="form.svgSizeMm"
+              v-model:svg-gap-mm="form.svgGapMm"
+            />
+
             <KeychainAccentPicker
+              v-if="form.text"
               v-model:accent-indices="form.accentIndices"
               :text="form.text"
               :letter-color="form.colors.letter"
@@ -377,8 +390,15 @@ function restartWizard() {
               <select v-model="form.themeId" class="input text-sm" @change="applyThemeDefaults(form.themeId)">
                 <option v-for="t in themes" :key="t.id" :value="t.id">{{ t.name }}</option>
               </select>
-              <p class="text-[10px] text-ink-400 mt-1">{{ activeTheme.fontLabel }}</p>
             </KeychainCompactField>
+
+            <KeychainFontPicker
+              v-model="form.fontUrl"
+              :preview-text="form.text || TEXT_PLACEHOLDER"
+              :show-preview="false"
+            />
+
+            <KeychainTypographyPicker v-model="form.typographyId" />
 
             <KeychainCompactField label="Attachment" :hint="activeAttachment.description">
               <select v-model="form.attachmentType" class="input text-sm">

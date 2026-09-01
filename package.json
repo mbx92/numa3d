@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "nuxt dev --host",
+    "dev:clean": "node -e \"try{require('fs').rmSync('.nuxt',{recursive:true,force:true})}catch(e){}\" && nuxt dev --host",
     "build": "nuxt build",
     "preview": "nuxt preview",
     "db:generate": "drizzle-kit generate",

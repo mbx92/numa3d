@@ -10,6 +10,7 @@ export const KEYCHAIN_THEMES = {
     fontUrl: '/fonts/BarlowCondensed-BlackItalic.woff',
     fontLabel: 'Barlow Condensed Black Italic',
     license: 'OFL — aman untuk komersial',
+    typographyId: 'sports',
     insertMode: 'plate',
     colors: {
       plate: '#2b2b2b',
@@ -70,6 +71,7 @@ export function themeToGeneratorOptions(themeId, overrides = {}) {
   return {
     themeId: theme.id,
     fontUrl: theme.fontUrl,
+    typographyId: overrides.typographyId ?? theme.typographyId ?? 'straight',
     insertMode: theme.insertMode || 'plate',
     ...defaults,
     ...overrides,

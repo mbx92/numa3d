@@ -4,7 +4,7 @@ definePageMeta({
   toolTitle: 'Tools'
 })
 
-import { SparklesIcon, ArrowRightIcon } from '@heroicons/vue/24/outline'
+import { SparklesIcon, ArrowRightIcon, ArrowDownTrayIcon, CursorArrowRaysIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
 
 const tools = [
   {
@@ -13,6 +13,27 @@ const tools = [
     description: 'Buat keychain 2-part (base + teks insert) dengan theme, warna, dan export 3MF/STL.',
     icon: SparklesIcon,
     tags: ['3MF', 'STL', 'Multi-color']
+  },
+  {
+    to: '/tools/clicker',
+    title: 'Clicker Generator',
+    description: 'Base + lid clicker MX — desain dari teks/SVG, preview/print mode, export 3MF/STL.',
+    icon: CursorArrowRaysIcon,
+    tags: ['Switch', '3MF', 'STL']
+  },
+  {
+    to: '/tools/lightbox',
+    title: 'Lightbox Generator',
+    description: 'Lightbox LED dari gambar/teks/SVG — multi-layer warna, cavity LED, export 3MF.',
+    icon: LightBulbIcon,
+    tags: ['LED', '3MF', 'AMS']
+  },
+  {
+    to: '/tools/font-downloader',
+    title: 'Font Downloader',
+    description: 'Cari & unduh font Google Fonts ke server untuk dipakai di generator keychain dan tools lain.',
+    icon: ArrowDownTrayIcon,
+    tags: ['Google Fonts', 'TTF', 'Keychain']
   }
 ]
 </script>

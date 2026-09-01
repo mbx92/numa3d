@@ -404,7 +404,8 @@ export const EXPORT_FORMATS = [
 
 export function exportFilename(slug, part, formatId) {
   const fmt = EXPORT_FORMATS.find((f) => f.id === formatId) || EXPORT_FORMATS[0]
-  const suffix = part === 'text' ? 'text' : 'base'
+  const known = { text: 'text', base: 'base', face: 'face', body: 'body', assembly: 'assembly', lid: 'lid' }
+  const suffix = known[part] || part || 'base'
   const tag =
     formatId === '3mf' || formatId === 'glb' || formatId === 'stl-color' || formatId === 'stl-parts'
       ? '_color'

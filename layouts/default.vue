@@ -1,21 +1,5 @@
 <script setup>
 import {
-  Squares2X2Icon,
-  CircleStackIcon,
-  CpuChipIcon,
-  ArchiveBoxIcon,
-  CubeIcon,
-  CubeTransparentIcon,
-  WrenchScrewdriverIcon,
-  PrinterIcon,
-  PuzzlePieceIcon,
-  BuildingStorefrontIcon,
-  BanknotesIcon,
-  ShoppingCartIcon,
-  TruckIcon,
-  ChartBarIcon,
-  WalletIcon,
-  Cog6ToothIcon,
   UserIcon,
   Bars3Icon,
   XMarkIcon,
@@ -24,37 +8,10 @@ import {
 
 const authUser = useState('authUser')
 const isAdmin = computed(() => authUser.value?.role === 'admin')
-
-const baseNav = [
-  { to: '/', label: 'Dashboard', icon: Squares2X2Icon },
-  { to: '/materials', label: 'Material', icon: CircleStackIcon },
-  { to: '/machines', label: 'Mesin', icon: CpuChipIcon },
-  { to: '/packaging', label: 'Packaging', icon: ArchiveBoxIcon },
-  { to: '/products', label: 'Produk & HPP', icon: CubeIcon },
-  { to: '/gallery', label: 'Galeri 3D', icon: CubeTransparentIcon },
-  { to: '/tools', label: 'Tools', icon: WrenchScrewdriverIcon },
-  { to: '/production', label: 'Produksi', icon: PrinterIcon },
-  { to: '/custom-orders', label: 'Custom', icon: PuzzlePieceIcon },
-  { to: '/catalog', label: 'Katalog', icon: BuildingStorefrontIcon },
-  { to: '/purchases', label: 'Pembelian', icon: TruckIcon },
-  { to: '/expenses', label: 'Pengeluaran', icon: BanknotesIcon },
-  { to: '/sales', label: 'Penjualan', icon: ShoppingCartIcon },
-  { to: '/reports', label: 'Laporan', icon: ChartBarIcon },
-  { to: '/capital', label: 'Modal', icon: WalletIcon },
-  { to: '/settings', label: 'Pengaturan', icon: Cog6ToothIcon }
-]
-const nav = baseNav
 const route = useRoute()
-
-function isNavActive(to) {
-  if (to === '/') return route.path === '/'
-  return route.path === to || route.path.startsWith(`${to}/`)
-}
 
 const roleLabel = { admin: 'Admin', staff: 'Staff' }
 
-// Daftar menu sudah terlalu panjang untuk topbar geser di layar kecil,
-// jadi di mobile dipakai drawer yang tertutup otomatis saat pindah halaman.
 const drawerOpen = ref(false)
 watch(() => route.fullPath, () => (drawerOpen.value = false))
 watch(drawerOpen, (open) => {
@@ -73,7 +30,7 @@ async function logout() {
 
 <template>
   <div class="min-h-screen md:flex">
-    <!-- Topbar (mobile) — pt-safe agar hamburger tidak tertutup status bar di PWA standalone -->
+    <!-- Topbar (mobile) -->
     <header
       class="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 pt-safe min-h-topbar-safe bg-ink-900 text-ink-100 border-b border-ink-700"
     >
@@ -97,17 +54,8 @@ async function logout() {
               <XMarkIcon class="w-5 h-5" />
             </button>
           </div>
-          <nav class="flex-1 overflow-y-auto">
-            <NuxtLink
-              v-for="item in nav"
-              :key="item.to"
-              :to="item.to"
-              class="flex items-center gap-3 px-4 py-3 text-sm border-l-2 border-transparent text-ink-300 hover:text-white hover:bg-ink-800 transition-colors"
-              :class="isNavActive(item.to) ? '!border-accent-500 !text-white bg-ink-800' : ''"
-            >
-              <component :is="item.icon" class="w-5 h-5 shrink-0" />
-              {{ item.label }}
-            </NuxtLink>
+          <nav class="flex-1 overflow-y-auto py-1">
+            <LayoutSidebarNavLinks compact />
           </nav>
           <div class="border-t border-ink-700">
             <div v-if="authUser" class="flex items-center gap-3 px-4 py-3">
@@ -139,24 +87,15 @@ async function logout() {
       </div>
     </Teleport>
 
-    <!-- Sidebar (desktop / tablet standalone) -->
+    <!-- Sidebar (desktop) -->
     <aside class="hidden md:flex bg-ink-900 text-ink-100 w-56 h-screen sticky top-0 shrink-0 flex-col pt-safe pb-safe">
       <div class="px-4 py-4 flex items-center gap-2 border-b border-ink-700">
         <img src="/logo-mark.svg" alt="" class="w-6 h-6" />
         <span class="font-bold tracking-wide">NUMA3D</span>
         <span class="text-[10px] uppercase tracking-widest text-ink-400 ml-auto">Workshop</span>
       </div>
-      <nav class="flex flex-col overflow-y-auto flex-1">
-        <NuxtLink
-          v-for="item in nav"
-          :key="item.to"
-          :to="item.to"
-          class="flex items-center gap-2.5 px-4 py-3 text-sm whitespace-nowrap border-l-2 border-transparent text-ink-300 hover:text-white hover:bg-ink-800 transition-colors"
-          :class="isNavActive(item.to) ? '!border-accent-500 !text-white bg-ink-800' : ''"
-        >
-          <component :is="item.icon" class="w-5 h-5 shrink-0" />
-          {{ item.label }}
-        </NuxtLink>
+      <nav class="flex flex-col overflow-y-auto flex-1 py-1">
+        <LayoutSidebarNavLinks />
         <div class="mt-auto sticky bottom-0 bg-ink-900 border-t border-ink-700">
           <div v-if="authUser" class="flex items-center gap-2 px-3 py-3">
             <div

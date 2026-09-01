@@ -16,7 +16,12 @@ const initialTheme = getKeychainTheme(KEYCHAIN_DEFAULTS.themeId)
 const accentIndices = ref([...(initialTheme.defaults.accentIndices || [])])
 const draft = reactive({
   text: initialTheme.defaults.text || '',
+  svgContent: '',
+  svgSizeMm: 14,
+  svgGapMm: 2,
   themeId: initialTheme.id,
+  fontUrl: initialTheme.fontUrl,
+  typographyId: initialTheme.typographyId || 'straight',
   attachmentType: initialTheme.defaults.attachmentType || 'hole',
   targetWidthMm: initialTheme.defaults.targetWidthMm ?? 68,
   targetHeightMm: initialTheme.defaults.targetHeightMm ?? 21,
@@ -35,7 +40,7 @@ const activeTheme = computed(() => getKeychainTheme(draft.themeId))
 const wizardColors = [
   { key: 'plate', label: 'Plate teks', hint: 'Dasar di bawah huruf' },
   { key: 'letter', label: 'Huruf', hint: 'Karakter non-aksen' },
-  { key: 'accent', label: 'Aksen', hint: 'Huruf yang dipilih di langkah 1' },
+  { key: 'accent', label: 'Aksen', hint: 'Huruf aksen & logo SVG' },
   { key: 'base', label: 'Base', hint: 'Body & cavity' }
 ]
 
@@ -44,6 +49,8 @@ const accentLabel = computed(() => accentIndicesToLabel(draft.text, accentIndice
 function applyThemePreset(themeId) {
   const theme = getKeychainTheme(themeId)
   draft.themeId = theme.id
+  draft.fontUrl = theme.fontUrl
+  draft.typographyId = theme.typographyId || 'straight'
   draft.targetWidthMm = theme.defaults.targetWidthMm ?? draft.targetWidthMm
   draft.targetHeightMm = theme.defaults.targetHeightMm ?? draft.targetHeightMm
   draft.attachmentType = theme.defaults.attachmentType ?? draft.attachmentType
@@ -56,8 +63,14 @@ function applyThemePreset(themeId) {
 function validateStep() {
   error.value = ''
   if (step.value === 0) {
-    if (!String(draft.text || '').trim()) {
-      error.value = 'Teks wajib diisi'
+    if (!String(draft.text || '').trim() && !String(draft.svgContent || '').trim()) {
+      error.value = 'Isi teks atau unggah logo SVG'
+      return false
+    }
+  }
+  if (step.value === 2) {
+    if (String(draft.text || '').trim() && !String(draft.fontUrl || '').trim()) {
+      error.value = 'Pilih font untuk keychain berisi teks'
       return false
     }
   }
@@ -86,8 +99,13 @@ function submit() {
   const theme = getKeychainTheme(draft.themeId)
   emit('complete', {
     text: String(draft.text).trim(),
+    svgContent: String(draft.svgContent || ''),
+    svgSizeMm: Number(draft.svgSizeMm) || 14,
+    svgGapMm: Number(draft.svgGapMm) || 2,
     accentIndices: [...accentIndices.value],
     themeId: draft.themeId,
+    fontUrl: draft.fontUrl,
+    typographyId: draft.typographyId,
     attachmentType: draft.attachmentType,
     targetWidthMm: Number(draft.targetWidthMm),
     targetHeightMm: Number(draft.targetHeightMm),
@@ -128,7 +146,7 @@ function submit() {
         </div>
       </header>
 
-      <div class="px-5 py-4 space-y-4 min-h-[16rem]">
+      <div class="px-5 py-4 space-y-4 min-h-[18rem] max-h-[min(70vh,36rem)] overflow-y-auto">
         <!-- Step 1: Teks -->
         <template v-if="step === 0">
           <label class="block space-y-1.5">
@@ -140,8 +158,17 @@ function submit() {
               :placeholder="TEXT_PLACEHOLDER"
               autofocus
             />
+            <p class="text-[10px] text-ink-400">Opsional jika hanya pakai logo SVG.</p>
           </label>
+
+          <KeychainSvgUpload
+            v-model:svg-content="draft.svgContent"
+            v-model:svg-size-mm="draft.svgSizeMm"
+            v-model:svg-gap-mm="draft.svgGapMm"
+          />
+
           <KeychainAccentPicker
+            v-if="draft.text"
             v-model:accent-indices="accentIndices"
             :text="draft.text"
             :letter-color="draft.colors.letter"
@@ -178,12 +205,17 @@ function submit() {
         <!-- Step 3: Font & attachment -->
         <template v-else-if="step === 2">
           <label class="block space-y-1.5">
-            <span class="text-xs font-medium text-ink-700">Font / theme</span>
+            <span class="text-xs font-medium text-ink-700">Theme preset</span>
             <select v-model="draft.themeId" class="input text-sm" @change="applyThemePreset(draft.themeId)">
               <option v-for="t in themes" :key="t.id" :value="t.id">{{ t.name }}</option>
             </select>
-            <p class="text-[11px] text-ink-400">{{ activeTheme.fontLabel }}</p>
+            <p class="text-[11px] text-ink-400">{{ activeTheme.description }}</p>
           </label>
+
+          <KeychainFontPicker v-model="draft.fontUrl" :preview-text="draft.text || 'NUMA 3D'" />
+
+          <KeychainTypographyPicker v-model="draft.typographyId" />
+
           <label class="block space-y-1.5">
             <span class="text-xs font-medium text-ink-700">Tipe attachment</span>
             <select v-model="draft.attachmentType" class="input text-sm">

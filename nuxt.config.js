@@ -1,12 +1,7 @@
-import { fileURLToPath } from 'node:url'
-
 const isProduction = process.env.NODE_ENV === 'production'
 const devAppManifestModule = '\0numa3d-dev-app-manifest'
-const devAppManifestAlias =
-  isProduction
-    ? {}
-    : { '#app-manifest': fileURLToPath(new URL('./.nuxt/manifest/meta/dev.json', import.meta.url)) }
 
+/** Virtual #app-manifest di dev — hindari alias ke file .nuxt yang belum ada. */
 function devAppManifestPlugin() {
   return {
     name: 'numa3d-dev-app-manifest',
@@ -28,10 +23,7 @@ export default defineNuxtConfig({
   modules: ['@nuxtjs/tailwindcss', '@vite-pwa/nuxt'],
   css: ['~/assets/css/main.css'],
   vite: {
-    plugins: isProduction ? [] : [devAppManifestPlugin()],
-    resolve: {
-      alias: devAppManifestAlias
-    }
+    plugins: isProduction ? [] : [devAppManifestPlugin()]
   },
   devServer: {
     host: '0.0.0.0',
@@ -113,7 +105,7 @@ export default defineNuxtConfig({
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
       navigateFallback: '/',
-      navigateFallbackDenylist: [/^\/api\//, /^\/i\//],
+      navigateFallbackDenylist: [/^\/api\//, /^\/i\//, /^\/manifest\.webmanifest$/],
       cleanupOutdatedCaches: true,
       clientsClaim: true,
       skipWaiting: true

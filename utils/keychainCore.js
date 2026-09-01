@@ -15,6 +15,10 @@ import {
   subtractShapes2D
 } from './shapeClipper.js'
 import { getKeychainTheme, themeToGeneratorOptions } from './keychainThemes.js'
+import { resolveTypography, resolveAccentTypography } from './keychainTypography.js'
+import { applyTypographyLayout, scaleGroupsToFit } from './keychainTypographyLayout.js'
+import { computeBoundsFromShapes } from './keychainTypographyCore.js'
+import { buildLogoGroupFromShapes, deserializeShapes, parseSvgToShapes } from './svgToShapes.js'
 
 const fontCache = new Map()
 const EXTRUDE_OPTS = (depth) => ({ depth, bevelEnabled: false, curveSegments: 5 })
@@ -310,7 +314,7 @@ function buildInsertGeometry(groups, shapes, thickness, outerMarginMm, innerBrid
       const g = new THREE.ExtrudeGeometry(shape, EXTRUDE_OPTS(letterH))
       g.translate(0, 0, plateH)
       stlParts.push(g)
-      previewBuckets[group.accent ? 'accent' : 'letter'].push(g.clone())
+      previewBuckets[group.logo || group.accent ? 'accent' : 'letter'].push(g.clone())
     }
   }
 
@@ -355,22 +359,6 @@ function meshToStlArrayBuffer(mesh) {
   return new TextEncoder().encode(String(data)).buffer
 }
 
-function computeBoundsFromShapes(shapes) {
-  let minX = Infinity
-  let maxX = -Infinity
-  let minY = Infinity
-  let maxY = -Infinity
-  for (const shape of shapes) {
-    for (const p of shape.getPoints(10)) {
-      minX = Math.min(minX, p.x)
-      maxX = Math.max(maxX, p.x)
-      minY = Math.min(minY, p.y)
-      maxY = Math.max(maxY, p.y)
-    }
-  }
-  return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY }
-}
-
 function flattenGroupShapes(groups) {
   return groups.flatMap((g) => g.shapes)
 }
@@ -381,32 +369,62 @@ export async function generateKeychainCore(userOpts = {}) {
   const theme = getKeychainTheme(themeId)
   const opts = themeToGeneratorOptions(themeId, userOpts)
   const text = String(opts.text || '').trim()
-  if (!text) throw new Error('Teks keychain wajib diisi')
+  const svgContent = String(opts.svgContent || '').trim()
+  const hasSvg = !!(svgContent || opts.svgShapes?.length)
+  if (!text && !hasSvg) throw new Error('Isi teks atau unggah logo SVG')
 
-  const font = await loadFont(opts.fontUrl)
-  const letterSpacing = opts.letterSpacingMm ?? 0
-  const probeSize = 100
-  const probePath = getTextPath(font, text, 0, 0, probeSize, letterSpacing)
-  const probeBox = probePath.getBoundingBox()
-  const probeWidth = Math.max(probeBox.x2 - probeBox.x1, 0.001)
-  const probeHeight = Math.max(probeBox.y2 - probeBox.y1, 0.001)
-  const scale = Math.min(opts.targetWidthMm / probeWidth, opts.targetHeightMm / probeHeight)
-  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Ukuran teks tidak valid — periksa lebar/tinggi (mm)')
-  const fontSize = probeSize * scale
-  if (fontSize < 0.05) throw new Error('Teks terlalu kecil — perbesar ukuran tag atau pendekkan teks')
+  const svgReserve = hasSvg ? (Number(opts.svgSizeMm) || 14) + (Number(opts.svgGapMm) || 2) : 0
+  let groups = []
 
-  const accentSet = new Set(
-    (Array.isArray(opts.accentIndices) ? opts.accentIndices : [])
-      .filter((i) => Number.isInteger(i) && i >= 0 && i < text.length)
-  )
-  let groups = getCharacterGroups(font, text, fontSize, letterSpacing, accentSet)
-  if (!groups.length) throw new Error('Gagal mengonversi teks ke bentuk 2D')
+  if (text) {
+    if (!opts.fontUrl) throw new Error('Font wajib dipilih untuk keychain berisi teks')
 
-  const rawBounds = computeBoundsFromShapes(flattenGroupShapes(groups))
-  const attachReach = getAttachmentReach(opts)
-  const offsetX = attachReach + opts.paddingMm - rawBounds.minX
-  const offsetY = -(rawBounds.minY + rawBounds.maxY) / 2
-  groups = translateGroups(groups, offsetX, offsetY)
+    const font = await loadFont(opts.fontUrl)
+    const typography = resolveTypography(opts.typographyId)
+    const letterSpacing = typography.letterSpacingMm ?? 0
+    const probeSize = 100
+    const probePath = getTextPath(font, text, 0, 0, probeSize, letterSpacing)
+    const probeBox = probePath.getBoundingBox()
+    const probeWidth = Math.max(probeBox.x2 - probeBox.x1, 0.001)
+    const probeHeight = Math.max(probeBox.y2 - probeBox.y1, 0.001)
+    const textTargetW = Math.max(10, opts.targetWidthMm - svgReserve)
+    const scale = Math.min(textTargetW / probeWidth, opts.targetHeightMm / probeHeight)
+    if (!Number.isFinite(scale) || scale <= 0) throw new Error('Ukuran teks tidak valid — periksa lebar/tinggi (mm)')
+    const fontSize = probeSize * scale
+    if (fontSize < 0.05) throw new Error('Teks terlalu kecil — perbesar ukuran tag atau pendekkan teks')
+
+    const accentSet = new Set(
+      (Array.isArray(opts.accentIndices) ? opts.accentIndices : [])
+        .filter((i) => Number.isInteger(i) && i >= 0 && i < text.length)
+    )
+    groups = getCharacterGroups(font, text, fontSize, letterSpacing, accentSet)
+    if (!groups.length) throw new Error('Gagal mengonversi teks ke bentuk 2D')
+
+    const accentTypo = resolveAccentTypography(opts.accentIndices)
+    groups = applyTypographyLayout(groups, typography, accentTypo)
+
+    const postBounds = computeBoundsFromShapes(flattenGroupShapes(groups))
+    const fitW = Math.max(10, (Number(opts.targetWidthMm) || postBounds.width) - svgReserve)
+    const fitH = Number(opts.targetHeightMm) || postBounds.height
+    groups = scaleGroupsToFit(groups, postBounds, fitW, fitH)
+
+    const rawBounds = computeBoundsFromShapes(flattenGroupShapes(groups))
+    const attachReach = getAttachmentReach(opts)
+    const offsetX = attachReach + opts.paddingMm - rawBounds.minX
+    const offsetY = -(rawBounds.minY + rawBounds.maxY) / 2
+    groups = translateGroups(groups, offsetX, offsetY)
+  }
+
+  if (hasSvg) {
+    const textBounds = groups.length ? computeBoundsFromShapes(flattenGroupShapes(groups)) : null
+    const logoShapes = opts.svgShapes?.length
+      ? deserializeShapes(opts.svgShapes)
+      : parseSvgToShapes(svgContent)
+    const logoGroup = buildLogoGroupFromShapes(logoShapes, opts, textBounds)
+    groups = [logoGroup, ...groups]
+  }
+
+  if (!groups.length) throw new Error('Tidak ada konten untuk di-generate')
 
   const shapes = flattenGroupShapes(groups)
   const bounds = computeBoundsFromShapes(shapes)
@@ -464,7 +482,7 @@ export async function generateKeychainCore(userOpts = {}) {
 
   const baseMesh = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial())
   const textMesh = new THREE.Mesh(textGeo, new THREE.MeshStandardMaterial())
-  const slug = slugify(text)
+  const slug = slugify(text || 'logo')
 
   const result = {
     slug,

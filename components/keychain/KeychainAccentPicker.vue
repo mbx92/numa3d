@@ -39,10 +39,10 @@ function onToggle(index, ch) {
         class="inline-flex items-center justify-center min-w-[1.25rem] px-1 py-1 rounded transition-transform hover:scale-105 disabled:opacity-40 disabled:cursor-default disabled:hover:scale-100"
         :class="
           isAccentIndex(accentIndices, token.index)
-            ? 'ring-2 ring-offset-1 shadow-sm'
+            ? 'ring-2 ring-offset-1 shadow-sm text-[1.35rem] -translate-y-0.5'
             : token.ch === ' '
-              ? 'cursor-default'
-              : 'ring-1 ring-ink-200/80'
+              ? 'cursor-default text-lg'
+              : 'ring-1 ring-ink-200/80 text-lg'
         "
         :style="
           isAccentIndex(accentIndices, token.index)
@@ -64,6 +64,11 @@ function onToggle(index, ch) {
         {{ token.ch === ' ' ? '·' : token.ch }}
       </button>
     </div>
-    <p class="text-[11px] text-ink-500">{{ hint }}</p>
+    <p class="text-[11px] text-ink-500">
+      {{ hint }}
+      <span v-if="accentIndices.length" class="text-ink-400">
+        Huruf aksen otomatis lebih besar di model 3D.
+      </span>
+    </p>
   </div>
 </template>
