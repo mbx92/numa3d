@@ -11,6 +11,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:activePanel', 'select', 'generate'])
 
+const { layoutConfig } = useUiLayout()
+
 const navRef = ref(null)
 const mobileCollapsed = ref(false)
 
@@ -27,6 +29,14 @@ function toggleMobileCollapsed() {
 }
 
 watch(
+  () => layoutConfig.value.panelCollapsedDefault,
+  (value) => {
+    mobileCollapsed.value = value
+  },
+  { immediate: true }
+)
+
+watch(
   () => props.activePanel,
   () => {
     nextTick(() => {
@@ -36,16 +46,45 @@ watch(
     })
   }
 )
+
+const navClass = computed(() => {
+  const cfg = layoutConfig.value
+  const vertical = cfg.rail === 'vertical'
+  return [
+    cfg.navOrder,
+    'z-20 shrink-0 gap-0.5 md:gap-1 px-1 py-1.5 border-b border-ink-200 bg-ink-50/95 backdrop-blur-sm md:bg-ink-50 shadow-sm md:shadow-none',
+    vertical
+      ? 'flex md:flex-col md:items-center md:py-3 md:w-[3.75rem] md:border-b-0 md:border-r md:static md:self-start md:h-full md:max-h-full'
+      : 'flex sticky top-0',
+    cfg.tabScroll
+      ? 'overflow-x-auto md:overflow-visible [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
+      : '',
+    cfg.mobileChrome && mobileCollapsed.value ? 'max-md:hidden' : ''
+  ]
+})
+
+const asideClass = computed(() => {
+  const cfg = layoutConfig.value
+  return [
+    cfg.asideOrder,
+    'flex flex-col flex-1 min-h-0 md:flex-none shrink-0 border-b md:border-b-0 md:border-r border-ink-200 bg-white md:max-h-full',
+    cfg.flyoutClass,
+    cfg.mobileChrome && mobileCollapsed.value ? 'max-md:hidden' : ''
+  ]
+})
+
+const collapsedClass = computed(() => [
+  layoutConfig.value.collapsedOrder,
+  layoutConfig.value.mobileChrome ? 'md:hidden' : 'hidden'
+])
 </script>
 
 <template>
-  <div
-    class="contents"
-  >
-    <!-- Mobile: minimized strip -->
+  <div class="contents">
     <div
-      v-if="mobileCollapsed"
-      class="md:hidden order-1 shrink-0 flex items-center gap-2 px-2 py-2 border-b border-ink-200 bg-ink-50/95 backdrop-blur-sm shadow-sm"
+      v-if="layoutConfig.mobileChrome && mobileCollapsed"
+      :class="collapsedClass"
+      class="shrink-0 flex items-center gap-2 px-2 py-2 border-b border-ink-200 bg-ink-50/95 backdrop-blur-sm shadow-sm"
     >
       <button
         type="button"
@@ -74,11 +113,9 @@ watch(
       </button>
     </div>
 
-    <!-- Tab rail -->
     <nav
       ref="navRef"
-      class="order-1 z-20 shrink-0 flex md:flex-col md:items-center gap-0.5 md:gap-1 px-1 py-1.5 md:py-3 md:w-[3.75rem] border-b md:border-b-0 md:border-r border-ink-200 bg-ink-50/95 backdrop-blur-sm md:bg-ink-50 sticky top-0 md:static md:self-start md:h-full md:max-h-full shadow-sm md:shadow-none overflow-x-auto md:overflow-visible [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-      :class="mobileCollapsed ? 'max-md:hidden' : ''"
+      :class="navClass"
       aria-label="Panel alat"
       role="tablist"
     >
@@ -89,12 +126,13 @@ watch(
         role="tab"
         :aria-selected="activePanel === panel.id"
         :disabled="panel.needsResult && !result"
-        class="flex md:flex-col items-center justify-center gap-0.5 shrink-0 min-w-[3.75rem] md:min-w-0 md:w-full px-2 py-2 md:px-2 md:py-2.5 rounded-lg text-[10px] font-medium transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
-        :class="
+        class="flex items-center justify-center gap-0.5 shrink-0 min-w-[3.75rem] md:min-w-0 md:w-full px-2 py-2 md:px-2 md:py-2.5 rounded-lg text-[10px] font-medium transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+        :class="[
+          layoutConfig.rail === 'vertical' ? 'md:flex-col' : 'flex-col',
           activePanel === panel.id
             ? 'bg-white text-accent-700 shadow-sm ring-1 ring-ink-200'
             : 'text-ink-500 hover:bg-white/70 hover:text-ink-700 disabled:hover:bg-transparent disabled:hover:text-ink-500'
-        "
+        ]"
         @click="selectPanel(panel.id)"
       >
         <component :is="panel.icon" class="w-5 h-5 shrink-0" />
@@ -112,15 +150,12 @@ watch(
       </button>
     </nav>
 
-    <!-- Flyout -->
-    <aside
-      class="order-2 flex flex-col flex-1 min-h-0 md:flex-none w-full md:w-80 lg:w-[22rem] shrink-0 border-b md:border-b-0 md:border-r border-ink-200 bg-white md:max-h-full"
-      :class="mobileCollapsed ? 'max-md:hidden' : ''"
-    >
+    <aside :class="asideClass">
       <header class="shrink-0 z-10 flex items-center justify-between gap-2 px-3 py-2.5 border-b border-ink-100 bg-white/95 backdrop-blur-sm">
         <h2 class="text-xs font-semibold text-ink-800">{{ activePanelMeta?.label }}</h2>
         <div class="flex items-center gap-1.5 shrink-0">
           <button
+            v-if="layoutConfig.mobileChrome"
             type="button"
             class="md:hidden rounded-lg p-1.5 text-ink-500 hover:bg-ink-100 hover:text-ink-800"
             aria-label="Minimize panel pengaturan"

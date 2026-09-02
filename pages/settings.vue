@@ -1,5 +1,14 @@
 <script setup>
-import { CheckIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
+import { CheckIcon, ArrowPathIcon, DevicePhoneMobileIcon, DeviceTabletIcon, ComputerDesktopIcon } from '@heroicons/vue/24/outline'
+import {
+  DEFAULT_UI_LAYOUT_MODES,
+  DEVICE_TIERS,
+  DEVICE_TIER_LABELS,
+  DEVICE_TIER_HINTS,
+  LAYOUT_MODE_OPTIONS,
+  detectDeviceTier,
+  normalizeUiLayoutModes
+} from '~/utils/uiLayoutModes.js'
 
 const { data: settings, refresh } = await useFetch('/api/settings')
 const form = ref({
@@ -8,6 +17,7 @@ const form = ref({
   invoicePhone: '',
   invoiceFooter: '',
   invoiceShareTtlDays: 7,
+  uiLayoutModes: { ...DEFAULT_UI_LAYOUT_MODES },
   ...settings.value
 })
 const savedMsg = ref('')
@@ -16,6 +26,7 @@ const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const tabs = computed(() => {
   const list = [
     { id: 'umum', label: 'Umum' },
+    { id: 'tampilan', label: 'Tampilan' },
     { id: 'integrasi', label: 'Integrasi' },
     { id: 'invoice', label: 'Invoice' },
     { id: 'hpp', label: 'Perhitungan HPP' }
@@ -25,7 +36,42 @@ const tabs = computed(() => {
   }
   return list
 })
-const formTabs = new Set(['umum', 'invoice', 'hpp'])
+const formTabs = new Set(['umum', 'tampilan', 'invoice', 'hpp'])
+const currentViewportTier = ref('desktop')
+const currentViewportWidth = ref(0)
+
+function syncViewport() {
+  if (!import.meta.client) return
+  currentViewportWidth.value = window.innerWidth
+  currentViewportTier.value = detectDeviceTier(window.innerWidth)
+}
+
+onMounted(() => {
+  syncViewport()
+  window.addEventListener('resize', syncViewport, { passive: true })
+})
+
+onUnmounted(() => {
+  if (import.meta.client) window.removeEventListener('resize', syncViewport)
+})
+
+watch(
+  settings,
+  (value) => {
+    if (!value) return
+    Object.assign(form.value, value, {
+      uiLayoutModes: normalizeUiLayoutModes(value.uiLayoutModes)
+    })
+  },
+  { immediate: true }
+)
+
+const deviceIcons = {
+  iphone: DevicePhoneMobileIcon,
+  ipad: DeviceTabletIcon,
+  macbook: ComputerDesktopIcon,
+  desktop: ComputerDesktopIcon
+}
 const route = useRoute()
 const router = useRouter()
 const tab = computed({
@@ -39,7 +85,13 @@ const tab = computed({
 })
 
 async function save() {
-  await $fetch('/api/settings', { method: 'PUT', body: form.value })
+  await $fetch('/api/settings', {
+    method: 'PUT',
+    body: {
+      ...form.value,
+      uiLayoutModes: normalizeUiLayoutModes(form.value.uiLayoutModes)
+    }
+  })
   await refresh()
   Object.assign(form.value, settings.value)
   savedMsg.value = 'Pengaturan tersimpan.'
@@ -77,7 +129,7 @@ watch(
 </script>
 
 <template>
-  <div class="space-y-4" :class="tab === 'user' || tab === 'audit' ? 'max-w-5xl' : 'max-w-2xl'">
+  <div class="space-y-4" :class="tab === 'user' || tab === 'audit' ? 'max-w-5xl' : tab === 'tampilan' ? 'max-w-3xl' : 'max-w-2xl'">
     <h1 class="text-xl font-bold">Pengaturan</h1>
     <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan.</p>
 
@@ -108,6 +160,60 @@ watch(
         <div>
           <label class="label">Telepon / WhatsApp</label>
           <input v-model="form.invoicePhone" class="input" :disabled="!isAdmin" placeholder="opsional" />
+        </div>
+      </template>
+
+      <template v-else-if="tab === 'tampilan'">
+        <p class="text-xs text-ink-500">
+          Atur layout editor generator (Clicker, Keychain, Lightbox) untuk setiap kategori perangkat.
+          Mode diterapkan otomatis berdasarkan lebar layar saat ini.
+        </p>
+        <div class="rounded-panel border border-accent-200 bg-accent-50/60 px-3 py-2 text-xs text-accent-900">
+          Perangkat terdeteksi sekarang:
+          <strong>{{ DEVICE_TIER_LABELS[currentViewportTier] }}</strong>
+          ({{ currentViewportWidth }} px) —
+          mode aktif:
+          <strong>{{ LAYOUT_MODE_OPTIONS[currentViewportTier]?.find((m) => m.id === form.uiLayoutModes?.[currentViewportTier])?.label }}</strong>
+        </div>
+        <div class="space-y-3">
+          <div
+            v-for="tier in DEVICE_TIERS"
+            :key="tier"
+            class="rounded-panel border border-ink-200 p-3 space-y-2"
+          >
+            <div class="flex items-start gap-3">
+              <div class="rounded-lg bg-ink-100 p-2 text-ink-600">
+                <component :is="deviceIcons[tier]" class="h-5 w-5" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-semibold text-ink-800">{{ DEVICE_TIER_LABELS[tier] }}</h3>
+                  <span
+                    v-if="currentViewportTier === tier"
+                    class="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-800"
+                  >
+                    perangkat ini
+                  </span>
+                </div>
+                <p class="text-[11px] text-ink-500">{{ DEVICE_TIER_HINTS[tier] }}</p>
+              </div>
+            </div>
+            <div>
+              <label class="label">Mode layout</label>
+              <select
+                v-model="form.uiLayoutModes[tier]"
+                class="input text-sm"
+                :disabled="!isAdmin"
+              >
+                <option v-for="mode in LAYOUT_MODE_OPTIONS[tier]" :key="mode.id" :value="mode.id">
+                  {{ mode.label }}
+                </option>
+              </select>
+              <p class="text-[11px] text-ink-500 mt-1">
+                {{ LAYOUT_MODE_OPTIONS[tier]?.find((m) => m.id === form.uiLayoutModes[tier])?.description }}
+              </p>
+            </div>
+          </div>
         </div>
       </template>
 

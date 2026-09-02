@@ -27,6 +27,8 @@ import ToolPanelShell from '~/components/ToolPanelShell.vue'
 import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
 import { buildPartLegend } from '~/utils/previewPartLabels.js'
 
+const { layoutConfig, deviceLabel, modeLabel } = useUiLayout()
+
 const COLOR_FIELDS = [
   { key: 'base', label: 'Base', short: 'Base', materialType: 'filament' },
   { key: 'lid', label: 'Lid', short: 'Lid', materialType: 'filament' },
@@ -306,7 +308,7 @@ watch(canSimulateClick, (ok) => {
   <ClickerWizard v-if="!wizardDone" @complete="onWizardComplete" />
 
   <div class="h-full flex flex-col p-2 sm:p-3 min-h-0" :class="{ 'invisible pointer-events-none': !wizardDone }">
-    <div class="panel overflow-hidden flex flex-col md:flex-row flex-1 min-h-0">
+    <div class="panel overflow-hidden flex flex-1 min-h-0" :class="layoutConfig.editorClass">
       <ToolPanelShell
         :panels="toolPanels"
         :active-panel="activeToolPanel"
@@ -442,7 +444,7 @@ watch(canSimulateClick, (ok) => {
           </template>
       </ToolPanelShell>
 
-      <div class="order-3 flex-1 min-w-0 flex flex-col min-h-0">
+      <div :class="[layoutConfig.previewOrder, layoutConfig.previewClass]">
         <div class="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-white/95 backdrop-blur-sm shadow-sm px-3 py-2 space-y-2">
           <div v-if="result" class="hidden lg:flex items-center gap-3 text-[10px] font-mono text-ink-500">
             <span>{{ result.dimensions.widthMm }}×{{ result.dimensions.depthMm }}×{{ result.dimensions.heightMm }} mm</span>
@@ -452,7 +454,7 @@ watch(canSimulateClick, (ok) => {
             <span>±{{ result.dimensions.fitToleranceMm }} tol</span>
           </div>
           <p v-if="result" class="text-[10px] text-ink-400">
-            Pilih tampilan & komponen di legend preview · drag part untuk geser posisi
+            {{ deviceLabel }} · mode {{ modeLabel }} · legend preview dapat dipindah & minimize
           </p>
         </div>
 

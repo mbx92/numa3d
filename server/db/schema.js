@@ -325,7 +325,15 @@ export const appSettings = pgTable('app_settings', {
   invoiceAddress: text('invoice_address'),
   invoicePhone: text('invoice_phone'),
   invoiceFooter: text('invoice_footer'),
-  invoiceShareTtlDays: integer('invoice_share_ttl_days').notNull().default(7)
+  invoiceShareTtlDays: integer('invoice_share_ttl_days').notNull().default(7),
+  uiLayoutModes: jsonb('ui_layout_modes')
+    .notNull()
+    .default({
+      iphone: 'preview-first',
+      ipad: 'stacked',
+      macbook: 'compact',
+      desktop: 'full'
+    })
 })
 
 // Tautan publik invoice: token acak, kadaluarsa sesuai pengaturan saat dibuat.

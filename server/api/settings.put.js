@@ -4,6 +4,7 @@ import { getSettings } from '../utils/settings.js'
 import { requireAdmin } from '../utils/rbac.js'
 import { logAudit } from '../utils/audit.js'
 import { clampShareTtlDays } from '../utils/invoice.js'
+import { parseUiLayoutModesBody } from '../utils/uiLayoutModes.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -20,7 +21,8 @@ export default defineEventHandler(async (event) => {
       invoiceAddress: String(body.invoiceAddress || '').trim() || null,
       invoicePhone: String(body.invoicePhone || '').trim() || null,
       invoiceFooter: String(body.invoiceFooter || '').replace(/\r\n/g, '\n').trim() || null,
-      invoiceShareTtlDays: clampShareTtlDays(body.invoiceShareTtlDays)
+      invoiceShareTtlDays: clampShareTtlDays(body.invoiceShareTtlDays),
+      uiLayoutModes: parseUiLayoutModesBody(body)
     })
     .where(eq(schema.appSettings.id, current.id))
     .returning()
