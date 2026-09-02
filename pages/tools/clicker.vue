@@ -23,6 +23,7 @@ import { generateClicker } from '~/utils/clickerGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
 import { getSwitchPreset } from '~/utils/clickerPresets.js'
 import ToolColorBar from '~/components/ToolColorBar.vue'
+import ToolPanelShell from '~/components/ToolPanelShell.vue'
 import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
 import { buildPartLegend } from '~/utils/previewPartLabels.js'
 
@@ -306,59 +307,15 @@ watch(canSimulateClick, (ok) => {
 
   <div class="h-full flex flex-col p-2 sm:p-3 min-h-0" :class="{ 'invisible pointer-events-none': !wizardDone }">
     <div class="panel overflow-hidden flex flex-col md:flex-row flex-1 min-h-0">
-      <nav
-        class="order-1 z-20 shrink-0 grid grid-cols-6 md:flex md:flex-col md:items-center gap-0.5 md:gap-1 px-1 py-1.5 md:py-3 md:w-[3.75rem] border-b md:border-b-0 md:border-r border-ink-200 bg-ink-50/95 backdrop-blur-sm md:bg-ink-50 sticky top-0 md:static md:self-start md:h-full md:max-h-full shadow-sm md:shadow-none"
-        aria-label="Panel alat"
-        role="tablist"
+      <ToolPanelShell
+        :panels="toolPanels"
+        :active-panel="activeToolPanel"
+        :active-panel-meta="activePanelMeta"
+        :generating="generating"
+        :result="result"
+        @select="selectToolPanel"
+        @generate="runGenerate"
       >
-        <button
-          v-for="panel in toolPanels"
-          :key="panel.id"
-          type="button"
-          role="tab"
-          :aria-selected="activeToolPanel === panel.id"
-          :disabled="panel.needsResult && !result"
-          class="flex md:flex-col items-center justify-center gap-0.5 w-full min-w-0 md:w-full px-1 py-2 md:px-2 md:py-2.5 rounded-lg text-[10px] font-medium transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
-          :class="
-            activeToolPanel === panel.id
-              ? 'bg-white text-accent-700 shadow-sm ring-1 ring-ink-200'
-              : 'text-ink-500 hover:bg-white/70 hover:text-ink-700 disabled:hover:bg-transparent disabled:hover:text-ink-500'
-          "
-          @click="selectToolPanel(panel.id)"
-        >
-          <component :is="panel.icon" class="w-5 h-5 shrink-0" />
-          <span class="leading-none">{{ panel.label }}</span>
-        </button>
-        <div class="hidden md:block flex-1" />
-        <button
-          type="button"
-          class="hidden md:flex flex-col items-center justify-center gap-0.5 w-full px-2 py-2.5 rounded-lg text-[10px] font-medium text-white bg-accent-500 hover:bg-accent-600 disabled:opacity-60"
-          :disabled="generating"
-          @click="runGenerate"
-        >
-          <ArrowPathIcon class="w-5 h-5" :class="generating ? 'animate-spin' : ''" />
-          <span>{{ generating ? '…' : 'Generate' }}</span>
-        </button>
-      </nav>
-
-      <aside
-        class="order-2 md:order-2 flex flex-col flex-1 min-h-0 md:flex-none w-full md:w-80 lg:w-[22rem] shrink-0 border-b md:border-b-0 md:border-r border-ink-200 bg-white md:max-h-full"
-      >
-        <header class="shrink-0 z-10 flex items-center justify-between gap-2 px-3 py-2.5 border-b border-ink-100 bg-white/95 backdrop-blur-sm">
-          <h2 class="text-xs font-semibold text-ink-800">{{ activePanelMeta?.label }}</h2>
-          <button
-            type="button"
-            class="md:hidden btn-primary text-xs py-1 px-2"
-            :disabled="generating"
-            @click="runGenerate"
-          >
-            <ArrowPathIcon class="w-3.5 h-3.5" :class="generating ? 'animate-spin' : ''" />
-            Generate
-          </button>
-        </header>
-
-        <div class="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
-          <div class="p-4 space-y-4">
           <template v-if="activeToolPanel === 'design'">
             <button type="button" class="btn-secondary w-full text-sm" @click="restartWizard">
               <ArrowUturnLeftIcon class="w-4 h-4" />
@@ -483,9 +440,7 @@ watch(canSimulateClick, (ok) => {
             </template>
             <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
           </template>
-          </div>
-        </div>
-      </aside>
+      </ToolPanelShell>
 
       <div class="order-3 flex-1 min-w-0 flex flex-col min-h-0">
         <div class="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-white/95 backdrop-blur-sm shadow-sm px-3 py-2 space-y-2">
