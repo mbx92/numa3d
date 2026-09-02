@@ -4,7 +4,7 @@
  */
 
 export const SHAPE_MODES = [
-  { id: 'rect', label: 'Kotak', description: 'Bentuk persegi sederhana' },
+  { id: 'rect', label: 'Shape', description: 'Tile per huruf dengan shape pilihan' },
   { id: 'svg', label: 'SVG', description: 'Upload logo / ikon vektor' },
   { id: 'text', label: 'Teks', description: 'Huruf atau kata sebagai lid' }
 ]
@@ -20,10 +20,18 @@ export const BASE_SHAPES = [
   { id: 'egg', label: 'Telur', description: 'Oval telur' }
 ]
 
+export const BASE_SHAPE_IDS = BASE_SHAPES.map((shape) => shape.id)
+export const TILE_BASE_SHAPE_IDS = ['circle', 'square', 'rect']
+
+export const KEYRING_POSITIONS = [
+  { id: 'left', label: 'Kiri', angleDeg: 270 },
+  { id: 'top', label: 'Atas', angleDeg: 0 }
+]
+
 export const DISPLAY_MODES = [
   { id: 'preview', label: 'Preview', description: 'Lid terpasang di dalam well' },
   { id: 'exploded', label: 'Exploded', description: 'Lid terangkat untuk melihat detail' },
-  { id: 'print', label: 'Print', description: 'Layout plat — lid dibalik di samping base' }
+  { id: 'print', label: 'Print', description: 'Layout plat — lid di samping base' }
 ]
 
 export const SWITCH_PRESETS = {
@@ -104,11 +112,12 @@ export const CLICKER_DEFAULTS = {
   keyringEnabled: false,
   keyringHoleMm: 5.2,
   keyringTabMm: 10,
-  keyringAngleDeg: 90,
+  keyringAngleDeg: 270,
   pinReliefEnabled: false,
   colors: {
     base: '#2d3748',
     lid: '#f5a623',
+    text: '#111827',
     floor: '#1a202c'
   }
 }
@@ -143,7 +152,11 @@ export function resolveClickerOptions(userOpts = {}) {
   const outerHeightMm = Math.max(Number(userOpts.outerHeightMm) || CLICKER_DEFAULTS.outerHeightMm, minOuterH)
 
   const colors = { ...CLICKER_DEFAULTS.colors, ...(userOpts.colors || {}) }
-  if (userOpts.colors?.accent && !userOpts.colors?.lid) colors.lid = userOpts.colors.accent
+  if (userOpts.colors?.accent && !userOpts.colors?.text) colors.text = userOpts.colors.accent
+  const allowedBaseShapes = userOpts.shapeMode === 'rect' ? TILE_BASE_SHAPE_IDS : BASE_SHAPE_IDS
+  const baseShape = allowedBaseShapes.includes(userOpts.baseShape)
+    ? userOpts.baseShape
+    : (userOpts.shapeMode === 'rect' ? 'square' : CLICKER_DEFAULTS.baseShape)
 
   const isText = userOpts.shapeMode === 'text'
   const imageMarginMm = Number(userOpts.imageMarginMm) || (isText ? 2.5 : CLICKER_DEFAULTS.imageMarginMm)
@@ -152,6 +165,7 @@ export function resolveClickerOptions(userOpts = {}) {
   return {
     ...CLICKER_DEFAULTS,
     ...userOpts,
+    baseShape,
     switchPresetId: preset.id,
     preset,
     fitToleranceMm,

@@ -83,6 +83,43 @@ function circleAt(cx, cy, r, segments = 32) {
   return shape
 }
 
+function bridgeShapeBetween(a, b, width) {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len = Math.hypot(dx, dy) || 1
+  const nx = -dy / len
+  const ny = dx / len
+  const hw = width / 2
+  const shape = new THREE.Shape()
+  shape.moveTo(a.x + nx * hw, a.y + ny * hw)
+  shape.lineTo(b.x + nx * hw, b.y + ny * hw)
+  shape.lineTo(b.x - nx * hw, b.y - ny * hw)
+  shape.lineTo(a.x - nx * hw, a.y - ny * hw)
+  shape.closePath()
+  return shape
+}
+
+function edgePointFromBounds(bounds, angleDeg) {
+  const angle = (angleDeg * Math.PI) / 180
+  const dir = { x: Math.sin(angle), y: Math.cos(angle) }
+  const cx = (bounds.minX + bounds.maxX) / 2
+  const cy = (bounds.minY + bounds.maxY) / 2
+  const depth = bounds.depth ?? bounds.height ?? (bounds.maxY - bounds.minY)
+  const tx = Math.abs(dir.x) > 1e-6
+    ? ((dir.x > 0 ? bounds.maxX : bounds.minX) - cx) / dir.x
+    : Infinity
+  const ty = Math.abs(dir.y) > 1e-6
+    ? ((dir.y > 0 ? bounds.maxY : bounds.minY) - cy) / dir.y
+    : Infinity
+  const t = Math.min(tx > 0 ? tx : Infinity, ty > 0 ? ty : Infinity)
+  const reach = Number.isFinite(t) ? t : Math.max(bounds.width, depth) / 2
+  return {
+    x: cx + dir.x * reach,
+    y: cy + dir.y * reach,
+    dir
+  }
+}
+
 /** Base button-in-bezel — siluet mengikuti bentuk desain. */
 function buildBaseBody(opts, mech) {
   const floor = opts.floorThicknessMm
@@ -130,18 +167,21 @@ function buildBaseBody(opts, mech) {
   // Keyring loop tab
   if (opts.keyringEnabled) {
     const hole = Number(opts.keyringHoleMm) || 5.2
-    const loopR = Math.max(3.2, hole / 2 + 1.8)
+    const loopR = Math.max(3.2, hole / 2 + 1.8, (Number(opts.keyringTabMm) || 10) / 2)
     const tabThick = Math.max(2.5, Math.min(4, oh * 0.35))
-    const angle = ((Number(opts.keyringAngleDeg) || 90) * Math.PI) / 180
-    const reach = Math.max(mech.bodyBounds.width, mech.bodyBounds.height) / 2 + loopR * 0.5
-    const tabX = Math.sin(angle) * reach
-    const tabY = Math.cos(angle) * reach
+    const edge = edgePointFromBounds(mech.bodyBounds, Number(opts.keyringAngleDeg) || 270)
+    const overlap = Math.min(loopR * 0.42, Math.max(1.1, loopR - hole / 2 - 0.2))
+    const tabX = edge.x + edge.dir.x * (loopR - overlap)
+    const tabY = edge.y + edge.dir.y * (loopR - overlap)
+    const innerP = { x: edge.x - edge.dir.x * overlap, y: edge.y - edge.dir.y * overlap }
+    const outerP = { x: tabX + edge.dir.x * loopR * 0.18, y: tabY + edge.dir.y * loopR * 0.18 }
 
-    const tabOuter = circleAt(tabX, tabY, loopR * 0.9)
+    const tabOuter = circleAt(tabX, tabY, loopR)
+    const tabBridge = bridgeShapeBetween(innerP, outerP, Math.max(hole * 1.08, loopR * 0.9))
     const tabHole = circleAt(tabX, tabY, hole / 2)
-    const tabShapes = subtractShapes2D([tabOuter], [tabHole])
+    const tabShapes = subtractShapes2D([tabOuter, tabBridge], [tabHole])
     const tabGeo = extrudeShapes(tabShapes, tabThick)
-    if (tabGeo) tabGeo.translate(0, 0, oh - tabThick / 2 - 0.3)
+    if (tabGeo) tabGeo.translate(0, 0, oh - tabThick)
     if (tabGeo) parts.push(tabGeo)
   }
 
@@ -263,8 +303,8 @@ export async function generateClickerCore(userOpts = {}) {
   const basePreviewParts = [{ geometry: baseGeo, color: colors.base, role: 'base' }]
   const lidPreviewParts = [{ geometry: lidGeoRaw, color: colors.lid, role: 'lid' }]
   const assemblyPreviewParts = [
-    { geometry: baseGeo, color: colors.base },
-    { geometry: lidGeoAssembly, color: colors.lid }
+    { geometry: baseGeo, color: colors.base, role: 'base' },
+    { geometry: lidGeoAssembly, color: colors.lid, role: 'lid' }
   ]
 
   const baseMesh = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial())
@@ -318,7 +358,8 @@ export async function generateClickerCore(userOpts = {}) {
     })),
     assemblyPreviewParts: assemblyPreviewParts.map((p) => ({
       geometry: packGeometry(p.geometry),
-      color: p.color
+      color: p.color,
+      role: p.role || null
     })),
     baseMergedExportGeometry: packGeometry(baseGeo.clone()),
     baseMergedExportColor: colors.base,

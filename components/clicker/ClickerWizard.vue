@@ -5,9 +5,10 @@ import { getSwitchPreset } from '~/utils/clickerPresets.js'
 
 const emit = defineEmits(['complete'])
 
+const toast = useToast()
+
 const steps = ['Desain', 'Warna', 'Mekanisme', 'Ukuran']
 const step = ref(0)
-const error = ref('')
 
 const draft = reactive({
   label: CLICKER_DEFAULTS.label,
@@ -19,6 +20,7 @@ const draft = reactive({
   maxSizeMm: CLICKER_DEFAULTS.maxSizeMm,
   displayMode: CLICKER_DEFAULTS.displayMode,
   keyringEnabled: CLICKER_DEFAULTS.keyringEnabled,
+  keyringAngleDeg: CLICKER_DEFAULTS.keyringAngleDeg,
   switchPresetId: CLICKER_DEFAULTS.switchPresetId,
   fitToleranceMm: CLICKER_DEFAULTS.fitToleranceMm,
   slipToleranceMm: CLICKER_DEFAULTS.slipToleranceMm,
@@ -39,7 +41,8 @@ const activePreset = computed(() => getSwitchPreset(draft.switchPresetId))
 
 const wizardColors = [
   { key: 'base', label: 'Base', hint: 'Casing & pocket switch' },
-  { key: 'lid', label: 'Lid', hint: 'Bagian tekan di atas switch' }
+  { key: 'lid', label: 'Lid', hint: 'Bagian tekan di atas switch' },
+  { key: 'text', label: 'Text / artwork', hint: 'Tulisan atau logo pada lid' }
 ]
 
 const pocketPreview = computed(() => {
@@ -52,31 +55,38 @@ const pocketPreview = computed(() => {
   }
 })
 
+function showError(message) {
+  toast.error(message)
+}
+
 function validateStep() {
-  error.value = ''
   if (step.value === 0) {
     if (!String(draft.label || '').trim()) {
-      error.value = 'Label wajib diisi'
+      showError('Label wajib diisi')
       return false
     }
     if (draft.shapeMode === 'text' && !String(draft.text || '').trim()) {
-      error.value = 'Isi teks untuk lid'
+      showError('Isi teks untuk lid')
+      return false
+    }
+    if (draft.shapeMode === 'text' && !String(draft.fontUrl || '').trim()) {
+      showError('Pilih font untuk teks lid')
       return false
     }
     if (draft.shapeMode === 'svg' && !String(draft.svgContent || '').trim()) {
-      error.value = 'Unggah SVG untuk lid'
+      showError('Unggah SVG untuk lid')
       return false
     }
   }
   if (step.value === 2) {
     if (draft.fitToleranceMm < 0 || draft.fitToleranceMm > 0.5) {
-      error.value = 'Toleransi 0–0.5 mm'
+      showError('Toleransi 0–0.5 mm')
       return false
     }
   }
   if (step.value === 3 && draft.shapeMode === 'rect') {
     if (draft.outerWidthMm < 24 || draft.outerDepthMm < 24) {
-      error.value = 'Ukuran base minimal 24 × 24 mm'
+      showError('Ukuran base minimal 24 × 24 mm')
       return false
     }
   }
@@ -90,7 +100,6 @@ function next() {
 }
 
 function back() {
-  error.value = ''
   if (step.value > 0) step.value -= 1
 }
 
@@ -106,6 +115,7 @@ function submit() {
     maxSizeMm: Number(draft.maxSizeMm),
     displayMode: draft.displayMode,
     keyringEnabled: !!draft.keyringEnabled,
+    keyringAngleDeg: Number(draft.keyringAngleDeg),
     switchPresetId: draft.switchPresetId,
     fitToleranceMm: Number(draft.fitToleranceMm),
     slipToleranceMm: Number(draft.slipToleranceMm),
@@ -126,14 +136,19 @@ function submit() {
 
 <template>
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-    <div class="w-full max-w-lg panel shadow-xl overflow-hidden">
-      <header class="px-5 pt-5 pb-3 border-b border-ink-100">
+    <div
+      class="panel shadow-xl overflow-hidden flex flex-col w-[min(100%,32rem)] h-[min(92vh,42rem)]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clicker-wizard-title"
+    >
+      <header class="shrink-0 px-5 pt-5 pb-3 border-b border-ink-100">
         <div class="flex items-center gap-2.5">
           <span class="inline-flex items-center justify-center w-9 h-9 rounded-panel bg-accent-500/10 text-accent-600">
             <CursorArrowRaysIcon class="w-5 h-5" />
           </span>
           <div>
-            <h2 class="text-base font-bold text-ink-900">Clicker Generator</h2>
+            <h2 id="clicker-wizard-title" class="text-base font-bold text-ink-900">Clicker Generator</h2>
             <p class="text-xs text-ink-500">Langkah {{ step + 1 }} dari {{ steps.length }} · {{ steps[step] }}</p>
           </div>
         </div>
@@ -147,7 +162,7 @@ function submit() {
         </div>
       </header>
 
-      <div class="px-5 py-4 space-y-4 min-h-[18rem] max-h-[min(70vh,36rem)] overflow-y-auto">
+      <div class="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-5 py-4 space-y-4">
         <template v-if="step === 0">
           <label class="block space-y-1.5">
             <span class="text-xs font-medium text-ink-700">Label / nama file</span>
@@ -162,6 +177,7 @@ function submit() {
             v-model:max-size-mm="draft.maxSizeMm"
             v-model:display-mode="draft.displayMode"
             v-model:keyring-enabled="draft.keyringEnabled"
+            v-model:keyring-angle-deg="draft.keyringAngleDeg"
           />
         </template>
 
@@ -238,11 +254,9 @@ function submit() {
             </label>
           </div>
         </template>
-
-        <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
       </div>
 
-      <footer class="flex items-center justify-between gap-2 px-5 py-4 border-t border-ink-100 bg-ink-50/50">
+      <footer class="shrink-0 flex items-center justify-between gap-2 px-5 py-4 border-t border-ink-100 bg-ink-50/50">
         <button type="button" class="btn-secondary text-sm" :disabled="step === 0" @click="back">
           <ChevronLeftIcon class="w-4 h-4" />
           Kembali

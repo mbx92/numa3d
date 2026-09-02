@@ -8,6 +8,7 @@ definePageMeta({
 import {
   ArrowPathIcon,
   ArrowDownTrayIcon,
+  ArrowUturnLeftIcon,
   CloudArrowUpIcon,
   CursorArrowRaysIcon,
   ArrowsPointingInIcon,
@@ -24,7 +25,8 @@ import { getSwitchPreset } from '~/utils/clickerPresets.js'
 
 const COLOR_FIELDS = [
   { key: 'base', label: 'Base', short: 'Base' },
-  { key: 'lid', label: 'Lid', short: 'Lid' }
+  { key: 'lid', label: 'Lid', short: 'Lid' },
+  { key: 'text', label: 'Text / artwork', short: 'Text' }
 ]
 
 const exportFormats = EXPORT_FORMATS
@@ -39,28 +41,37 @@ const exportFormat = ref('3mf')
 const activePreset = computed(() => getSwitchPreset(form.switchPresetId))
 
 const activeToolPanel = ref('design')
-const toolPanels = computed(() => {
-  const panels = [
-    { id: 'design', label: 'Desain', icon: PencilSquareIcon },
-    { id: 'switch', label: 'Switch', icon: CursorArrowRaysIcon },
-    { id: 'size', label: 'Ukuran', icon: ArrowsPointingInIcon },
-    { id: 'base', label: 'Info', icon: Square3Stack3DIcon }
-  ]
-  if (result.value) panels.push({ id: 'export', label: 'Export', icon: DocumentArrowDownIcon })
-  return panels
-})
+
+const TOOL_PANELS = [
+  { id: 'design', label: 'Desain', icon: PencilSquareIcon },
+  { id: 'switch', label: 'Switch', icon: CursorArrowRaysIcon },
+  { id: 'size', label: 'Ukuran', icon: ArrowsPointingInIcon },
+  { id: 'base', label: 'Info', icon: Square3Stack3DIcon },
+  { id: 'export', label: 'Export', icon: DocumentArrowDownIcon, needsResult: true }
+]
+
+const toolPanels = TOOL_PANELS
 
 const activePanelMeta = computed(
-  () => toolPanels.value.find((p) => p.id === activeToolPanel.value) || toolPanels.value[0]
+  () => toolPanels.find((p) => p.id === activeToolPanel.value) || toolPanels[0]
 )
+
+function selectToolPanel(id) {
+  const panel = toolPanels.find((p) => p.id === id)
+  if (panel?.needsResult && !result.value) {
+    toast.info('Generate model dulu untuk membuka Export')
+    return
+  }
+  activeToolPanel.value = id
+}
 
 const wizardDone = ref(false)
 const generating = ref(false)
 const saving = ref(false)
-const errorMsg = ref('')
 const result = ref(null)
 const previewKey = ref(0)
 const activePreview = ref('assembly')
+const simulatingClick = ref(false)
 const basePreviewParts = ref([])
 const lidPreviewParts = ref([])
 const assemblyPreviewParts = ref([])
@@ -78,6 +89,16 @@ const previewTabs = computed(() => {
     { id: 'lid', label: 'Lid' }
   ]
   return tabs
+})
+
+const canSimulateClick = computed(
+  () => Boolean(result.value) && activePreview.value === 'assembly' && form.displayMode !== 'print'
+)
+
+const clickTravelMm = computed(() => {
+  const travel = Number(form.travelMm) || CLICKER_DEFAULTS.travelMm
+  const proud = Number(form.capProudMm) || CLICKER_DEFAULTS.capProudMm
+  return Number(Math.max(0.2, Math.min(travel, proud * 0.85)).toFixed(2))
 })
 
 const activePreviewFilename = computed(() => {
@@ -103,7 +124,6 @@ onUnmounted(() => {
 async function runGenerate() {
   const token = ++generateToken
   generating.value = true
-  errorMsg.value = ''
   const prevDispose = disposePrev
   disposePrev = null
   clearPreviews()
@@ -122,22 +142,25 @@ async function runGenerate() {
     basePreviewParts.value = out.basePreviewParts.map((p) => ({
       geometry: p.geometry,
       color: p.color,
-      line: p.line
+      line: p.line,
+      role: p.role
     }))
     lidPreviewParts.value = (out.lidPreviewParts || out.accentPreviewParts).map((p) => ({
       geometry: p.geometry,
       color: p.color,
-      line: p.line
+      line: p.line,
+      role: p.role
     }))
     assemblyPreviewParts.value = out.assemblyPreviewParts.map((p) => ({
       geometry: p.geometry,
       color: p.color,
-      line: p.line
+      line: p.line,
+      role: p.role
     }))
   } catch (e) {
     if (token !== generateToken) return
     result.value = null
-    errorMsg.value = e?.message || 'Gagal membuat model clicker'
+    toast.error(e?.message || 'Gagal membuat model clicker')
   } finally {
     if (token === generateToken) generating.value = false
   }
@@ -220,7 +243,6 @@ function uploadBlob(blob, filename) {
 async function saveToGallery() {
   if (!result.value || !isAdmin.value) return
   saving.value = true
-  errorMsg.value = ''
   try {
     await uploadBlob(result.value.getBaseBlob(), result.value.baseFilename)
     if (result.value.getAccentBlob()) {
@@ -228,7 +250,7 @@ async function saveToGallery() {
     }
     toast.success('Model disimpan ke Galeri 3D')
   } catch (e) {
-    errorMsg.value = e?.message || 'Gagal menyimpan ke galeri'
+    toast.error(e?.message || 'Gagal menyimpan ke galeri')
   } finally {
     saving.value = false
   }
@@ -244,11 +266,16 @@ function onWizardComplete(payload) {
 function restartWizard() {
   wizardDone.value = false
   result.value = null
+  simulatingClick.value = false
   clearPreviews()
   const prevDispose = disposePrev
   disposePrev = null
   prevDispose?.()
 }
+
+watch(canSimulateClick, (ok) => {
+  if (!ok) simulatingClick.value = false
+})
 </script>
 
 <template>
@@ -257,20 +284,24 @@ function restartWizard() {
   <div class="h-full flex flex-col p-2 sm:p-3 min-h-0" :class="{ 'invisible pointer-events-none': !wizardDone }">
     <div class="panel overflow-hidden flex flex-col md:flex-row flex-1 min-h-0">
       <nav
-        class="order-2 md:order-1 flex md:flex-col items-stretch md:items-center gap-0.5 md:gap-1 px-1 py-1 md:py-3 md:w-[3.75rem] shrink-0 border-t md:border-t-0 md:border-r border-ink-200 bg-ink-50 overflow-x-auto md:overflow-visible"
+        class="order-1 z-20 shrink-0 grid grid-cols-5 md:flex md:flex-col md:items-center gap-0.5 md:gap-1 px-1 py-1.5 md:py-3 md:w-[3.75rem] border-b md:border-b-0 md:border-r border-ink-200 bg-ink-50/95 backdrop-blur-sm md:bg-ink-50 sticky top-0 md:static md:self-start md:h-full md:max-h-full shadow-sm md:shadow-none"
         aria-label="Panel alat"
+        role="tablist"
       >
         <button
           v-for="panel in toolPanels"
           :key="panel.id"
           type="button"
-          class="flex md:flex-col items-center justify-center gap-0.5 min-w-[3.25rem] md:w-full px-2 py-2 md:py-2.5 rounded-lg text-[10px] font-medium transition-colors shrink-0"
+          role="tab"
+          :aria-selected="activeToolPanel === panel.id"
+          :disabled="panel.needsResult && !result"
+          class="flex md:flex-col items-center justify-center gap-0.5 w-full min-w-0 md:w-full px-1 py-2 md:px-2 md:py-2.5 rounded-lg text-[10px] font-medium transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
           :class="
             activeToolPanel === panel.id
               ? 'bg-white text-accent-700 shadow-sm ring-1 ring-ink-200'
-              : 'text-ink-500 hover:bg-white/70 hover:text-ink-700'
+              : 'text-ink-500 hover:bg-white/70 hover:text-ink-700 disabled:hover:bg-transparent disabled:hover:text-ink-500'
           "
-          @click="activeToolPanel = panel.id"
+          @click="selectToolPanel(panel.id)"
         >
           <component :is="panel.icon" class="w-5 h-5 shrink-0" />
           <span class="leading-none">{{ panel.label }}</span>
@@ -288,9 +319,9 @@ function restartWizard() {
       </nav>
 
       <aside
-        class="order-1 md:order-2 w-full md:w-52 lg:w-56 shrink-0 border-b md:border-b-0 md:border-r border-ink-200 bg-white overflow-y-auto max-h-[42vh] md:max-h-none"
+        class="order-2 md:order-2 flex flex-col flex-1 min-h-0 md:flex-none w-full md:w-80 lg:w-[22rem] shrink-0 border-b md:border-b-0 md:border-r border-ink-200 bg-white md:max-h-full"
       >
-        <header class="sticky top-0 z-10 flex items-center justify-between gap-2 px-3 py-2.5 border-b border-ink-100 bg-white/95 backdrop-blur-sm">
+        <header class="shrink-0 z-10 flex items-center justify-between gap-2 px-3 py-2.5 border-b border-ink-100 bg-white/95 backdrop-blur-sm">
           <h2 class="text-xs font-semibold text-ink-800">{{ activePanelMeta?.label }}</h2>
           <button
             type="button"
@@ -303,10 +334,12 @@ function restartWizard() {
           </button>
         </header>
 
-        <div class="p-3 space-y-3">
+        <div class="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
+          <div class="p-4 space-y-4">
           <template v-if="activeToolPanel === 'design'">
-            <button type="button" class="text-[11px] text-accent-600 hover:underline mb-1" @click="restartWizard">
-              Setup ulang…
+            <button type="button" class="btn-secondary w-full text-sm" @click="restartWizard">
+              <ArrowUturnLeftIcon class="w-4 h-4" />
+              Setup ulang
             </button>
             <KeychainCompactField label="Label">
               <input v-model="form.label" class="input text-sm" maxlength="32" />
@@ -320,6 +353,7 @@ function restartWizard() {
               v-model:max-size-mm="form.maxSizeMm"
               v-model:display-mode="form.displayMode"
               v-model:keyring-enabled="form.keyringEnabled"
+              v-model:keyring-angle-deg="form.keyringAngleDeg"
             />
           </template>
 
@@ -386,38 +420,40 @@ function restartWizard() {
             </dl>
           </template>
 
-          <template v-else-if="activeToolPanel === 'export' && result">
-            <KeychainCompactField label="Format">
-              <select v-model="exportFormat" class="input text-sm">
-                <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
-              </select>
-            </KeychainCompactField>
-            <div class="space-y-2">
-              <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('base')">
-                <ArrowDownTrayIcon class="w-4 h-4" /> Base
-              </button>
-              <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('lid')">
-                <ArrowDownTrayIcon class="w-4 h-4" /> Lid
-              </button>
-              <button
-                v-if="isAdmin"
-                type="button"
-                class="btn-primary w-full text-sm"
-                :disabled="saving"
-                @click="saveToGallery"
-              >
-                <CloudArrowUpIcon class="w-4 h-4" />
-                {{ saving ? 'Menyimpan…' : 'Galeri' }}
-              </button>
-            </div>
+          <template v-else-if="activeToolPanel === 'export'">
+            <template v-if="result">
+              <KeychainCompactField label="Format">
+                <select v-model="exportFormat" class="input text-sm">
+                  <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
+                </select>
+              </KeychainCompactField>
+              <div class="space-y-2">
+                <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('base')">
+                  <ArrowDownTrayIcon class="w-4 h-4" /> Base
+                </button>
+                <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('lid')">
+                  <ArrowDownTrayIcon class="w-4 h-4" /> Lid
+                </button>
+                <button
+                  v-if="isAdmin"
+                  type="button"
+                  class="btn-primary w-full text-sm"
+                  :disabled="saving"
+                  @click="saveToGallery"
+                >
+                  <CloudArrowUpIcon class="w-4 h-4" />
+                  {{ saving ? 'Menyimpan…' : 'Galeri' }}
+                </button>
+              </div>
+            </template>
+            <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
           </template>
-
-          <p v-if="errorMsg" class="text-xs text-red-600">{{ errorMsg }}</p>
+          </div>
         </div>
       </aside>
 
-      <div class="order-3 flex-1 min-w-0 flex flex-col">
-        <div class="shrink-0 border-b border-ink-200 bg-white px-3 py-2 space-y-2">
+      <div class="order-3 flex-1 min-w-0 flex flex-col min-h-0">
+        <div class="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-white/95 backdrop-blur-sm shadow-sm px-3 py-2 space-y-2">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
             <PaintBrushIcon class="w-4 h-4 text-accent-600 shrink-0" />
             <div class="flex flex-wrap items-center gap-2">
@@ -444,29 +480,60 @@ function restartWizard() {
               <span>±{{ result.dimensions.fitToleranceMm }} tol</span>
             </div>
           </div>
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div v-if="result" class="flex rounded-md border border-ink-200 overflow-hidden text-[11px]">
+          <div class="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,7.5rem)] items-center gap-2">
+            <div
+              class="flex min-w-0 rounded-md border border-ink-200 overflow-hidden text-[11px] shadow-sm"
+              role="tablist"
+              aria-label="Preview model"
+            >
               <button
                 v-for="tab in previewTabs"
                 :key="tab.id"
                 type="button"
-                class="px-2.5 py-1 transition-colors border-l border-ink-200 first:border-l-0"
+                role="tab"
+                :aria-selected="activePreview === tab.id"
+                :disabled="!result"
+                class="flex-1 min-w-0 px-2 py-1.5 text-center transition-colors border-l border-ink-200 first:border-l-0 truncate disabled:opacity-40 disabled:cursor-not-allowed"
                 :class="activePreview === tab.id ? 'bg-ink-800 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'"
                 @click="activePreview = tab.id"
               >
                 {{ tab.label }}
               </button>
             </div>
-            <span v-if="result" class="text-[10px] text-ink-400 font-mono truncate max-w-[12rem]">{{ activePreviewFilename }}</span>
+            <button
+              type="button"
+              class="inline-flex items-center justify-center gap-1 rounded-md border px-2.5 py-1 text-[11px] transition-colors shrink-0 min-w-[7.25rem] disabled:cursor-not-allowed disabled:opacity-40"
+              :class="
+                simulatingClick
+                  ? 'border-accent-500 bg-accent-50 text-accent-700'
+                  : 'border-ink-200 bg-white text-ink-600 hover:bg-ink-50'
+              "
+              :disabled="!canSimulateClick"
+              :title="canSimulateClick ? `Travel ${clickTravelMm} mm` : 'Simulasi tersedia di tab Perakitan, selain mode Print'"
+              @click="simulatingClick = !simulatingClick"
+            >
+              <CursorArrowRaysIcon class="w-3.5 h-3.5" />
+              {{ simulatingClick ? 'Stop klik' : 'Simulasi klik' }}
+            </button>
+            <span class="hidden sm:block text-[10px] text-ink-400 font-mono truncate min-w-0">
+              {{ result ? activePreviewFilename : '—' }}
+            </span>
           </div>
         </div>
 
-        <div class="relative flex-1 min-h-[18rem] sm:min-h-[24rem] bg-gradient-to-b from-ink-50 to-ink-100/80">
+        <div
+          class="relative flex-1 min-h-[18rem] sm:min-h-[24rem] bg-gradient-to-b from-ink-50 to-ink-100/80 [background-image:linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:24px_24px]"
+        >
           <ClientOnly>
             <KeychainPreview
               v-if="activePreviewParts.length"
               :key="`${activePreview}-${previewKey}`"
               :parts="activePreviewParts"
+              show-grid
+              :simulate-click="simulatingClick && canSimulateClick"
+              :interactive-click="canSimulateClick"
+              click-role="lid"
+              :click-travel-mm="clickTravelMm"
               class="absolute inset-0 h-full w-full"
             />
             <div

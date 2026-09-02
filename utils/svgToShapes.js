@@ -57,6 +57,19 @@ export function translateSvgShapes(shapes, dx, dy) {
   )
 }
 
+/** SVG (Y ke bawah) → footprint 3D (Y ke atas), mirror vertikal di sekitar bbox. */
+export function flipShapesY(shapes) {
+  if (!shapes?.length) return shapes
+  const bounds = computeBoundsFromShapes(shapes)
+  const flipBase = bounds.minY + bounds.maxY
+  return shapes.map((shape) =>
+    mapShapePoints(shape, (x, y) => ({
+      x,
+      y: flipBase - y
+    }))
+  )
+}
+
 /** Parse SVG string → array THREE.Shape (fill path). Butuh DOMParser (main thread). */
 export function parseSvgToShapes(svgString) {
   const raw = String(svgString || '').trim()
@@ -79,7 +92,7 @@ export function parseSvgToShapes(svgString) {
     }
   }
 
-  return shapes
+  return flipShapesY(shapes)
 }
 
 export function serializeShapes(shapes) {

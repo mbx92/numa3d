@@ -6,11 +6,10 @@ import { accentIndicesToLabel } from '~/utils/keychainAccent.js'
 
 const emit = defineEmits(['complete'])
 
-const TEXT_PLACEHOLDER = 'Contoh: NAMA 07'
+const toast = useToast()
 
 const steps = ['Teks', 'Warna', 'Font & kait', 'Ukuran']
 const step = ref(0)
-const error = ref('')
 
 const initialTheme = getKeychainTheme(KEYCHAIN_DEFAULTS.themeId)
 const accentIndices = ref([...(initialTheme.defaults.accentIndices || [])])
@@ -46,6 +45,10 @@ const wizardColors = [
 
 const accentLabel = computed(() => accentIndicesToLabel(draft.text, accentIndices.value))
 
+function showError(message) {
+  toast.error(message)
+}
+
 function applyThemePreset(themeId) {
   const theme = getKeychainTheme(themeId)
   draft.themeId = theme.id
@@ -61,22 +64,21 @@ function applyThemePreset(themeId) {
 }
 
 function validateStep() {
-  error.value = ''
   if (step.value === 0) {
     if (!String(draft.text || '').trim() && !String(draft.svgContent || '').trim()) {
-      error.value = 'Isi teks atau unggah logo SVG'
+      showError('Isi teks atau unggah logo SVG')
       return false
     }
   }
   if (step.value === 2) {
     if (String(draft.text || '').trim() && !String(draft.fontUrl || '').trim()) {
-      error.value = 'Pilih font untuk keychain berisi teks'
+      showError('Pilih font untuk keychain berisi teks')
       return false
     }
   }
   if (step.value === 3) {
     if (draft.targetWidthMm < 20 || draft.targetHeightMm < 10) {
-      error.value = 'Ukuran minimal 20 × 10 mm'
+      showError('Ukuran minimal 20 × 10 mm')
       return false
     }
   }
@@ -90,7 +92,6 @@ function next() {
 }
 
 function back() {
-  error.value = ''
   if (step.value > 0) step.value -= 1
 }
 
@@ -125,14 +126,19 @@ function submit() {
 
 <template>
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-    <div class="w-full max-w-lg panel shadow-xl overflow-hidden">
-      <header class="px-5 pt-5 pb-3 border-b border-ink-100">
+    <div
+      class="panel shadow-xl overflow-hidden flex flex-col w-[min(100%,32rem)] h-[min(92vh,42rem)]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="keychain-wizard-title"
+    >
+      <header class="shrink-0 px-5 pt-5 pb-3 border-b border-ink-100">
         <div class="flex items-center gap-2.5">
           <span class="inline-flex items-center justify-center w-9 h-9 rounded-panel bg-accent-500/10 text-accent-600">
             <SparklesIcon class="w-5 h-5" />
           </span>
           <div>
-            <h2 class="text-base font-bold text-ink-900">Setup Keychain</h2>
+            <h2 id="keychain-wizard-title" class="text-base font-bold text-ink-900">Setup Keychain</h2>
             <p class="text-xs text-ink-500">Langkah {{ step + 1 }} dari {{ steps.length }} · {{ steps[step] }}</p>
           </div>
         </div>
@@ -146,7 +152,7 @@ function submit() {
         </div>
       </header>
 
-      <div class="px-5 py-4 space-y-4 min-h-[18rem] max-h-[min(70vh,36rem)] overflow-y-auto">
+      <div class="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-5 py-4 space-y-4">
         <!-- Step 1: Teks -->
         <template v-if="step === 0">
           <label class="block space-y-1.5">
@@ -251,11 +257,9 @@ function submit() {
             <span class="text-xs text-ink-400 ml-1">mm</span>
           </div>
         </template>
-
-        <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
       </div>
 
-      <footer class="flex items-center justify-between gap-2 px-5 py-4 border-t border-ink-100 bg-ink-50/50">
+      <footer class="shrink-0 flex items-center justify-between gap-2 px-5 py-4 border-t border-ink-100 bg-ink-50/50">
         <button type="button" class="btn-secondary text-sm" :disabled="step === 0" @click="back">
           <ChevronLeftIcon class="w-4 h-4" />
           Kembali

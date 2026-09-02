@@ -1,5 +1,5 @@
 <script setup>
-import { SHAPE_MODES, DISPLAY_MODES, BASE_SHAPES } from '~/utils/clickerPresets.js'
+import { SHAPE_MODES, DISPLAY_MODES, BASE_SHAPES, TILE_BASE_SHAPE_IDS, KEYRING_POSITIONS } from '~/utils/clickerPresets.js'
 
 const shapeMode = defineModel('shapeMode', { type: String, default: 'rect' })
 const baseShape = defineModel('baseShape', { type: String, default: 'outline' })
@@ -9,10 +9,35 @@ const svgContent = defineModel('svgContent', { type: String, default: '' })
 const maxSizeMm = defineModel('maxSizeMm', { type: Number, default: 40 })
 const displayMode = defineModel('displayMode', { type: String, default: 'preview' })
 const keyringEnabled = defineModel('keyringEnabled', { type: Boolean, default: false })
+const keyringAngleDeg = defineModel('keyringAngleDeg', { type: Number, default: 270 })
 
 const modes = SHAPE_MODES
 const baseShapes = BASE_SHAPES
 const displayModes = DISPLAY_MODES
+const keyringPositions = KEYRING_POSITIONS
+const visibleBaseShapes = computed(() => (
+  shapeMode.value === 'rect'
+    ? baseShapes.filter((s) => TILE_BASE_SHAPE_IDS.includes(s.id))
+    : baseShapes
+))
+const baseShapeLabel = computed(() => (shapeMode.value === 'rect' ? 'Shape per huruf' : 'Shape lid'))
+
+function normalizeBaseShape() {
+  const availableShapes = visibleBaseShapes.value
+  if (!availableShapes.some((shape) => shape.id === baseShape.value)) {
+    const preferredShape = shapeMode.value === 'rect' ? 'square' : 'outline'
+    baseShape.value = availableShapes.some((shape) => shape.id === preferredShape)
+      ? preferredShape
+      : availableShapes[0]?.id || 'square'
+  }
+}
+
+watch(shapeMode, (mode) => {
+  if (mode === 'rect' && baseShape.value === 'outline') baseShape.value = 'square'
+  normalizeBaseShape()
+}, { immediate: true })
+
+watch(baseShape, normalizeBaseShape)
 </script>
 
 <template>
@@ -38,29 +63,33 @@ const displayModes = DISPLAY_MODES
       </div>
     </div>
 
-    <div v-if="shapeMode !== 'rect'">
-      <span class="text-xs font-medium text-ink-700">Bentuk base</span>
+    <div>
+      <span class="text-xs font-medium text-ink-700">{{ baseShapeLabel }}</span>
       <div class="grid grid-cols-4 gap-1 mt-1.5">
         <button
-          v-for="s in baseShapes"
+          v-for="s in visibleBaseShapes"
           :key="s.id"
           type="button"
-          class="rounded-md border px-1.5 py-1.5 text-center transition-colors"
+          class="flex items-center justify-center rounded-md border p-2 transition-colors aspect-square"
           :class="
             baseShape === s.id
-              ? 'border-accent-400 bg-accent-50 ring-1 ring-accent-200'
-              : 'border-ink-200 hover:border-ink-300'
+              ? 'border-accent-400 bg-accent-50 ring-1 ring-accent-200 text-accent-700'
+              : 'border-ink-200 hover:border-ink-300 text-ink-600'
           "
-          :title="s.description"
+          :title="`${s.label} — ${s.description}`"
+          :aria-label="s.label"
+          :aria-pressed="baseShape === s.id"
           @click="baseShape = s.id"
         >
-          <span class="block text-[10px] font-medium text-ink-800 leading-tight">{{ s.label }}</span>
+          <ClickerBaseShapeIcon :shape="s.id" class="w-5 h-5" />
         </button>
       </div>
-      <p class="text-[10px] text-ink-400 mt-1">Outline = siluet desain; Shape = preset mengelilingi artwork.</p>
+      <p class="text-[10px] text-ink-400 mt-1">
+        {{ shapeMode === 'rect' ? 'Setiap huruf dibuat sebagai lid sendiri.' : 'Outline mengikuti siluet desain; shape lain membungkus artwork.' }}
+      </p>
     </div>
 
-    <template v-if="shapeMode === 'text'">
+    <template v-if="shapeMode === 'rect' || shapeMode === 'text'">
       <label class="block space-y-1">
         <span class="text-xs font-medium text-ink-700">Teks lid</span>
         <input v-model="text" class="input text-sm font-semibold" maxlength="16" placeholder="CLICK" />
@@ -96,5 +125,26 @@ const displayModes = DISPLAY_MODES
       <input v-model="keyringEnabled" type="checkbox" class="rounded border-ink-300" />
       <span class="text-xs text-ink-700">Tambah loop keyring di base</span>
     </label>
+
+    <div v-if="keyringEnabled" class="space-y-1">
+      <span class="text-xs font-medium text-ink-700">Posisi keyring</span>
+      <div class="grid grid-cols-2 gap-1.5">
+        <button
+          v-for="pos in keyringPositions"
+          :key="pos.id"
+          type="button"
+          class="rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors"
+          :class="
+            Number(keyringAngleDeg) === pos.angleDeg
+              ? 'border-accent-400 bg-accent-50 ring-1 ring-accent-200 text-accent-700'
+              : 'border-ink-200 text-ink-600 hover:border-ink-300'
+          "
+          :aria-pressed="Number(keyringAngleDeg) === pos.angleDeg"
+          @click="keyringAngleDeg = pos.angleDeg"
+        >
+          {{ pos.label }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>

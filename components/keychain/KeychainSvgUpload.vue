@@ -6,7 +6,6 @@ const svgContent = defineModel('svgContent', { type: String, default: '' })
 const svgSizeMm = defineModel('svgSizeMm', { type: Number, default: 14 })
 const svgGapMm = defineModel('svgGapMm', { type: Number, default: 2 })
 
-const error = ref('')
 const previewUrl = ref('')
 
 watch(
@@ -25,20 +24,18 @@ onBeforeUnmount(() => {
 })
 
 async function onFileChange(e) {
-  error.value = ''
   const file = e.target.files?.[0]
   e.target.value = ''
   if (!file) return
   try {
     svgContent.value = await readSvgFile(file)
   } catch (err) {
-    error.value = err?.message || 'Gagal membaca SVG'
+    useToast().error(err?.message || 'Gagal membaca SVG')
   }
 }
 
 function clearSvg() {
   svgContent.value = ''
-  error.value = ''
 }
 </script>
 
@@ -90,7 +87,5 @@ function clearSvg() {
         </div>
       </label>
     </template>
-
-    <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
   </div>
 </template>

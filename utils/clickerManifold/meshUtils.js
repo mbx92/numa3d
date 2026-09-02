@@ -10,6 +10,21 @@ export function hexToRgb(hex) {
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]
 }
 
+/** RGB 0–255 untuk filament / export (bukan normalized 0–1). */
+export function hexToRgbBytes(hex) {
+  const h = String(hex || '#888888').replace('#', '')
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+export function rgbBytesToHex(rgb) {
+  if (!rgb?.length) return ''
+  return `#${rgb
+    .slice(0, 3)
+    .map((c) => Math.round(Math.max(0, Math.min(255, c))).toString(16).padStart(2, '0'))
+    .join('')}`
+}
+
 export function partToGeometry(part) {
   const geo = new THREE.BufferGeometry()
   const np = part.numProp || 3
@@ -84,12 +99,47 @@ export function adaptiveRingSegments(shapes, minSegs = 48, maxSegs = 128, mmPerS
   return Math.min(maxSegs, Math.max(minSegs, Math.ceil(avg / mmPerSeg)))
 }
 
-/** Bentuk THREE.Shape → ring [x,y][] untuk Manifold CrossSection. */
-export function shapesToRings(shapes, segs = 24) {
-  const rings = []
-  for (const shape of shapes || []) {
-    const pts = shape.getPoints(segs)
+function pushShapeRings(shape, segs, rings) {
+  const outer = shape.getPoints(segs)
+  if (outer.length >= 3) rings.push(outer.map((p) => [p.x, p.y]))
+  for (const hole of shape.holes || []) {
+    const pts = hole.getPoints(segs)
     if (pts.length >= 3) rings.push(pts.map((p) => [p.x, p.y]))
   }
+}
+
+/** Bentuk THREE.Shape → ring [x,y][] untuk Manifold CrossSection (termasuk lubang glyph). */
+export function shapesToRings(shapes, segs = 24) {
+  const rings = []
+  for (const shape of shapes || []) pushShapeRings(shape, segs, rings)
   return rings
+}
+
+/** Transform normalisasi dari bbox referensi (plate outline). */
+export function ringNormalizeTransform(rings) {
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const ring of rings || []) {
+    for (const [x, y] of ring) {
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+  }
+  if (!isFinite(minX)) {
+    return ([x, y]) => [x, y]
+  }
+  const w = maxX - minX || 1
+  const h = maxY - minY || 1
+  const scale = 1 / Math.max(w, h)
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  return ([x, y]) => [(x - cx) * scale, (y - cy) * scale]
+}
+
+export function applyRingTransform(rings, transform) {
+  return (rings || []).map((ring) => ring.map(([x, y]) => transform([x, y])))
 }

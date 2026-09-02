@@ -66,7 +66,8 @@ function normalizeParams(params = {}) {
       ? {
           enabled: true,
           holeDiameterMm: params.keyringHoleMm ?? 5.2,
-          angleDeg: params.keyringAngleDeg ?? 90,
+          outerDiameterMm: params.keyringTabMm ?? 10,
+          angleDeg: params.keyringAngleDeg ?? 270,
           offsetMm: params.keyringOffsetMm ?? 0
         }
       : null)
@@ -89,7 +90,8 @@ function normalizeParams(params = {}) {
     imageOffset: params.imageOffset ?? { x: 0, y: 0 },
     switches: params.switches,
     keychain,
-    colorBleed: params.colorBleed ?? 0
+    colorBleed: params.colorBleed ?? 0,
+    outlineSmoothingRadius: params.outlineSmoothingRadius ?? 4.0
   }
 }
 
@@ -127,6 +129,26 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   }
 
   const grow = (sec, d) => (d <= 0.001 ? sec : track(sec.offset(d, 'Round', 2.0, ROUND_SEGMENTS)))
+
+  const bridgeBetween = (a, b, width) => {
+    const dx = b[0] - a[0]
+    const dy = b[1] - a[1]
+    const len = Math.hypot(dx, dy) || 1
+    const nx = -dy / len
+    const ny = dx / len
+    const hw = width / 2
+    return track(
+      new CrossSection(
+        [[
+          [a[0] + nx * hw, a[1] + ny * hw],
+          [b[0] + nx * hw, b[1] + ny * hw],
+          [b[0] - nx * hw, b[1] - ny * hw],
+          [a[0] - nx * hw, a[1] - ny * hw]
+        ]],
+        'NonZero'
+      )
+    )
+  }
 
   const shrink = (sec, d, fb) => {
     if (d <= 0.01) return sec
@@ -325,13 +347,15 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   if (p.baseShape === 'outline') {
     const rawPlate = track(filledOutline().offset(border, 'Round', 2.0, ROUND_SEGMENTS))
     const solidPlate = removeHoles(rawPlate)
-    const smoothingRadius = 4.0
+    const smoothingRadius = Math.max(0, p.outlineSmoothingRadius)
     plate = simp(
-      track(
-        solidPlate
-          .offset(smoothingRadius, 'Round', 2.0, SMOOTH_SEGMENTS)
-          .offset(-smoothingRadius, 'Round', 2.0, SMOOTH_SEGMENTS)
-      ),
+      smoothingRadius > 0.01
+        ? track(
+            solidPlate
+              .offset(smoothingRadius, 'Round', 2.0, SMOOTH_SEGMENTS)
+              .offset(-smoothingRadius, 'Round', 2.0, SMOOTH_SEGMENTS)
+          )
+        : solidPlate,
       0.05
     )
   } else {
@@ -389,7 +413,7 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   const clampX = (v) => clampAxis(v, loX, hiX)
   const clampY = (v) => clampAxis(v, loY, hiY)
 
-  const requested = (p.switches?.length ? p.switches : [{ x: 0, y: 0, rotation: 0 }]).slice(0, 3)
+  const requested = (p.switches?.length ? p.switches : [{ x: 0, y: 0, rotation: 0 }]).slice(0, 16)
   const applied = requested.map((sw) => ({
     x: clampX(sw.x ?? 0),
     y: clampY(sw.y ?? 0),
@@ -545,30 +569,25 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   if (kc && kc.enabled) {
     const holeR = Math.max(1.5, (kc.holeDiameterMm ?? 5.2) / 2)
     const th = Math.max(2.5, Math.min(4.0, (bodyTopZ - bodyBottomZ) * 0.35))
-    const zb = bodyBottomZ
-    const { p: edgeP, dir } = edgePointAt(bodyFootprint, kc.angleDeg ?? 90)
+    const zb = bodyTopZ - th
+    const { p: edgeP, dir } = edgePointAt(bodyFootprint, kc.angleDeg ?? 270)
     const tangent = [-dir[1], dir[0]]
     const px = edgeP[0] + tangent[0] * (kc.offsetMm ?? 0)
     const py = edgeP[1] + tangent[1] * (kc.offsetMm ?? 0)
 
-    const loopR = Math.max(3.2, holeR + 1.8)
-    const outward = loopR
-    const localLoop = track(track(CrossSection.circle(loopR, 64)).translate([0, outward]))
-    const bridgeH = outward + loopR * 3.5
-    const localBridge = track(
-      track(CrossSection.square([loopR * 2, bridgeH], true)).translate([0, outward - bridgeH / 2])
-    )
-    let localFp = track(localLoop.add(localBridge))
-    const rotDeg = (kc.angleDeg ?? 90) - 90
-    if (Math.abs(rotDeg) > 0.001) localFp = track(localFp.rotate(rotDeg))
-    const loopFootprint = track(localFp.translate([px, py]))
+    const loopR = Math.max(3.2, holeR + 1.8, (kc.outerDiameterMm ?? 10) / 2)
+    const overlap = Math.min(loopR * 0.42, Math.max(1.1, loopR - holeR - 0.2))
+    const hcx = px + dir[0] * (loopR - overlap)
+    const hcy = py + dir[1] * (loopR - overlap)
+    const innerP = [px - dir[0] * overlap, py - dir[1] * overlap]
+    const outerP = [hcx + dir[0] * loopR * 0.18, hcy + dir[1] * loopR * 0.18]
+    const loopCircle = track(track(CrossSection.circle(loopR, 80)).translate([hcx, hcy]))
+    const loopBridge = bridgeBetween(innerP, outerP, Math.max(holeR * 2.15, loopR * 0.9))
+    const loopFootprint = track(loopCircle.add(loopBridge))
 
     const loop = extrudeAt(loopFootprint, th, zb)
     body = track(body.add(loop))
 
-    const rr = (rotDeg * Math.PI) / 180
-    const hcx = -outward * Math.sin(rr) + px
-    const hcy = outward * Math.cos(rr) + py
     const hole = extrudeAt(track(track(CrossSection.circle(holeR, 48)).translate([hcx, hcy])), th + 2, zb - 1)
     body = track(body.subtract(hole))
   }
@@ -606,7 +625,7 @@ function raySegT(ox, oy, dx, dy, a, b) {
 
 function edgePointAt(footprint, angleDeg) {
   const rad = (angleDeg * Math.PI) / 180
-  const dir = [Math.cos(rad), Math.sin(rad)]
+  const dir = [Math.sin(rad), Math.cos(rad)]
   let rings = []
   try {
     rings = footprint.toPolygons()

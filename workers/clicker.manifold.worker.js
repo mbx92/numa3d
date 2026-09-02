@@ -5,10 +5,13 @@ import { parse3MF } from '../utils/clickerManifold/threemfImport.js'
 import { buildClicker } from '../utils/clickerManifold/buildClicker.js'
 import {
   adaptiveRingSegments,
-  hexToRgb,
+  applyRingTransform,
+  hexToRgbBytes,
   meshToStlArrayBuffer,
   partToGeometry,
   partsToGeometries,
+  ringNormalizeTransform,
+  rgbBytesToHex,
   shapesToRings
 } from '../utils/clickerManifold/meshUtils.js'
 import { packGeometry } from '../utils/geometryPack.js'
@@ -54,25 +57,14 @@ function slugify(text) {
   )
 }
 
-function normalizeRings(rings) {
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const ring of rings) {
-    for (const [x, y] of ring) {
-      minX = Math.min(minX, x)
-      maxX = Math.max(maxX, x)
-      minY = Math.min(minY, y)
-      maxY = Math.max(maxY, y)
-    }
-  }
-  const w = maxX - minX || 1
-  const h = maxY - minY || 1
-  const scale = 1 / Math.max(w, h)
-  const cx = (minX + maxX) / 2
-  const cy = (minY + maxY) / 2
-  return rings.map((ring) => ring.map(([x, y]) => [(x - cx) * scale, (y - cy) * scale]))
+function partsToPreviewParts(parts, group, colorHex) {
+  return parts
+    .filter((p) => p.group === group)
+    .map((p) => ({
+      geometry: packGeometry(partToGeometry(p)),
+      color: rgbBytesToHex(p.colorRgb) || colorHex,
+      role: group === 'top' ? 'lid' : 'base'
+    }))
 }
 
 function applyPlateLayout(parts, displayMode) {
@@ -116,7 +108,6 @@ function applyPlateLayout(parts, displayMode) {
   const topW = topBB.maxX - topBB.minX
   const baseCX = (baseBB.minX + baseBB.maxX) / 2
   const topCX = (topBB.minX + topBB.maxX) / 2
-  const topCY = (topBB.minY + topBB.maxY) / 2
 
   return parts.map((p) => {
     const vp = new Float32Array(p.vertProperties)
@@ -128,10 +119,8 @@ function applyPlateLayout(parts, displayMode) {
       if (p.group === 'base') {
         z -= baseBB.minZ
       } else if (p.group === 'top') {
-        const ty = 2 * topCY
-        z = -z + topBB.maxZ
+        z -= topBB.minZ
         x = x + (baseCX + baseW / 2 + GAP + topW / 2 - topCX)
-        y = -y + ty
       }
       vp[i] = x
       vp[i + 1] = y
@@ -164,18 +153,25 @@ function transformAssembly(parts, displayMode) {
 
 async function buildFromOpts(opts) {
   const resolved = resolveClickerOptions(opts)
-  const footprint = await resolveFootprint({ ...resolved, ...opts })
-  const plateShapes = buildPlateShapes(footprint, { ...resolved, ...opts })
+  const footprintOpts = { ...resolved, ...opts, baseShape: resolved.baseShape }
+  const footprint = await resolveFootprint(footprintOpts)
+  const plateShapes = buildPlateShapes(footprint, footprintOpts)
   const outlineSegs = adaptiveRingSegments(plateShapes, 64, 128, 0.45)
-  const outline = normalizeRings(shapesToRings(plateShapes, outlineSegs))
+  const outlineRings = shapesToRings(plateShapes, outlineSegs)
+  const norm = ringNormalizeTransform(outlineRings)
+  const outline = applyRingTransform(outlineRings, norm)
 
   const artSegs = adaptiveRingSegments(footprint.shapes || plateShapes, 48, 96, 0.5)
-  const artRings = shapesToRings(footprint.shapes || plateShapes, artSegs)
+  const artRingsRaw = shapesToRings(footprint.shapes || [], artSegs)
+  const artRings = artRingsRaw.length ? applyRingTransform(artRingsRaw, norm) : []
+  const colors = resolved.colors
+  const lidHex = colors.lid || '#f5a623'
+  const textHex = colors.text || colors.accent || lidHex
   const regions = artRings.length
     ? [
         {
-          rings: normalizeRings(artRings),
-          filamentRgb: hexToRgb(resolved.colors?.lid || '#f5a623'),
+          rings: artRings,
+          filamentRgb: hexToRgbBytes(textHex),
           coverage: 1,
           partName: 'top-color-0'
         }
@@ -188,26 +184,40 @@ async function buildFromOpts(opts) {
   const { parts, warnings } = buildClicker(wasm, socket, stem, regions, outline, {
     ...resolved,
     ...opts,
-    colors: resolved.colors
+    colors,
+    baseShape: footprint.source === 'rect-text-row' ? 'outline' : resolved.baseShape,
+    imageMarginMm: footprint.source === 'rect-text-row' ? 0 : resolved.imageMarginMm,
+    imageMargin: footprint.source === 'rect-text-row' ? 0 : resolved.imageMarginMm,
+    outlineSmoothingRadius: footprint.source === 'rect-text-row' ? 0.35 : undefined,
+    maxSizeMm: footprint.capWidthMm || resolved.maxSizeMm,
+    capWidthMm: footprint.capWidthMm || resolved.maxSizeMm,
+    switches: footprint.switches || opts.switches || resolved.switches,
+    baseFilamentRgb: hexToRgbBytes(lidHex),
+    bodyColorRgb: hexToRgbBytes(colors.base)
   })
 
   const displayMode = opts.displayMode || 'preview'
   const placed = transformAssembly(parts, displayMode)
 
-  const baseGeo = partsToGeometries(placed, 'base')
-  const lidGeo = partsToGeometries(placed, 'top')
+  const baseGeo = partsToGeometries(parts, 'base')
+  const lidGeo = partsToGeometries(parts, 'top')
   if (!baseGeo || !lidGeo) throw new Error('Geometry Manifold kosong')
   baseGeo.computeBoundingBox()
   lidGeo.computeBoundingBox()
 
-  const colors = resolved.colors
+  const lidPreviewParts = partsToPreviewParts(parts, 'top', lidHex)
+  const basePreviewParts = partsToPreviewParts(parts, 'base', colors.base)
+  const assemblyPreviewParts = [
+    ...partsToPreviewParts(placed, 'base', colors.base),
+    ...partsToPreviewParts(placed, 'top', lidHex)
+  ]
   const slug = slugify(opts.label || opts.text)
 
   return {
     slug,
     warnings,
     shapeMode: opts.shapeMode,
-    baseShape: opts.baseShape,
+    baseShape: resolved.baseShape,
     displayMode,
     switchPresetId: resolved.switchPresetId,
     switchPresetName: resolved.preset.name,
@@ -217,17 +227,29 @@ async function buildFromOpts(opts) {
     basePreviewColor: colors.base,
     dimensions: {
       engine: 'manifold',
+      tileCount: footprint.tileCount || 1,
+      tileWidthMm: footprint.tileWidthMm ? Number(footprint.tileWidthMm.toFixed(1)) : null,
+      tileDepthMm: footprint.tileDepthMm ? Number(footprint.tileDepthMm.toFixed(1)) : null,
+      tileGapMm: footprint.tileGapMm ? Number(footprint.tileGapMm.toFixed(1)) : null,
       widthMm: Number((baseGeo.boundingBox.max.x - baseGeo.boundingBox.min.x).toFixed(1)),
       depthMm: Number((baseGeo.boundingBox.max.y - baseGeo.boundingBox.min.y).toFixed(1)),
       heightMm: Number((baseGeo.boundingBox.max.z - baseGeo.boundingBox.min.z).toFixed(1))
     },
-    basePreviewParts: [{ geometry: packGeometry(baseGeo), color: colors.base, role: 'base' }],
-    lidPreviewParts: [{ geometry: packGeometry(lidGeo), color: colors.lid, role: 'lid' }],
-    accentPreviewParts: [{ geometry: packGeometry(lidGeo), color: colors.lid, role: 'lid' }],
-    assemblyPreviewParts: [
-      { geometry: packGeometry(baseGeo.clone()), color: colors.base },
-      { geometry: packGeometry(lidGeo.clone()), color: colors.lid }
-    ],
+    basePreviewParts: basePreviewParts.length
+      ? basePreviewParts
+      : [{ geometry: packGeometry(baseGeo), color: colors.base, role: 'base' }],
+    lidPreviewParts: lidPreviewParts.length
+      ? lidPreviewParts
+      : [{ geometry: packGeometry(lidGeo), color: lidHex, role: 'lid' }],
+    accentPreviewParts: lidPreviewParts.length
+      ? lidPreviewParts
+      : [{ geometry: packGeometry(lidGeo), color: lidHex, role: 'lid' }],
+    assemblyPreviewParts: assemblyPreviewParts.length
+      ? assemblyPreviewParts
+      : [
+          { geometry: packGeometry(baseGeo.clone()), color: colors.base },
+          { geometry: packGeometry(lidGeo.clone()), color: lidHex }
+        ],
     baseMergedExportGeometry: packGeometry(baseGeo.clone()),
     baseMergedExportColor: colors.base,
     baseStlBuffer: meshToStlArrayBuffer(baseGeo),

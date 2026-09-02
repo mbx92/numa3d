@@ -4,19 +4,101 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const props = defineProps({
-  parts: { type: Array, required: true } // [{ geometry, color, line? }]
+  parts: { type: Array, required: true }, // [{ geometry, color, line?, role? }]
+  showGrid: { type: Boolean, default: false },
+  simulateClick: { type: Boolean, default: false },
+  interactiveClick: { type: Boolean, default: false },
+  clickRole: { type: String, default: 'lid' },
+  clickTravelMm: { type: Number, default: 4 }
 })
 
 const container = ref(null)
 const loading = ref(true)
 const error = ref('')
 
-let renderer, scene, camera, orbit, resizeObserver, intersectionObserver, rootGroup
+let renderer, scene, camera, orbit, resizeObserver, intersectionObserver, rootGroup, clickGroup, gridHelper, animId
 let visible = true
+let manualPressed = false
+let manualPress = 0
 
-function render() {
+function shouldAnimateClick() {
+  return props.simulateClick || manualPressed || manualPress > 0.001
+}
+
+function clickOffsetAt(time = performance.now()) {
+  const travel = Math.max(0, Number(props.clickTravelMm) || 0)
+  if (travel <= 0) return 0
+  const cycle = props.simulateClick ? (time % 820) / 820 : 0
+  const autoPress = props.simulateClick
+    ? cycle < 0.42
+      ? cycle / 0.42
+      : Math.max(0, 1 - (cycle - 0.42) / 0.58)
+    : 0
+  const target = manualPressed ? 1 : 0
+  manualPress += (target - manualPress) * 0.32
+  if (Math.abs(target - manualPress) < 0.001) manualPress = target
+  const press = Math.max(autoPress, manualPress)
+  const eased = press * press * (3 - 2 * press)
+  return -travel * eased
+}
+
+function updateClickMotion(time) {
+  if (!clickGroup) return
+  clickGroup.position.z = clickOffsetAt(time)
+  clickGroup.updateMatrixWorld(true)
+}
+
+function render(time) {
   if (!renderer || !scene || !camera || !visible) return
+  updateClickMotion(typeof time === 'number' ? time : performance.now())
   renderer.render(scene, camera)
+}
+
+function startAnimation() {
+  if (animId || !shouldAnimateClick()) return
+  const tick = (time) => {
+    render(time)
+    if (shouldAnimateClick()) {
+      animId = requestAnimationFrame(tick)
+    } else {
+      animId = null
+    }
+  }
+  animId = requestAnimationFrame(tick)
+}
+
+function stopAnimation() {
+  if (animId) cancelAnimationFrame(animId)
+  animId = null
+  if (clickGroup) {
+    clickGroup.position.z = 0
+    clickGroup.updateMatrixWorld(true)
+  }
+  render()
+}
+
+function setManualPressed(value) {
+  if (!props.interactiveClick || !clickGroup) return
+  manualPressed = value
+  startAnimation()
+  render()
+}
+
+function onCanvasPointerDown(event) {
+  if (!props.interactiveClick) return
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+  setManualPressed(true)
+}
+
+function onCanvasPointerUp(event) {
+  if (!props.interactiveClick) return
+  event.currentTarget?.releasePointerCapture?.(event.pointerId)
+  setManualPressed(false)
+}
+
+function onCanvasPointerLeave() {
+  if (!props.interactiveClick) return
+  setManualPressed(false)
 }
 
 function getBox(object) {
@@ -60,21 +142,60 @@ function clearScene() {
     o.material?.dispose()
   })
   rootGroup = null
+  clickGroup = null
+  manualPressed = false
+}
+
+function setGridMaterial(grid) {
+  const mats = Array.isArray(grid.material) ? grid.material : [grid.material]
+  for (const m of mats) {
+    m.opacity = 0.65
+    m.transparent = true
+  }
+}
+
+function disposeGrid(grid) {
+  if (!grid) return
+  grid.geometry?.dispose()
+  const mats = Array.isArray(grid.material) ? grid.material : [grid.material]
+  for (const m of mats) m?.dispose()
+}
+
+function updateGridPosition() {
+  if (!gridHelper || !rootGroup) return
+  const box = getBox(rootGroup)
+  const span = Math.max(box.max.x - box.min.x, box.max.z - box.min.z, 40)
+  const size = Math.ceil(span * 2.4 / 10) * 10
+  if (gridHelper.userData.size !== size) {
+    scene.remove(gridHelper)
+    disposeGrid(gridHelper)
+    gridHelper = new THREE.GridHelper(size, Math.min(40, Math.max(10, Math.round(size / 5))), 0xb8bec8, 0xd5dae2)
+    setGridMaterial(gridHelper)
+    gridHelper.userData.size = size
+    scene.add(gridHelper)
+  }
+  gridHelper.position.set(0, box.min.y - 0.4, 0)
 }
 
 function mountParts() {
   clearScene()
   rootGroup = new THREE.Group()
+  const staticGroup = new THREE.Group()
+  clickGroup = new THREE.Group()
+  rootGroup.add(staticGroup, clickGroup)
+  let added = 0
 
   for (let i = 0; i < (props.parts || []).length; i++) {
     const part = props.parts[i]
     if (!part?.geometry?.attributes?.position?.count) continue
     const geo = part.geometry.clone()
+    const parent = part.role === props.clickRole ? clickGroup : staticGroup
     if (part.line) {
       const mat = new THREE.LineBasicMaterial({ color: part.color || '#1f2937' })
       const line = new THREE.LineSegments(geo, mat)
       line.renderOrder = i + 1
-      rootGroup.add(line)
+      parent.add(line)
+      added += 1
       continue
     }
     const mat = new THREE.MeshLambertMaterial({
@@ -83,16 +204,20 @@ function mountParts() {
     })
     const mesh = new THREE.Mesh(geo, mat)
     mesh.renderOrder = i + 1
-    rootGroup.add(mesh)
+    parent.add(mesh)
+    added += 1
   }
 
-  if (!rootGroup.children.length) throw new Error('Preview kosong')
+  if (!added) throw new Error('Preview kosong')
 
   centerAtOrigin(rootGroup)
   scene.add(rootGroup)
 
   const box = getBox(rootGroup)
+  if (props.showGrid) updateGridPosition()
   fitCameraToBox(box)
+  updateClickMotion()
+  if (props.simulateClick) startAnimation()
   render()
 }
 
@@ -150,7 +275,12 @@ async function init() {
       canvas.style.display = 'block'
       canvas.style.width = '100%'
       canvas.style.height = '100%'
+      canvas.style.cursor = props.interactiveClick ? 'pointer' : 'grab'
       el.appendChild(canvas)
+      canvas.addEventListener('pointerdown', onCanvasPointerDown)
+      canvas.addEventListener('pointerup', onCanvasPointerUp)
+      canvas.addEventListener('pointercancel', onCanvasPointerUp)
+      canvas.addEventListener('pointerleave', onCanvasPointerLeave)
 
       orbit = new OrbitControls(camera, canvas)
       orbit.enableDamping = false
@@ -166,6 +296,13 @@ async function init() {
       const rim = new THREE.DirectionalLight(0xffffff, 0.35)
       rim.position.set(0, -2, 2)
       scene.add(rim)
+
+      if (props.showGrid) {
+        gridHelper = new THREE.GridHelper(80, 16, 0xb8bec8, 0xd5dae2)
+        setGridMaterial(gridHelper)
+        gridHelper.userData = { size: 80 }
+        scene.add(gridHelper)
+      }
 
       resizeObserver = new ResizeObserver(() => scheduleMount())
       resizeObserver.observe(el)
@@ -197,13 +334,36 @@ watch(
   { deep: true }
 )
 
+watch(
+  () => [props.simulateClick, props.interactiveClick, props.clickTravelMm, props.clickRole, props.showGrid],
+  () => {
+    if (!renderer) return
+    if (!props.interactiveClick) manualPressed = false
+    renderer.domElement.style.cursor = props.interactiveClick ? 'pointer' : 'grab'
+    if (gridHelper) gridHelper.visible = props.showGrid
+    if (shouldAnimateClick()) startAnimation()
+    else stopAnimation()
+    render()
+  }
+)
+
 onMounted(init)
 
 onUnmounted(() => {
   intersectionObserver?.disconnect()
   resizeObserver?.disconnect()
+  stopAnimation()
+  renderer?.domElement?.removeEventListener('pointerdown', onCanvasPointerDown)
+  renderer?.domElement?.removeEventListener('pointerup', onCanvasPointerUp)
+  renderer?.domElement?.removeEventListener('pointercancel', onCanvasPointerUp)
+  renderer?.domElement?.removeEventListener('pointerleave', onCanvasPointerLeave)
   clearScene()
   orbit?.dispose()
+  if (gridHelper) {
+    scene?.remove(gridHelper)
+    disposeGrid(gridHelper)
+    gridHelper = null
+  }
   renderer?.dispose()
   renderer?.domElement?.remove()
 })
