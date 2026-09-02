@@ -177,6 +177,40 @@ function updateGridPosition() {
   gridHelper.position.set(0, box.min.y - 0.4, 0)
 }
 
+function createMeshMaterial(part) {
+  const opacity = part.opacity == null ? 1 : Math.min(Math.max(Number(part.opacity) || 1, 0.05), 1)
+  const transparent = opacity < 0.999 || part.role === 'ledGlow'
+  if (part.role === 'ledGlow') {
+    return new THREE.MeshBasicMaterial({
+      color: part.color || '#fff1a8',
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    })
+  }
+  const mat = new THREE.MeshLambertMaterial({
+    color: part.color || '#f97316',
+    side: THREE.FrontSide,
+    transparent,
+    opacity
+  })
+  if (part.glow || part.role === 'ledChip') {
+    mat.emissive = new THREE.Color(part.color || '#fff1a8')
+    mat.emissiveIntensity = Number(part.glowIntensity) || 0.7
+  }
+  return mat
+}
+
+function addLedPointLight(parent, geo, color, index) {
+  if (index % 3 !== 0) return
+  geo.computeBoundingBox()
+  const center = geo.boundingBox.getCenter(new THREE.Vector3())
+  const light = new THREE.PointLight(color || '#fff1a8', 0.42, 34, 1.8)
+  light.position.copy(center)
+  parent.add(light)
+}
+
 function mountParts() {
   clearScene()
   rootGroup = new THREE.Group()
@@ -198,13 +232,11 @@ function mountParts() {
       added += 1
       continue
     }
-    const mat = new THREE.MeshLambertMaterial({
-      color: part.color || '#f97316',
-      side: THREE.FrontSide
-    })
+    const mat = createMeshMaterial(part)
     const mesh = new THREE.Mesh(geo, mat)
     mesh.renderOrder = i + 1
     parent.add(mesh)
+    if (part.role === 'ledChip') addLedPointLight(parent, geo, part.color, i)
     added += 1
   }
 

@@ -8,6 +8,7 @@ definePageMeta({
 import {
   ArrowPathIcon,
   ArrowDownTrayIcon,
+  ArrowUturnLeftIcon,
   CloudArrowUpIcon,
   LightBulbIcon,
   ArrowsPointingInIcon,
@@ -16,7 +17,7 @@ import {
   DocumentArrowDownIcon,
   PencilSquareIcon
 } from '@heroicons/vue/24/outline'
-import { LIGHTBOX_DEFAULTS } from '~/utils/lightboxPresets.js'
+import { LIGHTBOX_DEFAULTS, getStandPreset } from '~/utils/lightboxPresets.js'
 import { generateLightbox } from '~/utils/lightboxGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
 import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExport.js'
@@ -47,19 +48,30 @@ const toast = useToast()
 const exportFormat = ref('3mf')
 const activeToolPanel = ref('design')
 
-const toolPanels = computed(() => {
-  const panels = [
-    { id: 'design', label: 'Desain', icon: PencilSquareIcon },
-    { id: 'led', label: 'LED', icon: LightBulbIcon },
-    { id: 'size', label: 'Ukuran', icon: ArrowsPointingInIcon },
-    { id: 'info', label: 'Info', icon: Square3Stack3DIcon }
-  ]
-  if (result.value) panels.push({ id: 'export', label: 'Export', icon: DocumentArrowDownIcon })
-  return panels
-})
+const TOOL_PANELS = [
+  { id: 'design', label: 'Desain', icon: PencilSquareIcon },
+  { id: 'led', label: 'LED', icon: LightBulbIcon },
+  { id: 'stand', label: 'Stand', icon: Square3Stack3DIcon },
+  { id: 'size', label: 'Ukuran', icon: ArrowsPointingInIcon },
+  { id: 'info', label: 'Info', icon: Square3Stack3DIcon },
+  { id: 'export', label: 'Export', icon: DocumentArrowDownIcon, needsResult: true }
+]
+
+const toolPanels = TOOL_PANELS
+
+const activeStandPreset = computed(() => getStandPreset(form.standModelId))
+
+function selectToolPanel(id) {
+  const panel = toolPanels.find((p) => p.id === id)
+  if (panel?.needsResult && !result.value) {
+    toast.info('Generate model dulu untuk membuka Export')
+    return
+  }
+  activeToolPanel.value = id
+}
 
 const activePanelMeta = computed(
-  () => toolPanels.value.find((p) => p.id === activeToolPanel.value) || toolPanels.value[0]
+  () => toolPanels.find((p) => p.id === activeToolPanel.value) || toolPanels[0]
 )
 
 const wizardDone = ref(false)
@@ -67,46 +79,115 @@ const generating = ref(false)
 const saving = ref(false)
 const errorMsg = ref('')
 const result = ref(null)
+const resultSignature = ref('')
 const previewKey = ref(0)
 const activePreview = ref('assembly')
 const facePreviewParts = ref([])
 const bodyPreviewParts = ref([])
+const standPreviewParts = ref([])
 const assemblyPreviewParts = ref([])
 
 const activePreviewParts = computed(() => {
   if (activePreview.value === 'face') return facePreviewParts.value
   if (activePreview.value === 'body') return bodyPreviewParts.value
+  if (activePreview.value === 'stand') return standPreviewParts.value
   return assemblyPreviewParts.value
 })
 
-const previewTabs = computed(() => [
-  { id: 'assembly', label: 'Perakitan' },
-  { id: 'face', label: 'Face' },
-  { id: 'body', label: 'Body' }
-])
+const editableLayerPalette = computed(() => {
+  if (!result.value || !['image', 'svg'].includes(form.designMode)) return []
+  return (result.value.layerPalette || []).filter((layer) => !layer.isDiffuser)
+})
+
+const previewTabs = computed(() => {
+  const tabs = [
+    { id: 'assembly', label: 'Perakitan' },
+    { id: 'face', label: 'Front & Side' },
+    { id: 'body', label: 'Back' }
+  ]
+  if (result.value?.standPreviewParts?.length) tabs.push({ id: 'stand', label: 'Stand' })
+  return tabs
+})
 
 const activePreviewFilename = computed(() => {
-  if (activePreview.value === 'face') return result.value?.baseFilename
-  if (activePreview.value === 'body') return result.value?.bodyFilename
+  if (activePreview.value === 'face') return result.value?.frontSideFilename || result.value?.baseFilename
+  if (activePreview.value === 'body') return result.value?.backFilename || result.value?.bodyFilename
+  if (activePreview.value === 'stand') return result.value?.standFilename
   return `${result.value?.slug}_assembly`
 })
 
 let disposePrev = null
 let generateToken = 0
+let queuedGenerateTimer = null
+
+watch(
+  () => [form.designMode, form.imageDataUrl, form.svgContent, form.maxColors],
+  () => {
+    form.layerColors = []
+  }
+)
+
+watch(
+  () => [
+    form.standEnabled,
+    form.standModelId,
+    form.standWidthMm,
+    form.standDepthMm,
+    form.standBaseHeightMm,
+    form.standRailHeightMm,
+    form.standSlotMm,
+    form.standColor
+  ],
+  () => {
+    if (!wizardDone.value || !result.value) return
+    queueGenerate()
+  }
+)
+
+function queueGenerate() {
+  if (queuedGenerateTimer) clearTimeout(queuedGenerateTimer)
+  queuedGenerateTimer = setTimeout(() => {
+    queuedGenerateTimer = null
+    runGenerate()
+  }, 180)
+}
 
 function clearPreviews() {
   facePreviewParts.value = []
   bodyPreviewParts.value = []
+  standPreviewParts.value = []
   assemblyPreviewParts.value = []
 }
 
+function buildFormSignature() {
+  return JSON.stringify({
+    ...form,
+    colors: { ...form.colors },
+    layerColors: Array.isArray(form.layerColors) ? [...form.layerColors] : []
+  })
+}
+
+async function ensureFreshResult() {
+  const signature = buildFormSignature()
+  if (queuedGenerateTimer) {
+    clearTimeout(queuedGenerateTimer)
+    queuedGenerateTimer = null
+  }
+  if (!result.value || resultSignature.value !== signature || generating.value) {
+    await runGenerate()
+  }
+  return !!result.value && resultSignature.value === buildFormSignature()
+}
+
 onUnmounted(() => {
+  if (queuedGenerateTimer) clearTimeout(queuedGenerateTimer)
   clearPreviews()
   disposePrev?.()
 })
 
 async function runGenerate() {
   const token = ++generateToken
+  const signature = buildFormSignature()
   generating.value = true
   errorMsg.value = ''
   const prevDispose = disposePrev
@@ -123,33 +204,76 @@ async function runGenerate() {
     }
     disposePrev = () => out.dispose()
     result.value = out
+    resultSignature.value = signature
+    if (activePreview.value === 'stand' && !out.standPreviewParts.length) activePreview.value = 'assembly'
     previewKey.value += 1
     facePreviewParts.value = out.facePreviewParts.map((p) => ({
       geometry: p.geometry,
       color: p.color,
-      line: p.line
+      line: p.line,
+      role: p.role,
+      name: p.name,
+      previewOnly: p.previewOnly,
+      opacity: p.opacity,
+      glow: p.glow,
+      glowIntensity: p.glowIntensity
     }))
     bodyPreviewParts.value = out.bodyPreviewParts.map((p) => ({
       geometry: p.geometry,
       color: p.color,
-      line: p.line
+      line: p.line,
+      role: p.role,
+      name: p.name,
+      previewOnly: p.previewOnly,
+      opacity: p.opacity,
+      glow: p.glow,
+      glowIntensity: p.glowIntensity
+    }))
+    standPreviewParts.value = out.standPreviewParts.map((p) => ({
+      geometry: p.geometry,
+      color: p.color,
+      line: p.line,
+      role: p.role,
+      name: p.name,
+      previewOnly: p.previewOnly,
+      opacity: p.opacity,
+      glow: p.glow,
+      glowIntensity: p.glowIntensity
     }))
     assemblyPreviewParts.value = out.assemblyPreviewParts.map((p) => ({
       geometry: p.geometry,
       color: p.color,
-      line: p.line
+      line: p.line,
+      role: p.role,
+      name: p.name,
+      previewOnly: p.previewOnly,
+      opacity: p.opacity,
+      glow: p.glow,
+      glowIntensity: p.glowIntensity
     }))
   } catch (e) {
     if (token !== generateToken) return
     result.value = null
+    resultSignature.value = ''
     errorMsg.value = e?.message || 'Gagal membuat model lightbox'
   } finally {
     if (token === generateToken) generating.value = false
   }
 }
 
+function updateLayerPaletteColor(layer, color) {
+  if (layer.isBackground && form.designMode === 'svg') {
+    form.colors.background = color
+  } else if (Number.isInteger(layer.overrideIndex)) {
+    const next = Array.isArray(form.layerColors) ? [...form.layerColors] : []
+    next[layer.overrideIndex] = color
+    form.layerColors = next
+  }
+  runGenerate()
+}
+
 async function downloadPart(part) {
-  if (!result.value) return
+  if (!(await ensureFreshResult())) return
   const slug = result.value.slug
   const fmt = exportFormat.value
   let blob
@@ -168,37 +292,55 @@ async function downloadPart(part) {
     }
   } else if (part === 'face') {
     if (fmt === '3mf') {
-      blob = result.value.getFace3mfBlob()
+      blob = result.value.getFrontSide3mfBlob?.() || result.value.getFace3mfBlob()
       filename = exportFilename(slug, 'face', fmt)
     } else if (fmt === 'glb') {
-      blob = await result.value.getFaceGlbBlob()
+      blob = await (result.value.getFrontSideGlbBlob?.() || result.value.getFaceGlbBlob())
       filename = exportFilename(slug, 'face', fmt)
     } else if (fmt === 'stl-parts') {
-      blob = result.value.getFaceMultiStlBlob()
+      blob = result.value.getFrontSideMultiStlBlob?.() || result.value.getFaceMultiStlBlob()
       filename = exportFilename(slug, 'face', fmt)
     } else if (fmt === 'stl-color') {
-      blob = result.value.getFaceColoredStlBlob()
+      blob = result.value.getFrontSideColoredStlBlob?.() || result.value.getFaceColoredStlBlob()
       filename = exportFilename(slug, 'face', fmt)
     } else {
-      blob = result.value.getFaceBlob()
-      filename = result.value.baseFilename
+      blob = result.value.getFrontSideBlob?.() || result.value.getFaceBlob()
+      filename = result.value.frontSideFilename || result.value.baseFilename
     }
   } else if (part === 'body') {
     if (fmt === '3mf') {
-      blob = result.value.getBody3mfBlob()
+      blob = result.value.getBack3mfBlob?.() || result.value.getBody3mfBlob()
       filename = exportFilename(slug, 'body', fmt)
     } else if (fmt === 'glb') {
-      blob = await result.value.getBodyGlbBlob()
+      blob = await (result.value.getBackGlbBlob?.() || result.value.getBodyGlbBlob())
       filename = exportFilename(slug, 'body', fmt)
     } else if (fmt === 'stl-parts') {
-      blob = result.value.getBodyMultiStlBlob()
+      blob = result.value.getBackMultiStlBlob?.() || result.value.getBodyMultiStlBlob()
       filename = exportFilename(slug, 'body', fmt)
     } else if (fmt === 'stl-color') {
-      blob = result.value.getBodyColoredStlBlob()
+      blob = result.value.getBackColoredStlBlob?.() || result.value.getBodyColoredStlBlob()
       filename = exportFilename(slug, 'body', fmt)
     } else {
-      blob = result.value.getBodyBlob()
-      filename = result.value.bodyFilename
+      blob = result.value.getBackBlob?.() || result.value.getBodyBlob()
+      filename = result.value.backFilename || result.value.bodyFilename
+    }
+  } else if (part === 'stand') {
+    const standPartName = `stand_${result.value.dimensions?.standModelId || form.standModelId || 'model'}`
+    if (fmt === '3mf') {
+      blob = result.value.getStand3mfBlob()
+      filename = exportFilename(slug, standPartName, fmt)
+    } else if (fmt === 'glb') {
+      blob = await result.value.getStandGlbBlob()
+      filename = exportFilename(slug, standPartName, fmt)
+    } else if (fmt === 'stl-parts') {
+      blob = result.value.getStandMultiStlBlob()
+      filename = exportFilename(slug, standPartName, fmt)
+    } else if (fmt === 'stl-color') {
+      blob = result.value.getStandColoredStlBlob()
+      filename = exportFilename(slug, standPartName, fmt)
+    } else {
+      blob = result.value.getStandBlob()
+      filename = result.value.standFilename
     }
   }
 
@@ -208,7 +350,8 @@ async function downloadPart(part) {
   }
   downloadBlob(blob, filename)
   const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
-  toast.success(`Unduh ${part} (${fmtLabel})`)
+  const partLabel = part === 'face' ? 'front & side' : part === 'body' ? 'back' : part
+  toast.success(`Unduh ${partLabel} (${fmtLabel})`)
 }
 
 function uploadBlob(blob, filename) {
@@ -234,12 +377,14 @@ function uploadBlob(blob, filename) {
 }
 
 async function saveToGallery() {
-  if (!result.value || !isAdmin.value) return
+  if (!isAdmin.value || !(await ensureFreshResult())) return
   saving.value = true
   errorMsg.value = ''
   try {
-    await uploadBlob(result.value.getFaceBlob(), result.value.baseFilename)
-    await uploadBlob(result.value.getBodyBlob(), result.value.bodyFilename)
+    await uploadBlob(result.value.getFrontSideBlob?.() || result.value.getFaceBlob(), result.value.frontSideFilename || result.value.baseFilename)
+    await uploadBlob(result.value.getBackBlob?.() || result.value.getBodyBlob(), result.value.backFilename || result.value.bodyFilename)
+    const standBlob = result.value.getStandBlob?.()
+    if (standBlob) await uploadBlob(standBlob, result.value.standFilename)
     toast.success('Model disimpan ke Galeri 3D')
   } catch (e) {
     errorMsg.value = e?.message || 'Gagal menyimpan ke galeri'
@@ -258,6 +403,7 @@ function onWizardComplete(payload) {
 function restartWizard() {
   wizardDone.value = false
   result.value = null
+  resultSignature.value = ''
   clearPreviews()
   const prevDispose = disposePrev
   disposePrev = null
@@ -284,7 +430,7 @@ function restartWizard() {
               ? 'bg-white text-accent-700 shadow-sm ring-1 ring-ink-200'
               : 'text-ink-500 hover:bg-white/70 hover:text-ink-700'
           "
-          @click="activeToolPanel = panel.id"
+          @click="selectToolPanel(panel.id)"
         >
           <component :is="panel.icon" class="w-5 h-5 shrink-0" />
           <span class="leading-none">{{ panel.label }}</span>
@@ -302,9 +448,9 @@ function restartWizard() {
       </nav>
 
       <aside
-        class="order-1 md:order-2 w-full md:w-52 lg:w-56 shrink-0 border-b md:border-b-0 md:border-r border-ink-200 bg-white overflow-y-auto max-h-[42vh] md:max-h-none"
+        class="order-1 md:order-2 flex flex-col flex-1 min-h-0 md:flex-none w-full md:w-80 lg:w-[22rem] shrink-0 border-b md:border-b-0 md:border-r border-ink-200 bg-white md:max-h-full"
       >
-        <header class="sticky top-0 z-10 flex items-center justify-between gap-2 px-3 py-2.5 border-b border-ink-100 bg-white/95 backdrop-blur-sm">
+        <header class="shrink-0 z-10 flex items-center justify-between gap-2 px-3 py-2.5 border-b border-ink-100 bg-white/95 backdrop-blur-sm">
           <h2 class="text-xs font-semibold text-ink-800">{{ activePanelMeta?.label }}</h2>
           <button
             type="button"
@@ -317,10 +463,12 @@ function restartWizard() {
           </button>
         </header>
 
-        <div class="p-3 space-y-3">
+        <div class="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
+          <div class="p-4 space-y-4">
           <template v-if="activeToolPanel === 'design'">
-            <button type="button" class="text-[11px] text-accent-600 hover:underline mb-1" @click="restartWizard">
-              Setup ulang…
+            <button type="button" class="btn-secondary w-full text-sm" @click="restartWizard">
+              <ArrowUturnLeftIcon class="w-4 h-4" />
+              Setup ulang
             </button>
             <KeychainCompactField label="Label">
               <input v-model="form.label" class="input text-sm" maxlength="32" />
@@ -337,6 +485,39 @@ function restartWizard() {
           </template>
 
           <template v-else-if="activeToolPanel === 'led'">
+            <label class="flex items-center justify-between gap-3 rounded-lg border border-ink-100 p-2.5">
+              <span class="min-w-0">
+                <span class="block text-xs font-medium text-ink-800">Aksen LED strip</span>
+                <span class="block text-[10px] text-ink-400">Preview hardware di cavity</span>
+              </span>
+              <input v-model="form.ledStripEnabled" type="checkbox" class="h-4 w-4 rounded border-ink-300 text-accent-600" @change="runGenerate" />
+            </label>
+            <div v-if="form.ledStripEnabled" class="grid grid-cols-[1fr_auto_auto] gap-2">
+              <KeychainCompactField label="Lebar" unit="mm">
+                <input v-model.number="form.ledStripWidthMm" type="number" min="2" max="8" step="0.5" class="input-num w-full text-sm" />
+              </KeychainCompactField>
+              <KeychainCompactField label="PCB">
+                <input v-model="form.ledStripColor" type="color" class="h-9 w-10 rounded-md border border-ink-200 cursor-pointer" @change="runGenerate" />
+              </KeychainCompactField>
+              <KeychainCompactField label="LED">
+                <input v-model="form.ledLightColor" type="color" class="h-9 w-10 rounded-md border border-ink-200 cursor-pointer" @change="runGenerate" />
+              </KeychainCompactField>
+            </div>
+            <label class="flex items-center justify-between gap-3 rounded-lg border border-ink-100 p-2.5">
+              <span class="min-w-0">
+                <span class="block text-xs font-medium text-ink-800">Diffuser</span>
+                <span class="block text-[10px] text-ink-400">Solid layer di balik face</span>
+              </span>
+              <input v-model="form.diffuserEnabled" type="checkbox" class="h-4 w-4 rounded border-ink-300 text-accent-600" @change="runGenerate" />
+            </label>
+            <div v-if="form.diffuserEnabled" class="grid grid-cols-[1fr_auto] gap-2">
+              <KeychainCompactField label="Tebal" unit="mm">
+                <input v-model.number="form.diffuserDepthMm" type="number" min="0.2" max="2" step="0.1" class="input-num w-full text-sm" />
+              </KeychainCompactField>
+              <KeychainCompactField label="Warna">
+                <input v-model="form.diffuserColor" type="color" class="h-9 w-10 rounded-md border border-ink-200 cursor-pointer" @change="runGenerate" />
+              </KeychainCompactField>
+            </div>
             <KeychainCompactField label="Cavity LED" unit="mm">
               <input v-model.number="form.backCavityDepthMm" type="number" min="8" max="30" step="1" class="input-num w-full text-sm" />
             </KeychainCompactField>
@@ -357,6 +538,14 @@ function restartWizard() {
               </KeychainCompactField>
             </div>
             <div class="grid grid-cols-2 gap-2">
+              <KeychainCompactField label="Gantung" unit="mm">
+                <input v-model.number="form.hangingHoleMm" type="number" min="0" max="12" step="0.5" class="input-num w-full text-sm" />
+              </KeychainCompactField>
+              <KeychainCompactField label="Offset atas" unit="mm">
+                <input v-model.number="form.hangingHoleOffsetMm" type="number" min="4" max="30" step="0.5" class="input-num w-full text-sm" />
+              </KeychainCompactField>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
               <KeychainCompactField label="Layer latar" unit="mm">
                 <input v-model.number="form.backLayerDepthMm" type="number" min="0.4" max="3" step="0.1" class="input-num w-full text-sm" />
               </KeychainCompactField>
@@ -364,6 +553,19 @@ function restartWizard() {
                 <input v-model.number="form.colorLayerDepthMm" type="number" min="0.3" max="1.5" step="0.1" class="input-num w-full text-sm" />
               </KeychainCompactField>
             </div>
+          </template>
+
+          <template v-else-if="activeToolPanel === 'stand'">
+            <LightboxStandPicker
+              v-model:stand-model-id="form.standModelId"
+              v-model:stand-enabled="form.standEnabled"
+              v-model:stand-width-mm="form.standWidthMm"
+              v-model:stand-depth-mm="form.standDepthMm"
+              v-model:stand-base-height-mm="form.standBaseHeightMm"
+              v-model:stand-rail-height-mm="form.standRailHeightMm"
+              v-model:stand-slot-mm="form.standSlotMm"
+              v-model:stand-color="form.standColor"
+            />
           </template>
 
           <template v-else-if="activeToolPanel === 'size'">
@@ -390,15 +592,21 @@ function restartWizard() {
             <p class="text-[11px] text-ink-500">
               Terinspirasi <strong>MakerWorld Lightbox Maker</strong> — face multi-layer + cavity LED di belakang.
             </p>
+            <p v-if="form.standEnabled" class="text-[11px] text-ink-500">
+              Stand: <strong>{{ activeStandPreset.label }}</strong> — {{ activeStandPreset.description }}
+            </p>
             <dl v-if="result" class="space-y-1 text-[11px] font-mono text-ink-600">
               <div class="flex justify-between"><dt class="text-ink-400">Layer</dt><dd>{{ result.dimensions.layerCount }}</dd></div>
               <div class="flex justify-between"><dt class="text-ink-400">Face depth</dt><dd>{{ result.dimensions.faceDepthMm }} mm</dd></div>
               <div class="flex justify-between"><dt class="text-ink-400">Cavity</dt><dd>{{ result.dimensions.cavityDepthMm }} mm</dd></div>
               <div class="flex justify-between"><dt class="text-ink-400">Desain</dt><dd>{{ result.dimensions.designWidthMm }}×{{ result.dimensions.designHeightMm }} mm</dd></div>
+              <div v-if="result.dimensions.standWidthMm" class="flex justify-between"><dt class="text-ink-400">Stand</dt><dd>{{ result.dimensions.standWidthMm }}×{{ result.dimensions.standDepthMm }}×{{ result.dimensions.standHeightMm }} mm</dd></div>
+              <div v-if="result.dimensions.standSlotMm" class="flex justify-between"><dt class="text-ink-400">Slot stand</dt><dd>{{ result.dimensions.standSlotMm }} mm</dd></div>
             </dl>
           </template>
 
-          <template v-else-if="activeToolPanel === 'export' && result">
+          <template v-else-if="activeToolPanel === 'export'">
+            <template v-if="result">
             <KeychainCompactField label="Format">
               <select v-model="exportFormat" class="input text-sm">
                 <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
@@ -409,10 +617,13 @@ function restartWizard() {
                 <ArrowDownTrayIcon class="w-4 h-4" /> Assembly (3MF/GLB)
               </button>
               <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('face')">
-                <ArrowDownTrayIcon class="w-4 h-4" /> Face (multi-color)
+                <ArrowDownTrayIcon class="w-4 h-4" /> Front & Side
               </button>
               <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('body')">
-                <ArrowDownTrayIcon class="w-4 h-4" /> Body (frame + back)
+                <ArrowDownTrayIcon class="w-4 h-4" /> Back
+              </button>
+              <button v-if="result.standPreviewParts?.length" type="button" class="btn-secondary w-full text-sm" @click="downloadPart('stand')">
+                <ArrowDownTrayIcon class="w-4 h-4" /> Stand
               </button>
               <button
                 v-if="isAdmin"
@@ -425,9 +636,11 @@ function restartWizard() {
                 {{ saving ? 'Menyimpan…' : 'Galeri' }}
               </button>
             </div>
+            </template>
           </template>
 
           <p v-if="errorMsg" class="text-xs text-red-600">{{ errorMsg }}</p>
+          </div>
         </div>
       </aside>
 
@@ -449,6 +662,27 @@ function restartWizard() {
                   @change="runGenerate"
                 />
                 <span class="text-[9px] text-ink-500 leading-none">{{ c.short }}</span>
+              </label>
+            </div>
+            <div
+              v-if="editableLayerPalette.length"
+              class="flex flex-wrap items-center gap-2 border-l border-ink-200 pl-3"
+            >
+              <label
+                v-for="layer in editableLayerPalette"
+                :key="`${layer.index}-${layer.name}`"
+                class="group flex flex-col items-center gap-0.5 cursor-pointer"
+                :title="layer.name"
+              >
+                <input
+                  :value="layer.color"
+                  type="color"
+                  class="h-7 w-7 cursor-pointer rounded-md border-2 border-white shadow-sm ring-1 ring-ink-200 transition-transform group-hover:scale-105"
+                  @change="updateLayerPaletteColor(layer, $event.target.value)"
+                />
+                <span class="text-[9px] text-ink-500 leading-none">
+                  {{ layer.isBackground ? 'Base' : `C${layer.overrideIndex + 1}` }}
+                </span>
               </label>
             </div>
             <div v-if="result" class="hidden lg:flex items-center gap-3 ml-auto text-[10px] font-mono text-ink-500">

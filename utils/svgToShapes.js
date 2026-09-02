@@ -70,8 +70,26 @@ export function flipShapesY(shapes) {
   )
 }
 
-/** Parse SVG string → array THREE.Shape (fill path). Butuh DOMParser (main thread). */
-export function parseSvgToShapes(svgString) {
+function normalizeSvgColor(value, fallback = '#111827') {
+  const raw = String(value || '').trim()
+  if (!raw || raw === 'none' || raw === 'transparent' || raw === 'currentColor') return fallback
+  try {
+    return `#${new THREE.Color().setStyle(raw).getHexString()}`
+  } catch {
+    if (/^#[0-9a-f]{3}$/i.test(raw)) {
+      return `#${raw
+        .slice(1)
+        .split('')
+        .map((ch) => ch + ch)
+        .join('')}`.toLowerCase()
+    }
+    if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase()
+    return fallback
+  }
+}
+
+/** Parse SVG string → layer warna per fill path. Butuh DOMParser (main thread). */
+export function parseSvgToShapeLayers(svgString) {
   const raw = String(svgString || '').trim()
   if (!raw) return []
   if (typeof DOMParser === 'undefined') {
@@ -80,19 +98,55 @@ export function parseSvgToShapes(svgString) {
 
   const loader = new SVGLoader()
   const { paths } = loader.parse(raw)
-  const shapes = []
+  const grouped = new Map()
 
   for (const path of paths) {
     const fill = path.userData?.style?.fill
     const stroke = path.userData?.style?.stroke
     if ((!fill || fill === 'none') && (!stroke || stroke === 'none')) continue
+    const color = normalizeSvgColor(fill && fill !== 'none' ? fill : stroke)
     const pathShapes = path.toShapes(true)
+    const shapes = []
     for (const shape of pathShapes) {
       if (shape.getPoints(4).length >= 3) shapes.push(shape)
     }
+    if (!shapes.length) continue
+    const current = grouped.get(color) || []
+    current.push(...shapes)
+    grouped.set(color, current)
   }
 
-  return flipShapesY(shapes)
+  return [...grouped.entries()].map(([color, shapes], index) => ({
+    index,
+    color,
+    shapes: flipShapesY(shapes),
+    isBackground: false
+  }))
+}
+
+/** Parse SVG string → array THREE.Shape (fill path). Butuh DOMParser (main thread). */
+export function parseSvgToShapes(svgString) {
+  const layers = parseSvgToShapeLayers(svgString)
+  return layers.flatMap((layer) => layer.shapes)
+}
+
+export function serializeShapeLayers(layers) {
+  return (layers || []).map((layer, index) => ({
+    index: layer.index ?? index,
+    color: layer.color,
+    isBackground: !!layer.isBackground,
+    shapes: serializeShapes(layer.shapes)
+  }))
+}
+
+export function deserializeShapeLayers(data) {
+  if (!Array.isArray(data) || !data.length) return []
+  return data.map((layer, index) => ({
+    index: layer.index ?? index,
+    color: layer.color,
+    isBackground: !!layer.isBackground,
+    shapes: deserializeShapes(layer.shapes)
+  }))
 }
 
 export function serializeShapes(shapes) {

@@ -6,6 +6,16 @@ const svgContent = defineModel('svgContent', { type: String, default: '' })
 const svgSizeMm = defineModel('svgSizeMm', { type: Number, default: 14 })
 const svgGapMm = defineModel('svgGapMm', { type: Number, default: 2 })
 
+const props = defineProps({
+  label: { type: String, default: 'Logo SVG (opsional)' },
+  hint: { type: String, default: 'Warna aksen' },
+  sizeLabel: { type: String, default: 'Ukuran logo' },
+  sizeMin: { type: Number, default: 6 },
+  sizeMax: { type: Number, default: 28 },
+  sizeStep: { type: Number, default: 0.5 },
+  showGap: { type: Boolean, default: true }
+})
+
 const previewUrl = ref('')
 
 watch(
@@ -42,8 +52,8 @@ function clearSvg() {
 <template>
   <div class="space-y-2">
     <div class="flex items-center justify-between gap-2">
-      <span class="text-xs font-medium text-ink-700">Logo SVG (opsional)</span>
-      <span class="text-[10px] text-ink-400">Warna aksen</span>
+      <span class="text-xs font-medium text-ink-700">{{ label }}</span>
+      <span v-if="hint" class="text-[10px] text-ink-400">{{ hint }}</span>
     </div>
 
     <div
@@ -73,13 +83,13 @@ function clearSvg() {
 
     <template v-if="svgContent">
       <label class="block space-y-1">
-        <span class="text-[11px] text-ink-600">Ukuran logo</span>
+        <span class="text-[11px] text-ink-600">{{ sizeLabel }}</span>
         <div class="flex items-center gap-2">
-          <input v-model.number="svgSizeMm" type="range" min="6" max="28" step="0.5" class="flex-1" />
+          <input v-model.number="svgSizeMm" type="range" :min="sizeMin" :max="sizeMax" :step="sizeStep" class="flex-1" />
           <span class="text-xs font-mono text-ink-700 w-12 text-right">{{ svgSizeMm }} mm</span>
         </div>
       </label>
-      <label class="block space-y-1">
+      <label v-if="showGap" class="block space-y-1">
         <span class="text-[11px] text-ink-600">Jarak ke teks</span>
         <div class="flex items-center gap-2">
           <input v-model.number="svgGapMm" type="range" min="0" max="8" step="0.5" class="flex-1" />

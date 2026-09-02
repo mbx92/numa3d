@@ -313,15 +313,19 @@ export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
   }
 
   const objectXml = [...meshObjectXml]
-  let buildObjectId = meshObjectIds[0]
+  let assemblyBuildId = null
   if (assembly && meshParts.length > 1) {
-    const assemblyId = nextObjectId++
-    buildObjectId = assemblyId
+    assemblyBuildId = nextObjectId++
     const componentsXml = meshObjectIds.map((id) => `<component objectid="${id}"/>`).join('')
     objectXml.push(
-      `<object id="${assemblyId}" type="model" name="${escapeXml(modelName)}"><components>${componentsXml}</components></object>`
+      `<object id="${assemblyBuildId}" type="model" name="${escapeXml(modelName)}"><components>${componentsXml}</components></object>`
     )
   }
+
+  const buildItemsXml =
+    assemblyBuildId != null
+      ? `<item objectid="${assemblyBuildId}"/>`
+      : meshObjectIds.map((id) => `<item objectid="${id}"/>`).join('')
 
   const baseXml = baseEntries
     .map((b) => `<base name="${escapeXml(b.name)}" displaycolor="${b.displaycolor}"/>`)
@@ -338,7 +342,7 @@ export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
     ${objectXml.join('\n    ')}
   </resources>
   <build>
-    <item objectid="${buildObjectId}"/>
+    ${buildItemsXml}
   </build>
 </model>`
 
@@ -404,7 +408,18 @@ export const EXPORT_FORMATS = [
 
 export function exportFilename(slug, part, formatId) {
   const fmt = EXPORT_FORMATS.find((f) => f.id === formatId) || EXPORT_FORMATS[0]
-  const known = { text: 'text', base: 'base', face: 'face', body: 'body', assembly: 'assembly', lid: 'lid' }
+  const known = {
+    text: 'text',
+    base: 'base',
+    face: 'front_side',
+    frontSide: 'front_side',
+    front_side: 'front_side',
+    body: 'back',
+    back: 'back',
+    stand: 'stand',
+    assembly: 'assembly',
+    lid: 'lid'
+  }
   const suffix = known[part] || part || 'base'
   const tag =
     formatId === '3mf' || formatId === 'glb' || formatId === 'stl-color' || formatId === 'stl-parts'

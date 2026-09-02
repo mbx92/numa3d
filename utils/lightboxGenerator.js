@@ -3,7 +3,7 @@
 import { generateLightboxCore } from './lightboxCore.js'
 import { unpackGeometry } from './geometryPack.js'
 
-import { parseSvgToShapes, serializeShapes } from './svgToShapes.js'
+import { parseSvgToShapeLayers, serializeShapeLayers } from './svgToShapes.js'
 
 import { imageToLayers } from './imageToLayers.js'
 
@@ -69,7 +69,17 @@ function mapPreviewPart(p, geos) {
 
   geos.push(geometry)
 
-  return { geometry, color: p.color, line: !!p.line, role: p.role || null, name: p.role || null }
+  return {
+    geometry,
+    color: p.color,
+    line: !!p.line,
+    role: p.role || null,
+    name: p.name || p.role || null,
+    previewOnly: !!p.previewOnly,
+    opacity: p.opacity ?? null,
+    glow: !!p.glow,
+    glowIntensity: p.glowIntensity ?? null
+  }
 
 }
 
@@ -77,7 +87,7 @@ function mapPreviewPart(p, geos) {
 
 function exportParts(parts) {
 
-  return parts.filter((p) => !p.line && p.geometry?.attributes?.position?.count)
+  return parts.filter((p) => !p.previewOnly && !p.line && p.geometry?.attributes?.position?.count)
 
 }
 
@@ -131,11 +141,11 @@ async function prepareWorkerOpts(opts) {
 
     if (svgContent) {
 
-      const shapes = parseSvgToShapes(svgContent)
+      const layers = parseSvgToShapeLayers(svgContent)
 
-      if (!shapes.length) throw new Error('SVG tidak punya area fill solid')
+      if (!layers.length) throw new Error('SVG tidak punya area fill solid')
 
-      cloned.svgShapes = serializeShapes(shapes)
+      cloned.svgLayers = serializeShapeLayers(layers)
 
       delete cloned.svgContent
 
@@ -155,17 +165,21 @@ function buildLiveResult(raw) {
 
   const geos = []
 
-  const facePreviewParts = (raw.facePreviewParts || raw.basePreviewParts || []).map((p) =>
+  const facePreviewParts = (raw.frontSidePreviewParts || raw.facePreviewParts || raw.basePreviewParts || []).map((p) =>
 
     mapPreviewPart(p, geos)
 
   )
 
-  const bodyPreviewParts = (raw.bodyPreviewParts || raw.lidPreviewParts || []).map((p) =>
+  const bodyPreviewParts = (raw.backPreviewParts || raw.bodyPreviewParts || raw.lidPreviewParts || []).map((p) =>
 
     mapPreviewPart(p, geos)
 
   )
+
+  const standPreviewParts = (raw.standPreviewParts || []).map((p) => mapPreviewPart(p, geos))
+
+  const standExportPreviewParts = (raw.standExportPreviewParts || raw.standPreviewParts || []).map((p) => mapPreviewPart(p, geos))
 
   const assemblyPreviewParts = (raw.assemblyPreviewParts || []).map((p) => mapPreviewPart(p, geos))
 
@@ -175,27 +189,41 @@ function buildLiveResult(raw) {
 
   const bodyExportParts = exportParts(bodyPreviewParts)
 
+  const standExportParts = exportParts(standExportPreviewParts)
+
+  const assemblyExportParts = exportParts(assemblyPreviewParts)
+
 
 
   let faceBlobCache = null
 
   let bodyBlobCache = null
 
+  let standBlobCache = null
+
   let faceColorStlCache = null
 
   let bodyColorStlCache = null
+
+  let standColorStlCache = null
 
   let faceMultiStlCache = null
 
   let bodyMultiStlCache = null
 
+  let standMultiStlCache = null
+
   let face3mfCache = null
 
   let body3mfCache = null
 
+  let stand3mfCache = null
+
   let faceGlbCache = null
 
   let bodyGlbCache = null
+
+  let standGlbCache = null
 
   let assembly3mfCache = null
 
@@ -203,7 +231,9 @@ function buildLiveResult(raw) {
 
 
 
-  const bodyStlBuffer = raw.bodyStlBuffer || raw.lidStlBuffer
+  const frontSideStlBuffer = raw.frontSideStlBuffer || raw.baseStlBuffer
+
+  const bodyStlBuffer = raw.backStlBuffer || raw.bodyStlBuffer || raw.lidStlBuffer
 
 
 
@@ -213,19 +243,31 @@ function buildLiveResult(raw) {
 
     designMode: raw.designMode,
 
-    baseFilename: raw.baseFilename,
+    frontSideFilename: raw.frontSideFilename || raw.baseFilename,
 
-    bodyFilename: raw.bodyFilename,
+    backFilename: raw.backFilename || raw.bodyFilename,
 
-    lidFilename: raw.baseFilename,
+    baseFilename: raw.frontSideFilename || raw.baseFilename,
 
-    accentFilename: raw.baseFilename,
+    bodyFilename: raw.backFilename || raw.bodyFilename,
+
+    standFilename: raw.standFilename,
+
+    lidFilename: raw.backFilename || raw.bodyFilename,
+
+    accentFilename: raw.frontSideFilename || raw.baseFilename,
 
     basePreviewColor: raw.basePreviewColor,
 
     facePreviewParts,
 
     bodyPreviewParts,
+
+    frontSidePreviewParts: facePreviewParts,
+
+    backPreviewParts: bodyPreviewParts,
+
+    standPreviewParts,
 
     basePreviewParts: facePreviewParts,
 
@@ -239,6 +281,14 @@ function buildLiveResult(raw) {
 
     bodyExportParts,
 
+    frontSideExportParts: faceExportParts,
+
+    backExportParts: bodyExportParts,
+
+    standExportParts,
+
+    assemblyExportParts,
+
     baseExportParts: faceExportParts,
 
     lidExportParts: bodyExportParts,
@@ -247,11 +297,21 @@ function buildLiveResult(raw) {
 
     dimensions: raw.dimensions,
 
+    layerPalette: raw.layerPalette || [],
+
     getFaceBlob() {
 
-      if (!faceBlobCache) faceBlobCache = new Blob([raw.baseStlBuffer], { type: 'model/stl' })
+      if (!frontSideStlBuffer) return null
+
+      if (!faceBlobCache) faceBlobCache = new Blob([frontSideStlBuffer], { type: 'model/stl' })
 
       return faceBlobCache
+
+    },
+
+    getFrontSideBlob() {
+
+      return this.getFaceBlob()
 
     },
 
@@ -262,6 +322,22 @@ function buildLiveResult(raw) {
       if (!bodyBlobCache) bodyBlobCache = new Blob([bodyStlBuffer], { type: 'model/stl' })
 
       return bodyBlobCache
+
+    },
+
+    getBackBlob() {
+
+      return this.getBodyBlob()
+
+    },
+
+    getStandBlob() {
+
+      if (!raw.standStlBuffer) return null
+
+      if (!standBlobCache) standBlobCache = new Blob([raw.standStlBuffer], { type: 'model/stl' })
+
+      return standBlobCache
 
     },
 
@@ -295,6 +371,12 @@ function buildLiveResult(raw) {
 
     },
 
+    getFrontSideColoredStlBlob() {
+
+      return this.getFaceColoredStlBlob()
+
+    },
+
     getBodyColoredStlBlob() {
 
       if (!bodyExportParts.length) return null
@@ -306,6 +388,26 @@ function buildLiveResult(raw) {
       }
 
       return bodyColorStlCache
+
+    },
+
+    getBackColoredStlBlob() {
+
+      return this.getBodyColoredStlBlob()
+
+    },
+
+    getStandColoredStlBlob() {
+
+      if (!standExportParts.length) return null
+
+      if (!standColorStlCache) {
+
+        standColorStlCache = new Blob([partsToColoredStlBuffer(standExportParts)], { type: 'model/stl' })
+
+      }
+
+      return standColorStlCache
 
     },
 
@@ -339,6 +441,12 @@ function buildLiveResult(raw) {
 
     },
 
+    getFrontSideMultiStlBlob() {
+
+      return this.getFaceMultiStlBlob()
+
+    },
+
     getBodyMultiStlBlob() {
 
       if (!bodyExportParts.length) return null
@@ -350,6 +458,26 @@ function buildLiveResult(raw) {
       }
 
       return bodyMultiStlCache
+
+    },
+
+    getBackMultiStlBlob() {
+
+      return this.getBodyMultiStlBlob()
+
+    },
+
+    getStandMultiStlBlob() {
+
+      if (!standExportParts.length) return null
+
+      if (!standMultiStlCache) {
+
+        standMultiStlCache = new Blob([partsToMultiSolidStlBuffer(standExportParts)], { type: 'model/stl' })
+
+      }
+
+      return standMultiStlCache
 
     },
 
@@ -377,7 +505,7 @@ function buildLiveResult(raw) {
 
         face3mfCache = new Blob(
 
-          [partsTo3mfBuffer(faceExportParts, `${raw.slug}_face`, { assembly: true })],
+          [partsTo3mfBuffer(faceExportParts, `${raw.slug}_front_side`, { assembly: true })],
 
           { type: 'model/3mf' }
 
@@ -389,6 +517,12 @@ function buildLiveResult(raw) {
 
     },
 
+    getFrontSide3mfBlob() {
+
+      return this.getFace3mfBlob()
+
+    },
+
     getBody3mfBlob() {
 
       if (!bodyExportParts.length) return null
@@ -397,7 +531,7 @@ function buildLiveResult(raw) {
 
         body3mfCache = new Blob(
 
-          [partsTo3mfBuffer(bodyExportParts, `${raw.slug}_body`, { assembly: false })],
+          [partsTo3mfBuffer(bodyExportParts, `${raw.slug}_back`, { assembly: false })],
 
           { type: 'model/3mf' }
 
@@ -406,6 +540,32 @@ function buildLiveResult(raw) {
       }
 
       return body3mfCache
+
+    },
+
+    getBack3mfBlob() {
+
+      return this.getBody3mfBlob()
+
+    },
+
+    getStand3mfBlob() {
+
+      if (!standExportParts.length) return null
+
+      if (!stand3mfCache) {
+
+        stand3mfCache = new Blob(
+
+          [partsTo3mfBuffer(standExportParts, `${raw.slug}_stand_${raw.dimensions?.standModelId || 'model'}`, { assembly: true })],
+
+          { type: 'model/3mf' }
+
+        )
+
+      }
+
+      return stand3mfCache
 
     },
 
@@ -431,11 +591,9 @@ function buildLiveResult(raw) {
 
       if (!assembly3mfCache) {
 
-        const allParts = [...faceExportParts, ...bodyExportParts]
-
         assembly3mfCache = new Blob(
 
-          [partsTo3mfBuffer(allParts, raw.slug, { assembly: true })],
+          [partsTo3mfBuffer(assemblyExportParts, raw.slug, { assembly: true })],
 
           { type: 'model/3mf' }
 
@@ -459,6 +617,12 @@ function buildLiveResult(raw) {
 
     },
 
+    async getFrontSideGlbBlob() {
+
+      return this.getFaceGlbBlob()
+
+    },
+
     async getBodyGlbBlob() {
 
       if (!bodyExportParts.length) return null
@@ -470,6 +634,26 @@ function buildLiveResult(raw) {
       }
 
       return bodyGlbCache
+
+    },
+
+    async getBackGlbBlob() {
+
+      return this.getBodyGlbBlob()
+
+    },
+
+    async getStandGlbBlob() {
+
+      if (!standExportParts.length) return null
+
+      if (!standGlbCache) {
+
+        standGlbCache = new Blob([await partsToGlbBuffer(standExportParts)], { type: 'model/gltf-binary' })
+
+      }
+
+      return standGlbCache
 
     },
 
@@ -495,9 +679,7 @@ function buildLiveResult(raw) {
 
       if (!assemblyGlbCache) {
 
-        const allParts = [...faceExportParts, ...bodyExportParts]
-
-        assemblyGlbCache = new Blob([await partsToGlbBuffer(allParts)], { type: 'model/gltf-binary' })
+        assemblyGlbCache = new Blob([await partsToGlbBuffer(assemblyExportParts)], { type: 'model/gltf-binary' })
 
       }
 
@@ -575,4 +757,3 @@ export async function generateLightbox(userOpts = {}) {
 
   return buildLiveResult(raw)
 }
-

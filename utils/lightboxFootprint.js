@@ -4,10 +4,11 @@ import { parse, Path } from 'opentype.js'
 import { opentypePathToShapes } from './opentypeToShapes.js'
 import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import {
+  deserializeShapeLayers,
   deserializeShapes,
-  parseSvgToShapes,
+  parseSvgToShapeLayers,
   scaleShapes,
-  serializeShapes,
+  serializeShapeLayers,
   translateSvgShapes
 } from './svgToShapes.js'
 import { imageToLayers } from './imageToLayers.js'
@@ -82,6 +83,40 @@ function backgroundRect(bounds, paddingMm = 0) {
   return [shape]
 }
 
+function colorOverride(layerColors, index, fallback) {
+  const color = Array.isArray(layerColors) ? layerColors[index] : null
+  return /^#[0-9a-f]{6}$/i.test(String(color || '')) ? String(color).toLowerCase() : fallback
+}
+
+function applyLayerColorOverrides(layers, layerColors) {
+  return (layers || []).map((layer, index) => ({
+    ...layer,
+    color: colorOverride(layerColors, index, layer.color)
+  }))
+}
+
+function scaleLayersToMaxSize(layers, maxSizeMm) {
+  const allShapes = layers.flatMap((layer) => layer.shapes || [])
+  const bounds = computeBoundsFromShapes(allShapes)
+  const maxDim = Math.max(bounds.width, bounds.height, 0.001)
+  const scale = maxSizeMm / maxDim
+  const cx = (bounds.minX + bounds.maxX) / 2
+  const cy = (bounds.minY + bounds.maxY) / 2
+  let scaledLayers = layers.map((layer) => ({
+    ...layer,
+    shapes: scaleShapes(layer.shapes, scale, cx, cy)
+  }))
+  const scaledBounds = computeBoundsFromShapes(scaledLayers.flatMap((layer) => layer.shapes || []))
+  const dx = -(scaledBounds.minX + scaledBounds.maxX) / 2
+  const dy = -(scaledBounds.minY + scaledBounds.maxY) / 2
+  scaledLayers = scaledLayers.map((layer) => ({
+    ...layer,
+    shapes: translateSvgShapes(layer.shapes, dx, dy)
+  }))
+  const centeredBounds = computeBoundsFromShapes(scaledLayers.flatMap((layer) => layer.shapes || []))
+  return { layers: scaledLayers, bounds: centeredBounds }
+}
+
 
 /**
  * Resolve design layers — dipanggil di main thread (image) atau worker (text/svg shapes sudah diserialisasi).
@@ -93,11 +128,7 @@ export async function resolveDesignLayers(opts) {
 
   if (mode === 'image') {
     if (opts.imageLayers?.length) {
-      const layers = opts.imageLayers.map((l) => ({
-        color: l.color,
-        shapes: deserializeShapes(l.shapes),
-        isBackground: !!l.isBackground
-      }))
+      const layers = applyLayerColorOverrides(deserializeShapeLayers(opts.imageLayers), opts.layerColors)
       const allShapes = layers.flatMap((l) => l.shapes)
       const bounds = computeBoundsFromShapes(allShapes)
       return {
@@ -113,8 +144,9 @@ export async function resolveDesignLayers(opts) {
       maxColors: opts.maxColors,
       maxSizeMm
     })
+    const layers = applyLayerColorOverrides(result.layers, opts.layerColors)
     return {
-      layers: result.layers,
+      layers,
       bounds: result.bounds,
       widthMm: result.widthMm,
       heightMm: result.heightMm
@@ -122,25 +154,35 @@ export async function resolveDesignLayers(opts) {
   }
 
   if (mode === 'svg') {
-    let shapes
-    if (opts.svgShapes?.length) {
-      shapes = deserializeShapes(opts.svgShapes)
+    let svgLayers
+    if (opts.svgLayers?.length) {
+      svgLayers = deserializeShapeLayers(opts.svgLayers)
+    } else if (opts.svgShapes?.length) {
+      svgLayers = [
+        {
+          index: 0,
+          color: colors.text || '#e94560',
+          shapes: deserializeShapes(opts.svgShapes),
+          isBackground: false
+        }
+      ]
     } else {
       const raw = String(opts.svgContent || '').trim()
       if (!raw) throw new Error('Unggah SVG untuk mode SVG')
-      shapes = parseSvgToShapes(raw)
+      svgLayers = parseSvgToShapeLayers(raw)
     }
+    const shapes = svgLayers.flatMap((layer) => layer.shapes || [])
     if (!shapes.length) throw new Error('SVG tidak punya area fill solid')
-    const scaled = scaleToMaxSize(shapes, maxSizeMm)
+    const scaled = scaleLayersToMaxSize(svgLayers, maxSizeMm)
     const bgColor = colors.background || '#f5f5f5'
-    const fgColor = colors.text || '#e94560'
     const bgShapes = backgroundRect(scaled.bounds, 2)
+    const colorLayers = applyLayerColorOverrides(scaled.layers, opts.layerColors)
     return {
       layers: [
         { color: bgColor, shapes: bgShapes, isBackground: true },
-        { color: fgColor, shapes: scaled.shapes, isBackground: false }
+        ...colorLayers.map((layer) => ({ ...layer, isBackground: false }))
       ],
-      bounds: computeBoundsFromShapes([...bgShapes, ...scaled.shapes]),
+      bounds: computeBoundsFromShapes([...bgShapes, ...colorLayers.flatMap((layer) => layer.shapes || [])]),
       widthMm: scaled.bounds.width + 4,
       heightMm: scaled.bounds.height + 4
     }
@@ -176,11 +218,7 @@ export async function resolveDesignLayers(opts) {
 }
 
 export function serializeDesignLayers(layers) {
-  return layers.map((l) => ({
-    color: l.color,
-    shapes: serializeShapes(l.shapes),
-    isBackground: !!l.isBackground
-  }))
+  return serializeShapeLayers(layers)
 }
 
 export function computeOuterSize(designWidthMm, designHeightMm, opts) {
