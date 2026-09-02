@@ -22,12 +22,18 @@ import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExpo
 import { generateClicker } from '~/utils/clickerGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
 import { getSwitchPreset } from '~/utils/clickerPresets.js'
+import ToolColorBar from '~/components/ToolColorBar.vue'
+import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
+import { buildPartLegend } from '~/utils/previewPartLabels.js'
 
 const COLOR_FIELDS = [
-  { key: 'base', label: 'Base', short: 'Base' },
-  { key: 'lid', label: 'Lid', short: 'Lid' },
-  { key: 'text', label: 'Text / artwork', short: 'Text' }
+  { key: 'base', label: 'Base', short: 'Base', materialType: 'filament' },
+  { key: 'lid', label: 'Lid', short: 'Lid', materialType: 'filament' },
+  { key: 'text', label: 'Text / artwork', short: 'Text', materialType: 'filament' }
 ]
+
+const { mode: colorMode } = useToolColorMode()
+const colorMaterialIds = ref({})
 
 const exportFormats = EXPORT_FORMATS
 const form = reactive({
@@ -46,6 +52,7 @@ const TOOL_PANELS = [
   { id: 'design', label: 'Desain', icon: PencilSquareIcon },
   { id: 'switch', label: 'Switch', icon: CursorArrowRaysIcon },
   { id: 'size', label: 'Ukuran', icon: ArrowsPointingInIcon },
+  { id: 'colors', label: 'Warna', icon: PaintBrushIcon },
   { id: 'base', label: 'Info', icon: Square3Stack3DIcon },
   { id: 'export', label: 'Export', icon: DocumentArrowDownIcon, needsResult: true }
 ]
@@ -71,6 +78,11 @@ const saving = ref(false)
 const result = ref(null)
 const previewKey = ref(0)
 const activePreview = ref('assembly')
+const selectedPartId = ref('')
+const explodeFactor = ref(0)
+const autoExplode = ref(false)
+const showPreviewGrid = ref(true)
+const assemblyResetToken = ref(0)
 const simulatingClick = ref(false)
 const basePreviewParts = ref([])
 const lidPreviewParts = ref([])
@@ -82,14 +94,21 @@ const activePreviewParts = computed(() => {
   return assemblyPreviewParts.value
 })
 
-const previewTabs = computed(() => {
-  const tabs = [
-    { id: 'assembly', label: 'Perakitan' },
-    { id: 'base', label: 'Base' },
-    { id: 'lid', label: 'Lid' }
-  ]
-  return tabs
-})
+const previewTabs = computed(() => [
+  { id: 'assembly', label: 'Perakitan', colors: [form.colors.base, form.colors.lid] },
+  { id: 'base', label: 'Base', color: form.colors.base },
+  { id: 'lid', label: 'Lid', color: form.colors.lid }
+])
+
+const assemblyPartLegend = computed(() => buildPartLegend(assemblyPreviewParts.value))
+const isAssemblyView = computed(() => activePreview.value === 'assembly')
+
+function resetAssemblyPreview() {
+  explodeFactor.value = 0
+  autoExplode.value = false
+  selectedPartId.value = ''
+  assemblyResetToken.value++
+}
 
 const canSimulateClick = computed(
   () => Boolean(result.value) && activePreview.value === 'assembly' && form.displayMode !== 'print'
@@ -155,8 +174,12 @@ async function runGenerate() {
       geometry: p.geometry,
       color: p.color,
       line: p.line,
-      role: p.role
+      role: p.role,
+      name: p.name
     }))
+    selectedPartId.value = ''
+    explodeFactor.value = 0
+    autoExplode.value = false
   } catch (e) {
     if (token !== generateToken) return
     result.value = null
@@ -284,7 +307,7 @@ watch(canSimulateClick, (ok) => {
   <div class="h-full flex flex-col p-2 sm:p-3 min-h-0" :class="{ 'invisible pointer-events-none': !wizardDone }">
     <div class="panel overflow-hidden flex flex-col md:flex-row flex-1 min-h-0">
       <nav
-        class="order-1 z-20 shrink-0 grid grid-cols-5 md:flex md:flex-col md:items-center gap-0.5 md:gap-1 px-1 py-1.5 md:py-3 md:w-[3.75rem] border-b md:border-b-0 md:border-r border-ink-200 bg-ink-50/95 backdrop-blur-sm md:bg-ink-50 sticky top-0 md:static md:self-start md:h-full md:max-h-full shadow-sm md:shadow-none"
+        class="order-1 z-20 shrink-0 grid grid-cols-6 md:flex md:flex-col md:items-center gap-0.5 md:gap-1 px-1 py-1.5 md:py-3 md:w-[3.75rem] border-b md:border-b-0 md:border-r border-ink-200 bg-ink-50/95 backdrop-blur-sm md:bg-ink-50 sticky top-0 md:static md:self-start md:h-full md:max-h-full shadow-sm md:shadow-none"
         aria-label="Panel alat"
         role="tablist"
       >
@@ -409,6 +432,18 @@ watch(canSimulateClick, (ok) => {
             </p>
           </template>
 
+          <template v-else-if="activeToolPanel === 'colors'">
+            <p class="text-xs text-ink-500">Hex manual atau pilih dari material di database.</p>
+            <ToolColorBar
+              v-model:mode="colorMode"
+              v-model:colors="form.colors"
+              v-model:material-ids="colorMaterialIds"
+              :fields="COLOR_FIELDS"
+              variant="list"
+              @change="runGenerate"
+            />
+          </template>
+
           <template v-else-if="activeToolPanel === 'base'">
             <p class="text-[11px] text-ink-500">Preset: <strong>{{ activePreset.name }}</strong></p>
             <dl class="space-y-1 text-[11px] font-mono text-ink-600">
@@ -454,88 +489,72 @@ watch(canSimulateClick, (ok) => {
 
       <div class="order-3 flex-1 min-w-0 flex flex-col min-h-0">
         <div class="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-white/95 backdrop-blur-sm shadow-sm px-3 py-2 space-y-2">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <PaintBrushIcon class="w-4 h-4 text-accent-600 shrink-0" />
-            <div class="flex flex-wrap items-center gap-2">
-              <label
-                v-for="c in COLOR_FIELDS"
-                :key="c.key"
-                class="group flex flex-col items-center gap-0.5 cursor-pointer"
-                :title="c.label"
-              >
-                <input
-                  v-model="form.colors[c.key]"
-                  type="color"
-                  class="h-7 w-7 cursor-pointer rounded-md border-2 border-white shadow-sm ring-1 ring-ink-200 transition-transform group-hover:scale-105"
-                  @change="runGenerate"
-                />
-                <span class="text-[9px] text-ink-500 leading-none">{{ c.short }}</span>
-              </label>
-            </div>
-            <div v-if="result" class="hidden lg:flex items-center gap-3 ml-auto text-[10px] font-mono text-ink-500">
-              <span>{{ result.dimensions.widthMm }}×{{ result.dimensions.depthMm }}×{{ result.dimensions.heightMm }} mm</span>
-              <span class="text-ink-300">|</span>
-              <span>Pocket {{ result.dimensions.housingPocketMm }} mm</span>
-              <span class="text-ink-300">|</span>
-              <span>±{{ result.dimensions.fitToleranceMm }} tol</span>
-            </div>
+          <div v-if="result" class="hidden lg:flex items-center gap-3 text-[10px] font-mono text-ink-500">
+            <span>{{ result.dimensions.widthMm }}×{{ result.dimensions.depthMm }}×{{ result.dimensions.heightMm }} mm</span>
+            <span class="text-ink-300">|</span>
+            <span>Pocket {{ result.dimensions.housingPocketMm }} mm</span>
+            <span class="text-ink-300">|</span>
+            <span>±{{ result.dimensions.fitToleranceMm }} tol</span>
           </div>
-          <div class="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,7.5rem)] items-center gap-2">
-            <div
-              class="flex min-w-0 rounded-md border border-ink-200 overflow-hidden text-[11px] shadow-sm"
-              role="tablist"
-              aria-label="Preview model"
-            >
-              <button
-                v-for="tab in previewTabs"
-                :key="tab.id"
-                type="button"
-                role="tab"
-                :aria-selected="activePreview === tab.id"
-                :disabled="!result"
-                class="flex-1 min-w-0 px-2 py-1.5 text-center transition-colors border-l border-ink-200 first:border-l-0 truncate disabled:opacity-40 disabled:cursor-not-allowed"
-                :class="activePreview === tab.id ? 'bg-ink-800 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'"
-                @click="activePreview = tab.id"
-              >
-                {{ tab.label }}
-              </button>
-            </div>
-            <button
-              type="button"
-              class="inline-flex items-center justify-center gap-1 rounded-md border px-2.5 py-1 text-[11px] transition-colors shrink-0 min-w-[7.25rem] disabled:cursor-not-allowed disabled:opacity-40"
-              :class="
-                simulatingClick
-                  ? 'border-accent-500 bg-accent-50 text-accent-700'
-                  : 'border-ink-200 bg-white text-ink-600 hover:bg-ink-50'
-              "
-              :disabled="!canSimulateClick"
-              :title="canSimulateClick ? `Travel ${clickTravelMm} mm` : 'Simulasi tersedia di tab Perakitan, selain mode Print'"
-              @click="simulatingClick = !simulatingClick"
-            >
-              <CursorArrowRaysIcon class="w-3.5 h-3.5" />
-              {{ simulatingClick ? 'Stop klik' : 'Simulasi klik' }}
-            </button>
-            <span class="hidden sm:block text-[10px] text-ink-400 font-mono truncate min-w-0">
-              {{ result ? activePreviewFilename : '—' }}
-            </span>
-          </div>
+          <p v-if="result" class="text-[10px] text-ink-400">
+            Pilih tampilan & komponen di legend preview · drag part untuk geser posisi
+          </p>
         </div>
 
         <div
           class="relative flex-1 min-h-[18rem] sm:min-h-[24rem] bg-gradient-to-b from-ink-50 to-ink-100/80 [background-image:linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:24px_24px]"
         >
           <ClientOnly>
-            <KeychainPreview
-              v-if="activePreviewParts.length"
-              :key="`${activePreview}-${previewKey}`"
-              :parts="activePreviewParts"
-              show-grid
-              :simulate-click="simulatingClick && canSimulateClick"
-              :interactive-click="canSimulateClick"
-              click-role="lid"
-              :click-travel-mm="clickTravelMm"
-              class="absolute inset-0 h-full w-full"
-            />
+            <template v-if="activePreviewParts.length">
+              <KeychainPreview
+                :key="`${activePreview}-${previewKey}`"
+                v-model:selected-part-id="selectedPartId"
+                :parts="activePreviewParts"
+                :show-grid="showPreviewGrid"
+                :assembly-reset-token="assemblyResetToken"
+                :simulate-click="simulatingClick && canSimulateClick"
+                :interactive-click="canSimulateClick"
+                :interactive-assembly="isAssemblyView"
+                :explode-factor="explodeFactor"
+                :auto-explode="autoExplode"
+                click-role="lid"
+                :click-travel-mm="clickTravelMm"
+                class="absolute inset-0 h-full w-full"
+              />
+              <PreviewViewLegend
+                v-model:active-view="activePreview"
+                v-model:selected-part-id="selectedPartId"
+                v-model:explode-factor="explodeFactor"
+                v-model:auto-explode="autoExplode"
+                v-model:show-grid="showPreviewGrid"
+                :view-tabs="previewTabs"
+                :part-legend="assemblyPartLegend"
+                :show-assembly-controls="isAssemblyView"
+                :filename="result ? activePreviewFilename : ''"
+                :disabled="!result"
+                @reset-positions="resetAssemblyPreview"
+              >
+                <template #footer>
+                  <div class="pointer-events-auto flex justify-end">
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] shadow-md backdrop-blur-md transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                      :class="
+                        simulatingClick
+                          ? 'border-accent-500 bg-accent-50/95 text-accent-700'
+                          : 'border-ink-200 bg-white/92 text-ink-600 hover:bg-ink-50'
+                      "
+                      :disabled="!canSimulateClick"
+                      :title="canSimulateClick ? `Travel ${clickTravelMm} mm` : 'Simulasi tersedia di Perakitan, selain mode Print'"
+                      @click="simulatingClick = !simulatingClick"
+                    >
+                      <CursorArrowRaysIcon class="w-3.5 h-3.5" />
+                      {{ simulatingClick ? 'Stop klik' : 'Simulasi klik' }}
+                    </button>
+                  </div>
+                </template>
+              </PreviewViewLegend>
+            </template>
             <div
               v-else-if="generating"
               class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-ink-500"

@@ -3,6 +3,7 @@ import { SparklesIcon, ChevronRightIcon, ChevronLeftIcon } from '@heroicons/vue/
 import { ATTACHMENT_TYPES, KEYCHAIN_DEFAULTS } from '~/utils/keychainGenerator.js'
 import { KEYCHAIN_THEME_LIST, getKeychainTheme } from '~/utils/keychainThemes.js'
 import { accentIndicesToLabel } from '~/utils/keychainAccent.js'
+import ToolColorBar from '~/components/ToolColorBar.vue'
 
 const emit = defineEmits(['complete'])
 
@@ -37,11 +38,14 @@ const attachmentTypes = ATTACHMENT_TYPES
 const activeTheme = computed(() => getKeychainTheme(draft.themeId))
 
 const wizardColors = [
-  { key: 'plate', label: 'Plate teks', hint: 'Dasar di bawah huruf' },
-  { key: 'letter', label: 'Huruf', hint: 'Karakter non-aksen' },
-  { key: 'accent', label: 'Aksen', hint: 'Huruf aksen & logo SVG' },
-  { key: 'base', label: 'Base', hint: 'Body & cavity' }
+  { key: 'plate', label: 'Plate teks', short: 'Plate', hint: 'Dasar di bawah huruf', materialType: 'filament' },
+  { key: 'letter', label: 'Huruf', short: 'Huruf', hint: 'Karakter non-aksen', materialType: 'filament' },
+  { key: 'accent', label: 'Aksen', short: 'Aksen', hint: 'Huruf aksen & logo SVG', isAccent: true, materialType: 'filament' },
+  { key: 'base', label: 'Base', short: 'Base', hint: 'Body & cavity', materialType: 'filament' }
 ]
+
+const { mode: colorMode } = useToolColorMode()
+const colorMaterialIds = ref({})
 
 const accentLabel = computed(() => accentIndicesToLabel(draft.text, accentIndices.value))
 
@@ -189,23 +193,13 @@ function submit() {
             Huruf aksen: <strong>{{ accentLabel }}</strong>
           </p>
           <p v-else class="text-[11px] text-ink-400">Belum ada huruf aksen — kembali ke langkah Teks untuk memilih.</p>
-          <div class="grid grid-cols-2 gap-3">
-            <label
-              v-for="c in wizardColors"
-              :key="c.key"
-              class="flex items-center gap-3 rounded-lg border border-ink-100 p-3 cursor-pointer hover:border-ink-200"
-            >
-              <input
-                v-model="draft.colors[c.key]"
-                type="color"
-                class="h-10 w-10 shrink-0 rounded-md border border-ink-200 cursor-pointer"
-              />
-              <span class="min-w-0">
-                <span class="block text-xs font-medium text-ink-800">{{ c.label }}</span>
-                <span class="block text-[10px] text-ink-400">{{ c.hint }}</span>
-              </span>
-            </label>
-          </div>
+          <ToolColorBar
+            v-model:mode="colorMode"
+            v-model:colors="draft.colors"
+            v-model:material-ids="colorMaterialIds"
+            :fields="wizardColors"
+            variant="list"
+          />
         </template>
 
         <!-- Step 3: Font & attachment -->

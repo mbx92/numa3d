@@ -1,6 +1,7 @@
 <script setup>
 import { LightBulbIcon, ChevronRightIcon, ChevronLeftIcon } from '@heroicons/vue/24/outline'
 import { LIGHTBOX_DEFAULTS, CABLE_HOLE_SIDES } from '~/utils/lightboxPresets.js'
+import ToolColorBar from '~/components/ToolColorBar.vue'
 
 const emit = defineEmits(['complete'])
 
@@ -50,19 +51,23 @@ const draft = reactive({
 })
 
 const wizardColors = computed(() => {
+  const type = 'filament'
   if (draft.designMode === 'text' || draft.designMode === 'svg') {
     return [
-      { key: 'background', label: 'Latar', hint: 'Layer belakang face (translucent)' },
-      { key: 'text', label: 'Teks / Logo', hint: 'Warna utama desain' },
-      { key: 'frame', label: 'Frame', hint: 'Dinding samping' },
-      { key: 'back', label: 'Back', hint: 'Panel belakang + lubang kabel' }
+      { key: 'background', label: 'Latar', hint: 'Layer belakang face (translucent)', materialType: type },
+      { key: 'text', label: 'Teks / Logo', hint: 'Warna utama desain', materialType: type },
+      { key: 'frame', label: 'Frame', hint: 'Dinding samping', materialType: type },
+      { key: 'back', label: 'Back', hint: 'Panel belakang + lubang kabel', materialType: type }
     ]
   }
   return [
-    { key: 'frame', label: 'Frame', hint: 'Dinding samping' },
-    { key: 'back', label: 'Back', hint: 'Panel belakang + lubang kabel' }
+    { key: 'frame', label: 'Frame', hint: 'Dinding samping', materialType: type },
+    { key: 'back', label: 'Back', hint: 'Panel belakang + lubang kabel', materialType: type }
   ]
 })
+
+const { mode: colorMode } = useToolColorMode()
+const colorMaterialIds = ref({})
 
 const cableSides = CABLE_HOLE_SIDES
 
@@ -199,19 +204,13 @@ function submit() {
                 : 'Warna layer face + frame — cocok AMS/multi-material.'
             }}
           </p>
-          <div class="grid grid-cols-1 gap-3">
-            <label
-              v-for="c in wizardColors"
-              :key="c.key"
-              class="flex items-center gap-3 rounded-lg border border-ink-100 p-3 cursor-pointer hover:border-ink-200"
-            >
-              <input v-model="draft.colors[c.key]" type="color" class="h-10 w-10 shrink-0 rounded-md border border-ink-200 cursor-pointer" />
-              <span class="min-w-0">
-                <span class="block text-xs font-medium text-ink-800">{{ c.label }}</span>
-                <span class="block text-[10px] text-ink-400">{{ c.hint }}</span>
-              </span>
-            </label>
-          </div>
+          <ToolColorBar
+            v-model:mode="colorMode"
+            v-model:colors="draft.colors"
+            v-model:material-ids="colorMaterialIds"
+            :fields="wizardColors"
+            variant="list"
+          />
         </template>
 
         <template v-else-if="step === 2">

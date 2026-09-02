@@ -2,6 +2,7 @@
 import { CursorArrowRaysIcon, ChevronRightIcon, ChevronLeftIcon } from '@heroicons/vue/24/outline'
 import { CLICKER_DEFAULTS } from '~/utils/clickerPresets.js'
 import { getSwitchPreset } from '~/utils/clickerPresets.js'
+import ToolColorBar from '~/components/ToolColorBar.vue'
 
 const emit = defineEmits(['complete'])
 
@@ -40,10 +41,13 @@ const draft = reactive({
 const activePreset = computed(() => getSwitchPreset(draft.switchPresetId))
 
 const wizardColors = [
-  { key: 'base', label: 'Base', hint: 'Casing & pocket switch' },
-  { key: 'lid', label: 'Lid', hint: 'Bagian tekan di atas switch' },
-  { key: 'text', label: 'Text / artwork', hint: 'Tulisan atau logo pada lid' }
+  { key: 'base', label: 'Base', short: 'Base', hint: 'Casing & pocket switch', materialType: 'filament' },
+  { key: 'lid', label: 'Lid', short: 'Lid', hint: 'Bagian tekan di atas switch', materialType: 'filament' },
+  { key: 'text', label: 'Text / artwork', short: 'Text', hint: 'Tulisan atau logo pada lid', materialType: 'filament' }
 ]
+
+const { mode: colorMode } = useToolColorMode()
+const colorMaterialIds = ref({})
 
 const pocketPreview = computed(() => {
   const p = activePreset.value
@@ -183,19 +187,13 @@ function submit() {
 
         <template v-else-if="step === 1">
           <p class="text-xs text-ink-500">2 warna — base + lid terpisah (cocok AMS/multi-material).</p>
-          <div class="grid grid-cols-1 gap-3">
-            <label
-              v-for="c in wizardColors"
-              :key="c.key"
-              class="flex items-center gap-3 rounded-lg border border-ink-100 p-3 cursor-pointer hover:border-ink-200"
-            >
-              <input v-model="draft.colors[c.key]" type="color" class="h-10 w-10 shrink-0 rounded-md border border-ink-200 cursor-pointer" />
-              <span class="min-w-0">
-                <span class="block text-xs font-medium text-ink-800">{{ c.label }}</span>
-                <span class="block text-[10px] text-ink-400">{{ c.hint }}</span>
-              </span>
-            </label>
-          </div>
+          <ToolColorBar
+            v-model:mode="colorMode"
+            v-model:colors="draft.colors"
+            v-model:material-ids="colorMaterialIds"
+            :fields="wizardColors"
+            variant="list"
+          />
         </template>
 
         <template v-else-if="step === 2">

@@ -76,6 +76,7 @@ export const materials = pgTable('materials', {
   pricePerUnit: integer('price_per_unit').notNull().default(0),
   stockQuantity: real('stock_quantity').notNull().default(0),
   supplier: text('supplier'),
+  color: text('color'),
   // Object key gambar di MinIO (bucket sama dengan file 3D). null = tanpa gambar.
   imageKey: text('image_key'),
   createdAt: timestamp('created_at').notNull().defaultNow()

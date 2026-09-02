@@ -16,6 +16,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import { PRODUCT_STATUSES, productStatusLabel, productStatusClass } from '~/utils/productStatus.js'
 import { materialTypeLabel } from '~/utils/materialType.js'
+import { materialSwatchColor } from '~/utils/materialColor.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -721,14 +722,12 @@ const tab = computed({
           <div v-for="(r, i) in recipeRows" :key="i" class="border border-ink-200 rounded-panel p-3 space-y-3">
             <div class="flex items-start gap-3">
               <div class="flex gap-2 shrink-0">
-                <div class="w-16 h-16 rounded-panel border border-ink-200 bg-ink-50 overflow-hidden flex items-center justify-center">
-                  <img
-                    v-if="materialOf(r.materialId)?.imageKey"
-                    :src="`/api/materials/${r.materialId}/image`"
-                    alt=""
-                    class="w-full h-full object-cover"
+                <div class="w-16 h-16 rounded-panel border border-ink-200 overflow-hidden shrink-0">
+                  <div
+                    class="w-full h-full"
+                    :style="{ backgroundColor: materialSwatchColor(materialOf(r.materialId)) || '#e5e7eb' }"
+                    :title="materialOf(r.materialId)?.color || 'Tanpa warna'"
                   />
-                  <PhotoIcon v-else class="w-6 h-6 text-ink-300" />
                 </div>
                 <div class="w-16 h-16 rounded-panel border border-ink-200 bg-ink-50 overflow-hidden flex items-center justify-center">
                   <img

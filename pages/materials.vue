@@ -6,11 +6,11 @@ import {
   ArrowsUpDownIcon,
   CheckIcon,
   XMarkIcon,
-  MagnifyingGlassIcon,
-  PhotoIcon
+  MagnifyingGlassIcon
 } from '@heroicons/vue/24/outline'
 
 import { MATERIAL_TYPES, materialTypeLabel, materialTypeBadge, materialLowStock } from '~/utils/materialType.js'
+import { DEFAULT_MATERIAL_COLOR, materialSwatchColor } from '~/utils/materialColor.js'
 
 const { data: materials, refresh } = await useFetch('/api/materials')
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
@@ -45,13 +45,21 @@ watch(
 
 function openAdd() {
   editing.value = null
-  form.value = { name: '', type: 'filament', unit: 'gram', pricePerUnit: 0, stockQuantity: 0, supplier: '' }
+  form.value = {
+    name: '',
+    type: 'filament',
+    unit: 'gram',
+    pricePerUnit: 0,
+    stockQuantity: 0,
+    supplier: '',
+    color: DEFAULT_MATERIAL_COLOR
+  }
   errorMsg.value = ''
   showForm.value = true
 }
 function openEdit(m) {
   editing.value = m
-  form.value = { ...m }
+  form.value = { ...m, color: m.color || DEFAULT_MATERIAL_COLOR }
   errorMsg.value = ''
   showForm.value = true
 }
@@ -140,10 +148,11 @@ async function saveAdjust() {
           <tbody>
             <tr v-for="m in paged" :key="m.id">
               <td>
-                <div class="w-10 h-10 rounded border border-ink-200 bg-ink-50 overflow-hidden flex items-center justify-center">
-                  <img v-if="m.imageKey" :src="`/api/materials/${m.id}/image`" alt="" class="w-full h-full object-cover" />
-                  <PhotoIcon v-else class="w-4 h-4 text-ink-300" />
-                </div>
+                <div
+                  class="w-10 h-10 rounded border border-ink-200 shrink-0"
+                  :style="{ backgroundColor: materialSwatchColor(m) || '#e5e7eb' }"
+                  :title="m.color || 'Tanpa warna'"
+                />
               </td>
               <td class="font-medium">{{ m.name }}</td>
               <td>
@@ -186,10 +195,11 @@ async function saveAdjust() {
     <!-- Kartu (mobile) -->
     <div class="md:hidden space-y-2">
       <div v-for="m in paged" :key="m.id" class="panel p-3 flex gap-3">
-        <div class="w-14 h-14 rounded border border-ink-200 bg-ink-50 overflow-hidden shrink-0 flex items-center justify-center">
-          <img v-if="m.imageKey" :src="`/api/materials/${m.id}/image`" alt="" class="w-full h-full object-cover" />
-          <PhotoIcon v-else class="w-5 h-5 text-ink-300" />
-        </div>
+        <div
+          class="w-14 h-14 rounded border border-ink-200 shrink-0"
+          :style="{ backgroundColor: materialSwatchColor(m) || '#e5e7eb' }"
+          :title="m.color || 'Tanpa warna'"
+        />
         <div class="min-w-0 flex-1 space-y-1">
           <div class="flex items-start justify-between gap-2">
             <span class="font-medium break-words">{{ m.name }}</span>
@@ -226,16 +236,10 @@ async function saveAdjust() {
 
     <AppModal v-if="showForm" :title="editing ? 'Edit Material' : 'Tambah Material'" @close="((showForm = false), refresh())">
       <form class="space-y-3" @submit.prevent="save">
-        <div v-if="editing" class="flex gap-4 items-start">
-          <ImageUploader
-            :src="`/api/materials/${editing.id}/image`"
-            :has-image="!!editing.imageKey"
-            :upload-url="`/api/materials/${editing.id}/image`"
-            @changed="refresh()"
-          />
-          <p class="text-xs text-ink-500 pt-1">
-            Gambar membantu membedakan filament, resin, atau komponen (switch, magnet) saat memilih di recipe.
-          </p>
+        <div>
+          <label class="label">Warna</label>
+          <HexColorPicker v-model="form.color" />
+          <p class="text-xs text-ink-500 mt-1">Swatch warna untuk membedakan filament, resin, atau komponen di recipe.</p>
         </div>
         <div>
           <label class="label">Nama</label>

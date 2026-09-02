@@ -29,21 +29,27 @@ import { resolveInsertFit } from '~/utils/keychainCore.js'
 import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExport.js'
 import { resolveEyeletLayout } from '~/utils/shapeClipper.js'
 import { KEYCHAIN_THEME_LIST, getKeychainTheme } from '~/utils/keychainThemes.js'
+import ToolColorBar from '~/components/ToolColorBar.vue'
+import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
+import { buildPartLegend } from '~/utils/previewPartLabels.js'
 import { accentIndicesToLabel } from '~/utils/keychainAccent.js'
 
 const TEXT_PLACEHOLDER = 'Contoh: NAMA 07'
 
 const TEXT_COLOR_FIELDS = [
-  { key: 'plate', label: 'Plate', short: 'Plate' },
-  { key: 'letter', label: 'Huruf', short: 'Huruf' },
-  { key: 'accent', label: 'Aksen', short: 'Aksen', isAccent: true }
+  { key: 'plate', label: 'Plate', short: 'Plate', materialType: 'filament' },
+  { key: 'letter', label: 'Huruf', short: 'Huruf', materialType: 'filament' },
+  { key: 'accent', label: 'Aksen', short: 'Aksen', isAccent: true, materialType: 'filament' }
 ]
 
 const BASE_COLOR_FIELDS = [
-  { key: 'baseHighlight', label: 'Rim', short: 'Rim' },
-  { key: 'baseBottom', label: 'Dasar', short: 'Dasar' },
-  { key: 'cavityWall', label: 'Cavity', short: 'Cavity' }
+  { key: 'baseHighlight', label: 'Rim', short: 'Rim', materialType: 'filament' },
+  { key: 'baseBottom', label: 'Dasar', short: 'Dasar', materialType: 'filament' },
+  { key: 'cavityWall', label: 'Cavity', short: 'Cavity', materialType: 'filament' }
 ]
+
+const { mode: colorMode } = useToolColorMode()
+const colorMaterialIds = ref({})
 
 const exportFormats = EXPORT_FORMATS
 const initialTheme = getKeychainTheme(KEYCHAIN_DEFAULTS.themeId)
@@ -82,6 +88,7 @@ const TOOL_PANELS = [
   { id: 'design', label: 'Teks', icon: PencilSquareIcon },
   { id: 'size', label: 'Ukuran', icon: ArrowsPointingInIcon },
   { id: 'base', label: 'Base', icon: Square3Stack3DIcon },
+  { id: 'colors', label: 'Warna', icon: PaintBrushIcon },
   { id: 'insert', label: 'Insert', icon: RectangleGroupIcon },
   { id: 'attach', label: 'Kait', icon: LinkIcon },
   { id: 'export', label: 'Export', icon: DocumentArrowDownIcon, needsResult: true }
@@ -119,6 +126,11 @@ const saving = ref(false)
 const result = ref(null)
 const previewKey = ref(0)
 const activePreview = ref('assembly')
+const selectedPartId = ref('')
+const explodeFactor = ref(0)
+const autoExplode = ref(false)
+const showPreviewGrid = ref(true)
+const assemblyResetToken = ref(0)
 const basePreviewParts = ref([])
 const textPreviewParts = ref([])
 const assemblyPreviewParts = ref([])
@@ -134,11 +146,21 @@ const activePreviewFilename = computed(() => {
   return `${result.value?.baseFilename} + ${result.value?.textFilename}`
 })
 
-const previewTabs = [
-  { id: 'assembly', label: 'Perakitan' },
-  { id: 'base', label: 'Base' },
-  { id: 'text', label: 'Teks' }
-]
+const previewTabs = computed(() => [
+  { id: 'assembly', label: 'Perakitan', colors: [form.colors.base, form.colors.letter] },
+  { id: 'base', label: 'Base', color: form.colors.base },
+  { id: 'text', label: 'Teks', color: form.colors.letter }
+])
+
+const assemblyPartLegend = computed(() => buildPartLegend(assemblyPreviewParts.value))
+const isAssemblyView = computed(() => activePreview.value === 'assembly')
+
+function resetAssemblyPreview() {
+  explodeFactor.value = 0
+  autoExplode.value = false
+  selectedPartId.value = ''
+  assemblyResetToken.value++
+}
 
 let disposePrev = null
 let generateToken = 0
@@ -175,18 +197,27 @@ async function runGenerate() {
     basePreviewParts.value = out.basePreviewParts.map((p) => ({
       geometry: p.geometry,
       color: p.color,
-      line: p.line
+      line: p.line,
+      role: p.role,
+      name: p.name
     }))
     textPreviewParts.value = out.textPreviewParts.map((p) => ({
       geometry: p.geometry,
       color: p.color,
-      line: p.line
+      line: p.line,
+      role: p.role,
+      name: p.name
     }))
     assemblyPreviewParts.value = out.assemblyPreviewParts.map((p) => ({
       geometry: p.geometry,
       color: p.color,
-      line: p.line
+      line: p.line,
+      role: p.role,
+      name: p.name
     }))
+    selectedPartId.value = ''
+    explodeFactor.value = 0
+    autoExplode.value = false
   } catch (e) {
     if (token !== generateToken) return
     result.value = null
@@ -317,7 +348,7 @@ function restartWizard() {
     <div class="panel overflow-hidden flex flex-col md:flex-row flex-1 min-h-0">
       <!-- Icon rail -->
       <nav
-        class="order-1 z-20 shrink-0 grid grid-cols-6 md:flex md:flex-col md:items-center gap-0.5 md:gap-1 px-1 py-1.5 md:py-3 md:w-[3.75rem] border-b md:border-b-0 md:border-r border-ink-200 bg-ink-50/95 backdrop-blur-sm md:bg-ink-50 sticky top-0 md:static md:self-start md:h-full md:max-h-full shadow-sm md:shadow-none"
+        class="order-1 z-20 shrink-0 grid grid-cols-7 md:flex md:flex-col md:items-center gap-0.5 md:gap-1 px-1 py-1.5 md:py-3 md:w-[3.75rem] border-b md:border-b-0 md:border-r border-ink-200 bg-ink-50/95 backdrop-blur-sm md:bg-ink-50 sticky top-0 md:static md:self-start md:h-full md:max-h-full shadow-sm md:shadow-none"
         aria-label="Panel alat"
         role="tablist"
       >
@@ -515,6 +546,35 @@ function restartWizard() {
             </template>
           </template>
 
+          <!-- Colors -->
+          <template v-else-if="activeToolPanel === 'colors'">
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <p class="text-xs font-medium text-ink-600">Teks & plate</p>
+                <ToolColorBar
+                  v-model:mode="colorMode"
+                  v-model:colors="form.colors"
+                  v-model:material-ids="colorMaterialIds"
+                  :fields="TEXT_COLOR_FIELDS"
+                  variant="list"
+                  @change="runGenerate"
+                />
+              </div>
+              <div class="space-y-2">
+                <p class="text-xs font-medium text-ink-600">Base & cavity</p>
+                <ToolColorBar
+                  v-model:mode="colorMode"
+                  v-model:colors="form.colors"
+                  v-model:material-ids="colorMaterialIds"
+                  :fields="BASE_COLOR_FIELDS"
+                  :show-mode-switch="false"
+                  variant="list"
+                  @change="runGenerate"
+                />
+              </div>
+            </div>
+          </template>
+
           <!-- Export -->
           <template v-else-if="activeToolPanel === 'export'">
             <template v-if="result">
@@ -551,90 +611,18 @@ function restartWizard() {
 
       <!-- Canvas / preview -->
       <div class="order-3 flex-1 min-w-0 flex flex-col min-h-0">
-        <!-- Toolbar: warna + tabs + stats -->
         <div class="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-white/95 backdrop-blur-sm shadow-sm px-3 py-2 space-y-2">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <PaintBrushIcon class="w-4 h-4 text-accent-600 shrink-0" />
-
-            <div class="flex flex-wrap items-center gap-2">
-              <label
-                v-for="c in TEXT_COLOR_FIELDS"
-                :key="c.key"
-                class="group relative flex flex-col items-center gap-0.5 cursor-pointer"
-                :title="c.isAccent ? `${c.label}${accentCharsLabel ? `: ${accentCharsLabel}` : ' — klik huruf di panel Teks'}` : c.label"
-              >
-                <input
-                  v-model="form.colors[c.key]"
-                  type="color"
-                  class="h-7 w-7 cursor-pointer rounded-md border-2 border-white shadow-sm ring-1 transition-transform group-hover:scale-105"
-                  :class="c.isAccent ? 'ring-amber-400 ring-2' : 'ring-ink-200'"
-                  @change="runGenerate"
-                />
-                <span class="text-[9px] text-ink-500 leading-none flex items-center gap-0.5">
-                  <HashtagIcon v-if="c.isAccent" class="w-2.5 h-2.5" />
-                  {{ c.short }}
-                </span>
-                <span
-                  v-if="c.isAccent && accentCount"
-                  class="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-amber-500 text-[8px] font-bold text-white leading-none flex items-center justify-center"
-                >
-                  {{ accentCount }}
-                </span>
-              </label>
-            </div>
-
-            <div class="hidden sm:block w-px h-6 bg-ink-200" />
-
-            <div class="flex flex-wrap items-center gap-2">
-              <label
-                v-for="c in BASE_COLOR_FIELDS"
-                :key="c.key"
-                class="group flex flex-col items-center gap-0.5 cursor-pointer"
-                :title="c.label"
-              >
-                <input
-                  v-model="form.colors[c.key]"
-                  type="color"
-                  class="h-7 w-7 cursor-pointer rounded-md border-2 border-white shadow-sm ring-1 ring-ink-200 transition-transform group-hover:scale-105"
-                  @change="runGenerate"
-                />
-                <span class="text-[9px] text-ink-500 leading-none">{{ c.short }}</span>
-              </label>
-            </div>
-
-            <div v-if="result" class="hidden lg:flex items-center gap-3 ml-auto text-[10px] font-mono text-ink-500">
-              <span>{{ result.dimensions.widthMm }}×{{ result.dimensions.heightMm }} mm</span>
-              <span class="text-ink-300">|</span>
-              <span>Cavity {{ result.dimensions.cavityDepthMm }}</span>
-              <span class="text-ink-300">|</span>
-              <span :class="result.dimensions.textClamped ? 'text-amber-700' : ''">Teks {{ result.dimensions.textThicknessMm }}</span>
-            </div>
+          <div v-if="result" class="hidden lg:flex items-center gap-3 text-[10px] font-mono text-ink-500">
+            <span>{{ result.dimensions.widthMm }}×{{ result.dimensions.heightMm }} mm</span>
+            <span class="text-ink-300">|</span>
+            <span>Cavity {{ result.dimensions.cavityDepthMm }}</span>
+            <span class="text-ink-300">|</span>
+            <span :class="result.dimensions.textClamped ? 'text-amber-700' : ''">Teks {{ result.dimensions.textThicknessMm }}</span>
           </div>
 
-          <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,7.5rem)] sm:grid-cols-[minmax(0,1fr)_minmax(0,7.5rem)] items-center gap-2">
-            <div
-              class="flex min-w-0 rounded-md border border-ink-200 overflow-hidden text-[11px] shadow-sm"
-              role="tablist"
-              aria-label="Preview model"
-            >
-              <button
-                v-for="tab in previewTabs"
-                :key="tab.id"
-                type="button"
-                role="tab"
-                :aria-selected="activePreview === tab.id"
-                :disabled="!result"
-                class="flex-1 min-w-0 px-2 py-1.5 text-center transition-colors border-l border-ink-200 first:border-l-0 truncate disabled:opacity-40 disabled:cursor-not-allowed"
-                :class="activePreview === tab.id ? 'bg-ink-800 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'"
-                @click="activePreview = tab.id"
-              >
-                {{ tab.label }}
-              </button>
-            </div>
-            <span class="hidden sm:block text-[10px] text-ink-400 font-mono truncate min-w-0">
-              {{ result ? activePreviewFilename : '—' }}
-            </span>
-          </div>
+          <p v-if="result" class="text-[10px] text-ink-400">
+            Pilih tampilan & komponen di legend preview · drag part untuk geser posisi
+          </p>
         </div>
 
         <!-- 3D viewport -->
@@ -642,13 +630,32 @@ function restartWizard() {
           class="relative flex-1 min-h-[18rem] sm:min-h-[24rem] bg-gradient-to-b from-ink-50 to-ink-100/80 [background-image:linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:24px_24px]"
         >
           <ClientOnly>
-            <KeychainPreview
-              v-if="activePreviewParts.length"
-              :key="`${activePreview}-${previewKey}`"
-              :parts="activePreviewParts"
-              show-grid
-              class="absolute inset-0 h-full w-full"
-            />
+            <template v-if="activePreviewParts.length">
+              <KeychainPreview
+                :key="`${activePreview}-${previewKey}`"
+                v-model:selected-part-id="selectedPartId"
+                :parts="activePreviewParts"
+                :show-grid="showPreviewGrid"
+                :assembly-reset-token="assemblyResetToken"
+                :interactive-assembly="isAssemblyView"
+                :explode-factor="explodeFactor"
+                :auto-explode="autoExplode"
+                class="absolute inset-0 h-full w-full"
+              />
+              <PreviewViewLegend
+                v-model:active-view="activePreview"
+                v-model:selected-part-id="selectedPartId"
+                v-model:explode-factor="explodeFactor"
+                v-model:auto-explode="autoExplode"
+                v-model:show-grid="showPreviewGrid"
+                :view-tabs="previewTabs"
+                :part-legend="assemblyPartLegend"
+                :show-assembly-controls="isAssemblyView"
+                :filename="result ? activePreviewFilename : ''"
+                :disabled="!result"
+                @reset-positions="resetAssemblyPreview"
+              />
+            </template>
             <div
               v-else-if="generating"
               class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-ink-500"

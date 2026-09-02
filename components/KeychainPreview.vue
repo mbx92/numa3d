@@ -2,27 +2,65 @@
 // Preview keychain — centering benar, cavity terlihat (rim berlubang + lantai gelap).
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
 
 const props = defineProps({
-  parts: { type: Array, required: true }, // [{ geometry, color, line?, role? }]
+  parts: { type: Array, required: true }, // [{ geometry, color, line?, role?, name? }]
   showGrid: { type: Boolean, default: false },
   simulateClick: { type: Boolean, default: false },
   interactiveClick: { type: Boolean, default: false },
   clickRole: { type: String, default: 'lid' },
-  clickTravelMm: { type: Number, default: 4 }
+  clickTravelMm: { type: Number, default: 4 },
+  interactiveAssembly: { type: Boolean, default: false },
+  selectedPartId: { type: String, default: '' },
+  explodeFactor: { type: Number, default: 0 },
+  autoExplode: { type: Boolean, default: false },
+  assemblyResetToken: { type: Number, default: 0 }
 })
+
+const emit = defineEmits(['update:selectedPartId', 'select-part'])
 
 const container = ref(null)
 const loading = ref(true)
 const error = ref('')
 
-let renderer, scene, camera, orbit, resizeObserver, intersectionObserver, rootGroup, clickGroup, gridHelper, animId
+let renderer, scene, camera, orbit, transform, resizeObserver, intersectionObserver
+let rootGroup, clickGroup, gridHelper, animId
+let partGroupMap = new Map()
+let explodeDistance = 18
+let autoExplodeValue = 0
+let pointerStart = null
 let visible = true
 let manualPressed = false
 let manualPress = 0
 
-function shouldAnimateClick() {
-  return props.simulateClick || manualPressed || manualPress > 0.001
+function getPartId(part, index) {
+  return part.role || part.name || `part-${index}`
+}
+
+function shouldAnimate() {
+  return (
+    props.simulateClick ||
+    manualPressed ||
+    manualPress > 0.001 ||
+    props.autoExplode ||
+    (props.interactiveAssembly && props.explodeFactor > 0.001)
+  )
+}
+
+function easeInOut(t) {
+  return t * t * (3 - 2 * t)
+}
+
+function effectiveExplodeFactor(time = performance.now()) {
+  if (props.autoExplode) {
+    const phase = (time % 3600) / 3600
+    const t = phase < 0.5 ? phase * 2 : (1 - phase) * 2
+    autoExplodeValue = easeInOut(t)
+    return autoExplodeValue
+  }
+  autoExplodeValue = 0
+  return Math.min(Math.max(Number(props.explodeFactor) || 0, 0), 1)
 }
 
 function clickOffsetAt(time = performance.now()) {
@@ -42,23 +80,78 @@ function clickOffsetAt(time = performance.now()) {
   return -travel * eased
 }
 
+function applyExplodeAndHighlight(time) {
+  if (!props.interactiveAssembly || !partGroupMap.size) return
+  const factor = effectiveExplodeFactor(time)
+  for (const [partId, group] of partGroupMap) {
+    const dir = group.userData.explodeDir
+    const drag = group.userData.dragOffset
+    if (dir?.isVector3) {
+      group.position.copy(dir).multiplyScalar(explodeDistance * factor)
+      if (drag?.isVector3) group.position.add(drag)
+    }
+    const selected = props.selectedPartId === partId
+    group.traverse((obj) => {
+      if (!obj.isMesh || !obj.material) return
+      const mat = obj.material
+      if (selected) {
+        if (mat.emissive) {
+          mat.emissive.set(obj.userData.baseColor || '#ffffff')
+          mat.emissiveIntensity = 0.42
+        }
+      } else if (mat.emissive && obj.userData.baseEmissive?.isColor) {
+        mat.emissive.copy(obj.userData.baseEmissive)
+        mat.emissiveIntensity = obj.userData.baseEmissiveIntensity ?? 0
+      }
+    })
+  }
+}
+
 function updateClickMotion(time) {
   if (!clickGroup) return
   clickGroup.position.z = clickOffsetAt(time)
   clickGroup.updateMatrixWorld(true)
 }
 
+function attachTransform() {
+  if (!transform || !props.interactiveAssembly) return
+  const group = props.selectedPartId ? partGroupMap.get(props.selectedPartId) : null
+  if (group) {
+    transform.attach(group)
+    transform.enabled = true
+  } else {
+    transform.detach()
+    transform.enabled = false
+  }
+}
+
+function resetAssemblyPositions() {
+  if (transform) {
+    transform.detach()
+    transform.enabled = false
+  }
+  for (const group of partGroupMap.values()) {
+    if (group.userData.dragOffset?.isVector3) group.userData.dragOffset.set(0, 0, 0)
+    group.position.set(0, 0, 0)
+  }
+  applyExplodeAndHighlight()
+  render()
+}
+
+defineExpose({ resetAssemblyPositions })
+
 function render(time) {
   if (!renderer || !scene || !camera || !visible) return
   updateClickMotion(typeof time === 'number' ? time : performance.now())
+  if (props.interactiveAssembly) applyExplodeAndHighlight(typeof time === 'number' ? time : performance.now())
   renderer.render(scene, camera)
 }
 
 function startAnimation() {
-  if (animId || !shouldAnimateClick()) return
+  if (animId) return
   const tick = (time) => {
     render(time)
-    if (shouldAnimateClick()) {
+    if (shouldAnimate() || transform?.dragging) {
       animId = requestAnimationFrame(tick)
     } else {
       animId = null
@@ -84,21 +177,72 @@ function setManualPressed(value) {
   render()
 }
 
+function collectMeshes(object) {
+  const meshes = []
+  object.traverse((obj) => {
+    if (obj.isMesh) meshes.push(obj)
+  })
+  return meshes
+}
+
+function findPartId(object) {
+  let node = object
+  while (node) {
+    if (node.userData?.partId) return node.userData.partId
+    node = node.parent
+  }
+  return ''
+}
+
+function selectPart(partId) {
+  emit('update:selectedPartId', partId)
+  emit('select-part', partId)
+  attachTransform()
+  render()
+}
+
 function onCanvasPointerDown(event) {
-  if (!props.interactiveClick) return
-  event.currentTarget?.setPointerCapture?.(event.pointerId)
-  setManualPressed(true)
+  if (props.interactiveClick) {
+    event.currentTarget?.setPointerCapture?.(event.pointerId)
+    setManualPressed(true)
+  }
+  if (props.interactiveAssembly) {
+    pointerStart = { x: event.clientX, y: event.clientY }
+  }
 }
 
 function onCanvasPointerUp(event) {
-  if (!props.interactiveClick) return
-  event.currentTarget?.releasePointerCapture?.(event.pointerId)
-  setManualPressed(false)
+  if (props.interactiveClick) {
+    event.currentTarget?.releasePointerCapture?.(event.pointerId)
+    setManualPressed(false)
+  }
+
+  if (!props.interactiveAssembly || !pointerStart || !rootGroup || !camera || !renderer) {
+    pointerStart = null
+    return
+  }
+
+  const dx = event.clientX - pointerStart.x
+  const dy = event.clientY - pointerStart.y
+  pointerStart = null
+  if (dx * dx + dy * dy > 36) return
+  if (transform?.dragging || transform?.axis) return
+
+  const rect = renderer.domElement.getBoundingClientRect()
+  const mouse = new THREE.Vector2(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -((event.clientY - rect.top) / rect.height) * 2 + 1
+  )
+  const raycaster = new THREE.Raycaster()
+  raycaster.setFromCamera(mouse, camera)
+  const hits = raycaster.intersectObjects(collectMeshes(rootGroup), false)
+  const partId = hits[0] ? findPartId(hits[0].object) : ''
+  selectPart(partId === props.selectedPartId ? '' : partId)
 }
 
 function onCanvasPointerLeave() {
-  if (!props.interactiveClick) return
-  setManualPressed(false)
+  if (props.interactiveClick) setManualPressed(false)
+  pointerStart = null
 }
 
 function getBox(object) {
@@ -135,14 +279,20 @@ function fitCameraToBox(box) {
 }
 
 function clearScene() {
+  if (transform) {
+    transform.detach()
+    transform.enabled = false
+  }
   if (!rootGroup) return
   scene.remove(rootGroup)
   rootGroup.traverse((o) => {
     o.geometry?.dispose()
-    o.material?.dispose()
+    if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose())
+    else o.material?.dispose()
   })
   rootGroup = null
   clickGroup = null
+  partGroupMap = new Map()
   manualPressed = false
 }
 
@@ -175,6 +325,18 @@ function updateGridPosition() {
     scene.add(gridHelper)
   }
   gridHelper.position.set(0, box.min.y - 0.4, 0)
+}
+
+function ensureGridHelper() {
+  if (!scene || !props.showGrid) return
+  if (!gridHelper) {
+    gridHelper = new THREE.GridHelper(80, 16, 0xb8bec8, 0xd5dae2)
+    setGridMaterial(gridHelper)
+    gridHelper.userData = { size: 80 }
+    scene.add(gridHelper)
+  }
+  gridHelper.visible = true
+  if (rootGroup) updateGridPosition()
 }
 
 function createMeshMaterial(part) {
@@ -211,6 +373,35 @@ function addLedPointLight(parent, geo, color, index) {
   parent.add(light)
 }
 
+function ensurePartGroup(partId, parent) {
+  if (partGroupMap.has(partId)) return partGroupMap.get(partId)
+  const group = new THREE.Group()
+  group.userData.partId = partId
+  group.userData.dragOffset = new THREE.Vector3()
+  partGroupMap.set(partId, group)
+  parent.add(group)
+  return group
+}
+
+function computeExplodeVectors() {
+  if (!rootGroup || !partGroupMap.size) return
+  rootGroup.updateMatrixWorld(true)
+  const modelCenter = getBox(rootGroup).getCenter(new THREE.Vector3())
+  const size = getBox(rootGroup).getSize(new THREE.Vector3())
+  explodeDistance = Math.max(size.x, size.y, size.z, 12) * 0.38
+
+  for (const group of partGroupMap.values()) {
+    group.updateMatrixWorld(true)
+    const partCenter = getBox(group).getCenter(new THREE.Vector3())
+    const dir = partCenter.clone().sub(modelCenter)
+    if (dir.lengthSq() < 1e-4) dir.set(0, 1, 0)
+    else dir.normalize()
+    group.userData.explodeDir = dir
+    group.position.set(0, 0, 0)
+    group.userData.dragOffset.set(0, 0, 0)
+  }
+}
+
 function mountParts() {
   clearScene()
   rootGroup = new THREE.Group()
@@ -223,33 +414,48 @@ function mountParts() {
     const part = props.parts[i]
     if (!part?.geometry?.attributes?.position?.count) continue
     const geo = part.geometry.clone()
-    const parent = part.role === props.clickRole ? clickGroup : staticGroup
+    const partId = getPartId(part, i)
+    const parentRoot = part.role === props.clickRole ? clickGroup : staticGroup
+    const group = props.interactiveAssembly ? ensurePartGroup(partId, parentRoot) : parentRoot
+
     if (part.line) {
       const mat = new THREE.LineBasicMaterial({ color: part.color || '#1f2937' })
       const line = new THREE.LineSegments(geo, mat)
       line.renderOrder = i + 1
-      parent.add(line)
+      if (props.interactiveAssembly) line.userData.partId = partId
+      group.add(line)
       added += 1
       continue
     }
+
     const mat = createMeshMaterial(part)
     const mesh = new THREE.Mesh(geo, mat)
     mesh.renderOrder = i + 1
-    parent.add(mesh)
-    if (part.role === 'ledChip') addLedPointLight(parent, geo, part.color, i)
+    mesh.userData.baseColor = part.color || '#f97316'
+    if (mat.emissive) {
+      mesh.userData.baseEmissive = mat.emissive.clone()
+      mesh.userData.baseEmissiveIntensity = mat.emissiveIntensity ?? 0
+    }
+    if (props.interactiveAssembly) mesh.userData.partId = partId
+    group.add(mesh)
+    if (part.role === 'ledChip') addLedPointLight(group, geo, part.color, i)
     added += 1
   }
 
   if (!added) throw new Error('Preview kosong')
 
+  if (props.interactiveAssembly) computeExplodeVectors()
+
   centerAtOrigin(rootGroup)
   scene.add(rootGroup)
 
   const box = getBox(rootGroup)
-  if (props.showGrid) updateGridPosition()
+  if (props.showGrid) ensureGridHelper()
   fitCameraToBox(box)
   updateClickMotion()
-  if (props.simulateClick) startAnimation()
+  applyExplodeAndHighlight()
+  attachTransform()
+  if (shouldAnimate()) startAnimation()
   render()
 }
 
@@ -307,7 +513,7 @@ async function init() {
       canvas.style.display = 'block'
       canvas.style.width = '100%'
       canvas.style.height = '100%'
-      canvas.style.cursor = props.interactiveClick ? 'pointer' : 'grab'
+      canvas.style.cursor = 'grab'
       el.appendChild(canvas)
       canvas.addEventListener('pointerdown', onCanvasPointerDown)
       canvas.addEventListener('pointerup', onCanvasPointerUp)
@@ -317,6 +523,33 @@ async function init() {
       orbit = new OrbitControls(camera, canvas)
       orbit.enableDamping = false
       orbit.addEventListener('change', render)
+
+      transform = new TransformControls(camera, canvas)
+      transform.setMode('translate')
+      transform.enabled = false
+      transform.showX = true
+      transform.showY = true
+      transform.showZ = true
+      scene.add(transform.getHelper())
+      transform.addEventListener('dragging-changed', (ev) => {
+        orbit.enabled = !ev.value
+        if (ev.value) startAnimation()
+        else render()
+      })
+      transform.addEventListener('objectChange', () => {
+        const obj = transform.object
+        if (!obj?.userData?.partId) return
+        const drag = obj.userData.dragOffset
+        const dir = obj.userData.explodeDir
+        if (!drag?.isVector3) return
+        const factor = effectiveExplodeFactor()
+        const explode =
+          dir?.isVector3
+            ? dir.clone().multiplyScalar(explodeDistance * factor)
+            : new THREE.Vector3()
+        drag.copy(obj.position).sub(explode)
+        render()
+      })
 
       scene.add(new THREE.AmbientLight(0xffffff, 0.6))
       const key = new THREE.DirectionalLight(0xffffff, 1.15)
@@ -329,12 +562,7 @@ async function init() {
       rim.position.set(0, -2, 2)
       scene.add(rim)
 
-      if (props.showGrid) {
-        gridHelper = new THREE.GridHelper(80, 16, 0xb8bec8, 0xd5dae2)
-        setGridMaterial(gridHelper)
-        gridHelper.userData = { size: 80 }
-        scene.add(gridHelper)
-      }
+      if (props.showGrid) ensureGridHelper()
 
       resizeObserver = new ResizeObserver(() => scheduleMount())
       resizeObserver.observe(el)
@@ -367,15 +595,36 @@ watch(
 )
 
 watch(
-  () => [props.simulateClick, props.interactiveClick, props.clickTravelMm, props.clickRole, props.showGrid],
+  () => [
+    props.simulateClick,
+    props.interactiveClick,
+    props.clickTravelMm,
+    props.clickRole,
+    props.showGrid,
+    props.interactiveAssembly,
+    props.selectedPartId,
+    props.explodeFactor,
+    props.autoExplode,
+    props.assemblyResetToken
+  ],
   () => {
     if (!renderer) return
     if (!props.interactiveClick) manualPressed = false
-    renderer.domElement.style.cursor = props.interactiveClick ? 'pointer' : 'grab'
-    if (gridHelper) gridHelper.visible = props.showGrid
-    if (shouldAnimateClick()) startAnimation()
+    if (props.showGrid) ensureGridHelper()
+    else if (gridHelper) gridHelper.visible = false
+    attachTransform()
+    if (props.interactiveAssembly) applyExplodeAndHighlight()
+    if (shouldAnimate()) startAnimation()
     else stopAnimation()
     render()
+  }
+)
+
+watch(
+  () => props.assemblyResetToken,
+  (token, prev) => {
+    if (!renderer || prev === undefined || token === prev) return
+    resetAssemblyPositions()
   }
 )
 
@@ -389,6 +638,7 @@ onUnmounted(() => {
   renderer?.domElement?.removeEventListener('pointerup', onCanvasPointerUp)
   renderer?.domElement?.removeEventListener('pointercancel', onCanvasPointerUp)
   renderer?.domElement?.removeEventListener('pointerleave', onCanvasPointerLeave)
+  transform?.dispose()
   clearScene()
   orbit?.dispose()
   if (gridHelper) {

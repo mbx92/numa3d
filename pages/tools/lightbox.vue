@@ -21,21 +21,27 @@ import { LIGHTBOX_DEFAULTS, getStandPreset } from '~/utils/lightboxPresets.js'
 import { generateLightbox } from '~/utils/lightboxGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
 import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExport.js'
+import ToolColorBar from '~/components/ToolColorBar.vue'
+import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
+import { buildPartLegend } from '~/utils/previewPartLabels.js'
 
 const COLOR_FIELDS = computed(() => {
   if (form.designMode === 'text' || form.designMode === 'svg') {
     return [
-      { key: 'background', label: 'Latar', short: 'Latar' },
-      { key: 'text', label: 'Desain', short: 'Desain' },
-      { key: 'frame', label: 'Frame', short: 'Frame' },
-      { key: 'back', label: 'Back', short: 'Back' }
+      { key: 'background', label: 'Latar', short: 'Latar', materialType: 'filament' },
+      { key: 'text', label: 'Desain', short: 'Desain', materialType: 'filament' },
+      { key: 'frame', label: 'Frame', short: 'Frame', materialType: 'filament' },
+      { key: 'back', label: 'Back', short: 'Back', materialType: 'filament' }
     ]
   }
   return [
-    { key: 'frame', label: 'Frame', short: 'Frame' },
-    { key: 'back', label: 'Back', short: 'Back' }
+    { key: 'frame', label: 'Frame', short: 'Frame', materialType: 'filament' },
+    { key: 'back', label: 'Back', short: 'Back', materialType: 'filament' }
   ]
 })
+
+const { mode: colorMode } = useToolColorMode()
+const colorMaterialIds = ref({})
 
 const exportFormats = EXPORT_FORMATS
 const form = reactive({
@@ -53,6 +59,7 @@ const TOOL_PANELS = [
   { id: 'led', label: 'LED', icon: LightBulbIcon },
   { id: 'stand', label: 'Stand', icon: Square3Stack3DIcon },
   { id: 'size', label: 'Ukuran', icon: ArrowsPointingInIcon },
+  { id: 'colors', label: 'Warna', icon: PaintBrushIcon },
   { id: 'info', label: 'Info', icon: Square3Stack3DIcon },
   { id: 'export', label: 'Export', icon: DocumentArrowDownIcon, needsResult: true }
 ]
@@ -82,6 +89,11 @@ const result = ref(null)
 const resultSignature = ref('')
 const previewKey = ref(0)
 const activePreview = ref('assembly')
+const selectedPartId = ref('')
+const explodeFactor = ref(0)
+const autoExplode = ref(false)
+const showPreviewGrid = ref(true)
+const assemblyResetToken = ref(0)
 const facePreviewParts = ref([])
 const bodyPreviewParts = ref([])
 const standPreviewParts = ref([])
@@ -101,13 +113,25 @@ const editableLayerPalette = computed(() => {
 
 const previewTabs = computed(() => {
   const tabs = [
-    { id: 'assembly', label: 'Perakitan' },
-    { id: 'face', label: 'Front & Side' },
-    { id: 'body', label: 'Back' }
+    { id: 'assembly', label: 'Perakitan', colors: [form.colors.frame, form.colors.text || form.colors.background] },
+    { id: 'face', label: 'Front & Side', color: form.colors.text || form.colors.background },
+    { id: 'body', label: 'Back', color: form.colors.back }
   ]
-  if (result.value?.standPreviewParts?.length) tabs.push({ id: 'stand', label: 'Stand' })
+  if (result.value?.standPreviewParts?.length) {
+    tabs.push({ id: 'stand', label: 'Stand', color: form.colors.frame })
+  }
   return tabs
 })
+
+const assemblyPartLegend = computed(() => buildPartLegend(assemblyPreviewParts.value))
+const isAssemblyView = computed(() => activePreview.value === 'assembly')
+
+function resetAssemblyPreview() {
+  explodeFactor.value = 0
+  autoExplode.value = false
+  selectedPartId.value = ''
+  assemblyResetToken.value++
+}
 
 const activePreviewFilename = computed(() => {
   if (activePreview.value === 'face') return result.value?.frontSideFilename || result.value?.baseFilename
@@ -251,6 +275,9 @@ async function runGenerate() {
       glow: p.glow,
       glowIntensity: p.glowIntensity
     }))
+    selectedPartId.value = ''
+    explodeFactor.value = 0
+    autoExplode.value = false
   } catch (e) {
     if (token !== generateToken) return
     result.value = null
@@ -588,6 +615,39 @@ function restartWizard() {
             </KeychainCompactField>
           </template>
 
+          <template v-else-if="activeToolPanel === 'colors'">
+            <p class="text-xs text-ink-500">Hex manual atau pilih dari material di database.</p>
+            <ToolColorBar
+              v-model:mode="colorMode"
+              v-model:colors="form.colors"
+              v-model:material-ids="colorMaterialIds"
+              :fields="COLOR_FIELDS"
+              variant="list"
+              @change="runGenerate"
+            />
+            <div v-if="editableLayerPalette.length" class="space-y-2 pt-2 border-t border-ink-100">
+              <p class="text-xs font-medium text-ink-600">Layer gambar</p>
+              <div class="grid grid-cols-1 gap-2">
+                <label
+                  v-for="layer in editableLayerPalette"
+                  :key="`${layer.index}-${layer.name}`"
+                  class="flex items-center gap-3 rounded-lg border border-ink-100 p-3 cursor-pointer hover:border-ink-200"
+                >
+                  <input
+                    :value="layer.color"
+                    type="color"
+                    class="h-10 w-10 shrink-0 rounded-md border border-ink-200 cursor-pointer"
+                    @change="updateLayerPaletteColor(layer, $event.target.value)"
+                  />
+                  <span class="min-w-0">
+                    <span class="block text-xs font-medium text-ink-800">{{ layer.name }}</span>
+                    <span class="block text-[10px] font-mono text-ink-400">{{ layer.color }}</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </template>
+
           <template v-else-if="activeToolPanel === 'info'">
             <p class="text-[11px] text-ink-500">
               Terinspirasi <strong>MakerWorld Lightbox Maker</strong> — face multi-layer + cavity LED di belakang.
@@ -646,76 +706,44 @@ function restartWizard() {
 
       <div class="order-3 flex-1 min-w-0 flex flex-col">
         <div class="shrink-0 border-b border-ink-200 bg-white px-3 py-2 space-y-2">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <PaintBrushIcon class="w-4 h-4 text-amber-600 shrink-0" />
-            <div class="flex flex-wrap items-center gap-2">
-              <label
-                v-for="c in COLOR_FIELDS"
-                :key="c.key"
-                class="group flex flex-col items-center gap-0.5 cursor-pointer"
-                :title="c.label"
-              >
-                <input
-                  v-model="form.colors[c.key]"
-                  type="color"
-                  class="h-7 w-7 cursor-pointer rounded-md border-2 border-white shadow-sm ring-1 ring-ink-200 transition-transform group-hover:scale-105"
-                  @change="runGenerate"
-                />
-                <span class="text-[9px] text-ink-500 leading-none">{{ c.short }}</span>
-              </label>
-            </div>
-            <div
-              v-if="editableLayerPalette.length"
-              class="flex flex-wrap items-center gap-2 border-l border-ink-200 pl-3"
-            >
-              <label
-                v-for="layer in editableLayerPalette"
-                :key="`${layer.index}-${layer.name}`"
-                class="group flex flex-col items-center gap-0.5 cursor-pointer"
-                :title="layer.name"
-              >
-                <input
-                  :value="layer.color"
-                  type="color"
-                  class="h-7 w-7 cursor-pointer rounded-md border-2 border-white shadow-sm ring-1 ring-ink-200 transition-transform group-hover:scale-105"
-                  @change="updateLayerPaletteColor(layer, $event.target.value)"
-                />
-                <span class="text-[9px] text-ink-500 leading-none">
-                  {{ layer.isBackground ? 'Base' : `C${layer.overrideIndex + 1}` }}
-                </span>
-              </label>
-            </div>
-            <div v-if="result" class="hidden lg:flex items-center gap-3 ml-auto text-[10px] font-mono text-ink-500">
-              <span>{{ result.dimensions.widthMm }}×{{ result.dimensions.depthMm }}×{{ result.dimensions.heightMm }} mm</span>
-              <span class="text-ink-300">|</span>
-              <span>{{ result.dimensions.layerCount }} layer</span>
-            </div>
+          <div v-if="result" class="hidden lg:flex items-center gap-3 text-[10px] font-mono text-ink-500">
+            <span>{{ result.dimensions.widthMm }}×{{ result.dimensions.depthMm }}×{{ result.dimensions.heightMm }} mm</span>
+            <span class="text-ink-300">|</span>
+            <span>{{ result.dimensions.layerCount }} layer</span>
           </div>
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div v-if="result" class="flex rounded-md border border-ink-200 overflow-hidden text-[11px]">
-              <button
-                v-for="tab in previewTabs"
-                :key="tab.id"
-                type="button"
-                class="px-2.5 py-1 transition-colors border-l border-ink-200 first:border-l-0"
-                :class="activePreview === tab.id ? 'bg-ink-800 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'"
-                @click="activePreview = tab.id"
-              >
-                {{ tab.label }}
-              </button>
-            </div>
-            <span v-if="result" class="text-[10px] text-ink-400 font-mono truncate max-w-[12rem]">{{ activePreviewFilename }}</span>
-          </div>
+          <p v-if="result" class="text-[10px] text-ink-400">
+            Pilih tampilan & komponen di legend preview · drag part untuk geser posisi
+          </p>
         </div>
 
         <div class="relative flex-1 min-h-[18rem] sm:min-h-[24rem] bg-gradient-to-b from-ink-50 to-ink-100/80">
           <ClientOnly>
-            <KeychainPreview
-              v-if="activePreviewParts.length"
-              :key="`${activePreview}-${previewKey}`"
-              :parts="activePreviewParts"
-              class="absolute inset-0 h-full w-full"
-            />
+            <template v-if="activePreviewParts.length">
+              <KeychainPreview
+                :key="`${activePreview}-${previewKey}`"
+                v-model:selected-part-id="selectedPartId"
+                :parts="activePreviewParts"
+                :show-grid="showPreviewGrid"
+                :assembly-reset-token="assemblyResetToken"
+                :interactive-assembly="isAssemblyView"
+                :explode-factor="explodeFactor"
+                :auto-explode="autoExplode"
+                class="absolute inset-0 h-full w-full"
+              />
+              <PreviewViewLegend
+                v-model:active-view="activePreview"
+                v-model:selected-part-id="selectedPartId"
+                v-model:explode-factor="explodeFactor"
+                v-model:auto-explode="autoExplode"
+                v-model:show-grid="showPreviewGrid"
+                :view-tabs="previewTabs"
+                :part-legend="assemblyPartLegend"
+                :show-assembly-controls="isAssemblyView"
+                :filename="result ? activePreviewFilename : ''"
+                :disabled="!result"
+                @reset-positions="resetAssemblyPreview"
+              />
+            </template>
             <div
               v-else-if="generating"
               class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-ink-500"
