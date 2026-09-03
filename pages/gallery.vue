@@ -9,8 +9,10 @@ import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
   CheckIcon,
-  XMarkIcon
+  XMarkIcon,
+  CursorArrowRaysIcon
 } from '@heroicons/vue/24/outline'
+import { isMeshClickerFile } from '~/utils/clickerManifold/meshImport.js'
 
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const { data: files, refresh: refreshFiles } = await useFetch('/api/library-files')
@@ -56,6 +58,19 @@ function formatSize(bytes) {
   if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
   if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB'
   return bytes + ' B'
+}
+
+function formatDate(iso) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })
+  } catch {
+    return String(iso)
+  }
+}
+
+function canMakeClicker(f) {
+  return isMeshClickerFile(f)
 }
 
 function uploadOneFile(file, onProgress) {
@@ -192,8 +207,8 @@ async function saveRename() {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="flex items-center justify-between gap-2">
+  <div class="flex flex-col gap-4 min-h-0 h-[calc(100dvh-5.5rem)] md:h-[calc(100dvh-3rem)]">
+    <div class="flex items-center justify-between gap-2 shrink-0">
       <div class="min-w-0">
         <h1 class="text-xl font-bold">Galeri 3D</h1>
         <p class="text-sm text-ink-500">Model lepas, tidak terikat produk. .stl .obj .3mf .glb .gltf, maks 100 MB.</p>
@@ -213,167 +228,193 @@ async function saveRename() {
       </label>
     </div>
 
-    <div class="panel overflow-hidden">
-          <div class="panel-header !flex-wrap gap-2 sticky top-0 z-10 bg-white">
-            <span class="panel-title">{{ total }} file</span>
-            <div class="inline-flex rounded-panel border border-ink-200 overflow-hidden ml-auto">
-              <button
-                type="button"
-                class="p-1.5 transition-colors"
-                :class="filesView === 'list' ? 'bg-ink-100 text-ink-800' : 'text-ink-400 hover:text-ink-700 hover:bg-ink-50'"
-                title="List"
-                aria-label="List"
-                @click="filesView = 'list'"
-              >
-                <ListBulletIcon class="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                class="p-1.5 transition-colors border-l border-ink-200"
-                :class="filesView === 'grid' ? 'bg-ink-100 text-ink-800' : 'text-ink-400 hover:text-ink-700 hover:bg-ink-50'"
-                title="Grid"
-                aria-label="Grid"
-                @click="filesView = 'grid'"
-              >
-                <Squares2X2Icon class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <div class="px-3 sm:px-4 pt-3">
-            <div class="relative">
-              <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
-              <input v-model="search" class="input pl-9 w-full" placeholder="Cari nama file…" />
-            </div>
-          </div>
-          <div v-if="uploading" class="px-3 sm:px-4 pt-3 space-y-1.5">
-            <div class="flex items-center justify-between gap-2 text-xs text-ink-500">
-              <span class="truncate min-w-0">{{ uploadProgress || 'Mengunggah...' }}</span>
-              <span class="font-mono shrink-0 tabular-nums">{{ uploadPercent }}%</span>
-            </div>
-            <div class="h-2 rounded-full bg-ink-100 overflow-hidden" role="progressbar" :aria-valuenow="uploadPercent" aria-valuemin="0" aria-valuemax="100">
-              <div
-                class="h-full bg-accent-500 rounded-full transition-[width] duration-150 ease-out"
-                :style="{ width: Math.max(uploadPercent, 2) + '%' }"
-              />
-            </div>
-          </div>
-          <p v-if="uploadError" class="px-3 sm:px-4 pt-3 text-sm text-red-600 whitespace-pre-line">{{ uploadError }}</p>
+    <div class="panel flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div class="panel-header !flex-wrap gap-2 shrink-0 z-10 bg-white">
+        <span class="panel-title">{{ total }} file</span>
+        <div class="inline-flex rounded-panel border border-ink-200 overflow-hidden ml-auto">
+          <button
+            type="button"
+            class="p-1.5 transition-colors"
+            :class="filesView === 'list' ? 'bg-ink-100 text-ink-800' : 'text-ink-400 hover:text-ink-700 hover:bg-ink-50'"
+            title="List"
+            aria-label="List"
+            @click="filesView = 'list'"
+          >
+            <ListBulletIcon class="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            class="p-1.5 transition-colors border-l border-ink-200"
+            :class="filesView === 'grid' ? 'bg-ink-100 text-ink-800' : 'text-ink-400 hover:text-ink-700 hover:bg-ink-50'"
+            title="Grid"
+            aria-label="Grid"
+            @click="filesView = 'grid'"
+          >
+            <Squares2X2Icon class="w-4 h-4" />
+          </button>
+        </div>
+      </div>
 
-          <div v-if="paged.length && filesView === 'list'" class="overflow-y-auto overscroll-contain">
-            <ul class="divide-y divide-ink-100">
-              <li
-                v-for="f in paged"
-                :key="f.id"
-                class="p-3 space-y-1 cursor-pointer"
-                :class="{ 'bg-accent-50': previewFile?.id === f.id }"
-                @click="previewFile = f"
-              >
-                <div class="font-mono text-sm break-all line-clamp-2">{{ f.filename }}</div>
-                <div class="text-xs text-ink-500">{{ formatSize(f.sizeBytes) }} · {{ formatDate(f.createdAt) }}</div>
-                <div class="flex items-center gap-3 flex-wrap">
-                  <span
-                    class="inline-flex items-center gap-1 text-xs font-medium"
-                    :class="previewFile?.id === f.id ? 'text-accent-700' : 'text-accent-600'"
-                  >
-                    <EyeIcon class="w-3.5 h-3.5" />{{ previewFile?.id === f.id ? 'Ditampilkan' : 'Preview' }}
-                  </span>
-                  <a
-                    :href="`/api/library-files/${f.id}?download=1`"
-                    class="inline-flex items-center gap-1 text-xs font-medium text-teal-600 hover:text-teal-700"
-                    @click.stop
-                  >
-                    <ArrowDownTrayIcon class="w-3.5 h-3.5" />Unduh
-                  </a>
-                  <button
-                    v-if="isAdmin"
-                    type="button"
-                    class="inline-flex items-center gap-1 text-xs font-medium text-ink-600 hover:text-ink-800"
-                    @click.stop="openRename(f)"
-                  >
-                    <PencilSquareIcon class="w-3.5 h-3.5" />Rename
-                  </button>
-                  <button
-                    v-if="isAdmin"
-                    type="button"
-                    class="inline-flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700"
-                    @click.stop="deleteFile(f)"
-                  >
-                    <TrashIcon class="w-3.5 h-3.5" />Hapus
-                  </button>
-                </div>
-              </li>
-            </ul>
+      <div class="px-3 sm:px-4 pt-3 shrink-0 space-y-3">
+        <div class="relative">
+          <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+          <input v-model="search" class="input pl-9 w-full" placeholder="Cari nama file…" />
+        </div>
+        <div v-if="uploading" class="space-y-1.5">
+          <div class="flex items-center justify-between gap-2 text-xs text-ink-500">
+            <span class="truncate min-w-0">{{ uploadProgress || 'Mengunggah...' }}</span>
+            <span class="font-mono shrink-0 tabular-nums">{{ uploadPercent }}%</span>
           </div>
-
-          <div v-else-if="paged.length && filesView === 'grid'" class="overflow-y-auto overscroll-contain p-2">
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 items-stretch">
-              <div
-                v-for="f in paged"
-                :key="f.id"
-                role="button"
-                tabindex="0"
-                class="min-w-0 h-full flex flex-col text-left rounded-panel border p-2 gap-1.5 transition-colors cursor-pointer"
-                :class="previewFile?.id === f.id ? 'border-accent-400 bg-accent-50' : 'border-ink-200 hover:border-ink-300 bg-white'"
-                @click="previewFile = f"
-                @keydown.enter.prevent="previewFile = f"
-              >
-                <div
-                  class="aspect-square w-full rounded border border-ink-100 bg-ink-50 flex items-center justify-center shrink-0"
-                  :class="previewFile?.id === f.id ? 'border-accent-200' : ''"
-                >
-                  <span class="text-[10px] font-mono font-semibold uppercase tracking-wide text-ink-500">{{ fileExt(f.filename) }}</span>
-                </div>
-                <div class="font-mono text-[11px] leading-4 h-8 overflow-hidden break-all line-clamp-2">{{ f.filename }}</div>
-                <div class="text-[10px] text-ink-400 truncate">{{ formatSize(f.sizeBytes) }}</div>
-                <div class="mt-auto flex items-center gap-2 pt-0.5" @click.stop>
-                  <a
-                    :href="`/api/library-files/${f.id}?download=1`"
-                    class="text-teal-600 hover:text-teal-700"
-                    title="Unduh"
-                    aria-label="Unduh"
-                  >
-                    <ArrowDownTrayIcon class="w-3.5 h-3.5" />
-                  </a>
-                  <button
-                    v-if="isAdmin"
-                    type="button"
-                    class="text-ink-600 hover:text-ink-800"
-                    title="Rename"
-                    aria-label="Rename"
-                    @click="openRename(f)"
-                  >
-                    <PencilSquareIcon class="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    v-if="isAdmin"
-                    type="button"
-                    class="text-red-500 hover:text-red-700"
-                    title="Hapus"
-                    aria-label="Hapus"
-                    @click="deleteFile(f)"
-                  >
-                    <TrashIcon class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <p v-else class="p-4 text-sm text-ink-500">
-            {{ search.trim() ? 'Tidak ada file yang cocok.' : 'Belum ada file. Upload model 3D tanpa membuat produk.' }}
-          </p>
-
-          <div v-if="total" class="border-t border-ink-100">
-            <AppPagination
-              v-model:page="page"
-              v-model:pageSize="pageSize"
-              :total-pages="totalPages"
-              :total="total"
-              :range-start="rangeStart"
-              :range-end="rangeEnd"
+          <div
+            class="h-2 rounded-full bg-ink-100 overflow-hidden"
+            role="progressbar"
+            :aria-valuenow="uploadPercent"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <div
+              class="h-full bg-accent-500 rounded-full transition-[width] duration-150 ease-out"
+              :style="{ width: Math.max(uploadPercent, 2) + '%' }"
             />
           </div>
         </div>
+        <p v-if="uploadError" class="text-sm text-red-600 whitespace-pre-line">{{ uploadError }}</p>
+      </div>
+
+      <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div v-if="paged.length && filesView === 'list'">
+          <ul class="divide-y divide-ink-100">
+            <li
+              v-for="f in paged"
+              :key="f.id"
+              class="p-3 space-y-1 cursor-pointer"
+              :class="{ 'bg-accent-50': previewFile?.id === f.id }"
+              @click="previewFile = f"
+            >
+              <div class="font-mono text-sm break-all line-clamp-2">{{ f.filename }}</div>
+              <div class="text-xs text-ink-500">{{ formatSize(f.sizeBytes) }} · {{ formatDate(f.createdAt) }}</div>
+              <div class="flex items-center gap-3 flex-wrap">
+                <span
+                  class="inline-flex items-center gap-1 text-xs font-medium"
+                  :class="previewFile?.id === f.id ? 'text-accent-700' : 'text-accent-600'"
+                >
+                  <EyeIcon class="w-3.5 h-3.5" />{{ previewFile?.id === f.id ? 'Ditampilkan' : 'Preview' }}
+                </span>
+                <a
+                  :href="`/api/library-files/${f.id}?download=1`"
+                  class="inline-flex items-center gap-1 text-xs font-medium text-teal-600 hover:text-teal-700"
+                  @click.stop
+                >
+                  <ArrowDownTrayIcon class="w-3.5 h-3.5" />Unduh
+                </a>
+                <NuxtLink
+                  v-if="canMakeClicker(f)"
+                  :to="{ path: '/tools/mesh-clicker', query: { libraryFileId: String(f.id) } }"
+                  class="inline-flex items-center gap-1 text-xs font-medium text-accent-600 hover:text-accent-700"
+                  @click.stop
+                >
+                  <CursorArrowRaysIcon class="w-3.5 h-3.5" />Jadikan clicker
+                </NuxtLink>
+                <button
+                  v-if="isAdmin"
+                  type="button"
+                  class="inline-flex items-center gap-1 text-xs font-medium text-ink-600 hover:text-ink-800"
+                  @click.stop="openRename(f)"
+                >
+                  <PencilSquareIcon class="w-3.5 h-3.5" />Rename
+                </button>
+                <button
+                  v-if="isAdmin"
+                  type="button"
+                  class="inline-flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700"
+                  @click.stop="deleteFile(f)"
+                >
+                  <TrashIcon class="w-3.5 h-3.5" />Hapus
+                </button>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div v-else-if="paged.length && filesView === 'grid'" class="p-2">
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 items-stretch">
+            <div
+              v-for="f in paged"
+              :key="f.id"
+              role="button"
+              tabindex="0"
+              class="min-w-0 h-full flex flex-col text-left rounded-panel border p-2 gap-1.5 transition-colors cursor-pointer"
+              :class="previewFile?.id === f.id ? 'border-accent-400 bg-accent-50' : 'border-ink-200 hover:border-ink-300 bg-white'"
+              @click="previewFile = f"
+              @keydown.enter.prevent="previewFile = f"
+            >
+              <div
+                class="aspect-square w-full rounded border border-ink-100 bg-ink-50 flex items-center justify-center shrink-0"
+                :class="previewFile?.id === f.id ? 'border-accent-200' : ''"
+              >
+                <span class="text-[10px] font-mono font-semibold uppercase tracking-wide text-ink-500">{{ fileExt(f.filename) }}</span>
+              </div>
+              <div class="font-mono text-[11px] leading-4 h-8 overflow-hidden break-all line-clamp-2">{{ f.filename }}</div>
+              <div class="text-[10px] text-ink-400 truncate">{{ formatSize(f.sizeBytes) }}</div>
+              <div class="mt-auto flex items-center gap-2 pt-0.5" @click.stop>
+                <a
+                  :href="`/api/library-files/${f.id}?download=1`"
+                  class="text-teal-600 hover:text-teal-700"
+                  title="Unduh"
+                  aria-label="Unduh"
+                >
+                  <ArrowDownTrayIcon class="w-3.5 h-3.5" />
+                </a>
+                <NuxtLink
+                  v-if="canMakeClicker(f)"
+                  :to="{ path: '/tools/mesh-clicker', query: { libraryFileId: String(f.id) } }"
+                  class="text-accent-600 hover:text-accent-700"
+                  title="Jadikan clicker"
+                  aria-label="Jadikan clicker"
+                >
+                  <CursorArrowRaysIcon class="w-3.5 h-3.5" />
+                </NuxtLink>
+                <button
+                  v-if="isAdmin"
+                  type="button"
+                  class="text-ink-600 hover:text-ink-800"
+                  title="Rename"
+                  aria-label="Rename"
+                  @click="openRename(f)"
+                >
+                  <PencilSquareIcon class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  v-if="isAdmin"
+                  type="button"
+                  class="text-red-500 hover:text-red-700"
+                  title="Hapus"
+                  aria-label="Hapus"
+                  @click="deleteFile(f)"
+                >
+                  <TrashIcon class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p v-else class="p-4 text-sm text-ink-500">
+          {{ search.trim() ? 'Tidak ada file yang cocok.' : 'Belum ada file. Upload model 3D tanpa membuat produk.' }}
+        </p>
+      </div>
+
+      <div v-if="total" class="border-t border-ink-100 shrink-0">
+        <AppPagination
+          v-model:page="page"
+          v-model:pageSize="pageSize"
+          :total-pages="totalPages"
+          :total="total"
+          :range-start="rangeStart"
+          :range-end="rangeEnd"
+        />
+      </div>
+    </div>
 
     <AppModal v-if="previewFile" :title="previewFile.filename" size="xl" @close="previewFile = null">
       <div class="h-[70vh] -m-4">

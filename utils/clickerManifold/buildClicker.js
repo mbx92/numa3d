@@ -87,12 +87,143 @@ function normalizeParams(params = {}) {
     bodyColorRgb: resolveRgb(params.bodyColorRgb ?? params.colors?.base, [45, 55, 72]),
     socketFitPct: params.socketFitPct ?? 0,
     stemFitPct: params.stemFitPct ?? 0,
+    fitToleranceMm: Math.max(0, Math.min(0.8, Number(params.fitToleranceMm) || 0.15)),
+    plateOpeningMm: Math.max(10, Number(params.plateOpeningMm) || 14),
+    housingPocketMm: Math.max(12, Number(params.housingPocketMm) || 18.5),
     imageOffset: params.imageOffset ?? { x: 0, y: 0 },
     switches: params.switches,
     keychain,
     colorBleed: params.colorBleed ?? 0,
-    outlineSmoothingRadius: params.outlineSmoothingRadius ?? 4.0
+    outlineSmoothingRadius: params.outlineSmoothingRadius ?? 4.0,
+    meshSolid: params.meshSolid ?? null,
+    meshLidSolid: params.meshLidSolid ?? null,
+    meshBaseSolid: params.meshBaseSolid ?? null,
+    meshTransform: params.meshTransform ?? null,
+    meshAsTop: params.meshAsTop ?? params.shapeMode === 'mesh',
+    meshSplitLidRatio: Math.max(0, Math.min(0.75, Number(params.meshSplitLidRatio) || 0)),
+    meshStemBuryMm: Math.max(0, Math.min(8, Number(params.meshStemBuryMm) || 0)),
+    meshCavityToleranceMm: Math.max(
+      0.05,
+      Math.min(0.8, Number(params.meshCavityToleranceMm ?? params.fitToleranceMm ?? params.slipToleranceMm) || 0.2)
+    ),
+    meshSplitRegion: normalizeSplitRegion(params.meshSplitRegion)
   }
+}
+
+/** Wilayah potong XY sebagai fraksi AABB mesh (u/v pusat, wu/wv lebar/dalam). */
+function normalizeSplitRegion(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {}
+  const clamp01 = (v, d) => Math.max(0.02, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : d))
+  const clampUV = (v, d) => Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : d))
+  return {
+    u: clampUV(r.u, 0.5),
+    v: clampUV(r.v, 0.5),
+    wu: clamp01(r.wu, 1),
+    wv: clamp01(r.wv, 1)
+  }
+}
+
+function placeTransformedMesh(solid, mt, track) {
+  return track(
+    solid
+      .scale([mt.scaleX, mt.scaleY, mt.scaleZ])
+      .translate([mt.translateX, mt.translateY, mt.translateZ])
+  )
+}
+
+function cleanCutSection(cs, track, closeGap = 0.06) {
+  try {
+    let out = typeof cs.simplify === 'function' ? track(cs.simplify(0.035)) : cs
+    if (!sectionIsEmpty(out) && closeGap > 0.001) {
+      const closed = track(
+        track(out.offset(closeGap, 'Round', 2.0, SMOOTH_SEGMENTS))
+          .offset(-closeGap, 'Round', 2.0, SMOOTH_SEGMENTS)
+      )
+      if (!sectionIsEmpty(closed)) out = typeof closed.simplify === 'function' ? track(closed.simplify(0.03)) : closed
+    }
+    return out
+  } catch {
+    return cs
+  }
+}
+
+function safeSliceSection(solid, z, track) {
+  try {
+    const sliced = cleanCutSection(track(solid.slice(z)), track)
+    if (!sectionIsEmpty(sliced) && sectionArea(sliced) > 0.05) return sliced
+  } catch {
+    /* fall through to projection */
+  }
+  try {
+    const projected = cleanCutSection(track(solid.project()), track, 0.04)
+    if (!sectionIsEmpty(projected) && sectionArea(projected) > 0.05) return projected
+  } catch {
+    /* no usable fallback */
+  }
+  return null
+}
+
+function simplifySolid(solid, track, tolerance = 0.025) {
+  try {
+    return typeof solid.simplify === 'function' ? track(solid.simplify(tolerance)) : solid
+  } catch {
+    return solid
+  }
+}
+
+/** Potong mesh di bidang Z — atas = lid, bawah = base (kasus hamburger). */
+function splitSolidByZ(wasm, solid, cutZ, track, regionMm = null) {
+  const { Manifold } = wasm
+  const bb = solid.boundingBox()
+  const pad = 10
+  const fullW = Math.max(4, bb.max[0] - bb.min[0] + pad * 2)
+  const fullD = Math.max(4, bb.max[1] - bb.min[1] + pad * 2)
+  const fullCx = (bb.min[0] + bb.max[0]) / 2
+  const fullCy = (bb.min[1] + bb.max[1]) / 2
+
+  let work = solid
+  let rest = null
+  if (regionMm && regionMm.w > 0.5 && regionMm.d > 0.5) {
+    const colH = Math.max(4, bb.max[2] - bb.min[2] + pad * 2)
+    const midZ = (bb.min[2] + bb.max[2]) / 2
+    const column = track(
+      Manifold.cube([regionMm.w, regionMm.d, colH], true).translate([regionMm.cx, regionMm.cy, midZ])
+    )
+    work = track(solid.intersect(column))
+    rest = track(solid.subtract(column))
+    if (work.isEmpty()) {
+      throw new Error('Wilayah potong kosong — perbesar resizer atau geser ke bagian mesh')
+    }
+  }
+
+  const wbb = work.boundingBox()
+  const cutSection = safeSliceSection(work, cutZ, track)
+  if (!cutSection) {
+    throw new Error('Bidang potong tidak menyentuh mesh — geser tinggi potong ke bagian yang berisi poligon')
+  }
+  const w = Math.max(4, (regionMm?.w || fullW) + pad * 2)
+  const d = Math.max(4, (regionMm?.d || fullD) + pad * 2)
+  const cx = regionMm?.cx ?? fullCx
+  const cy = regionMm?.cy ?? fullCy
+
+  const lidBottom = cutZ
+  const lidTop = Math.max(wbb.max[2], bb.max[2]) + pad
+  const lidH = Math.max(0.25, lidTop - lidBottom)
+  const lidCube = track(Manifold.cube([w, d, lidH], true).translate([cx, cy, lidBottom + lidH / 2]))
+  const lid = simplifySolid(track(work.intersect(lidCube)), track)
+
+  const baseBottom = Math.min(wbb.min[2], bb.min[2]) - pad
+  const baseTop = cutZ
+  const baseH = Math.max(0.25, baseTop - baseBottom)
+  const baseCube = track(Manifold.cube([w, d, baseH], true).translate([cx, cy, baseBottom + baseH / 2]))
+  let base = simplifySolid(track(work.intersect(baseCube)), track)
+
+  // Bagian di luar resizer tidak ikut terpotong — tetap di base utuh.
+  if (rest && !rest.isEmpty()) {
+    base = simplifySolid(track(base.add(rest)), track)
+  }
+
+  return { lid, base, cutSection, cutZ }
 }
 
 /**
@@ -166,14 +297,23 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
 
   // --- Socket fit ---
   const socketFit = p.socketFitPct ?? 0
+  const fitTol = Math.max(0, p.fitToleranceMm || 0)
   const socketSized =
-    Math.abs(socketFit) > 0.01
-      ? track(socket.scale([1 + socketFit / 100, 1 + socketFit / 100, 1]))
+    Math.abs(socketFit) > 0.01 || fitTol > 0.001
+      ? (() => {
+          const bb0 = socket.boundingBox()
+          const dim0 = Math.max(bb0.max[0] - bb0.min[0], bb0.max[1] - bb0.min[1], 1)
+          // fitTolerance memperlebar lubang agar MX masuk longgar di mesh organik
+          const xyScale = 1 + socketFit / 100 + (2 * fitTol) / dim0
+          return track(socket.scale([xyScale, xyScale, 1]))
+        })()
       : socket
 
   const socketBB = socketSized.boundingBox()
   const stemBB = stem.boundingBox()
   const socketDim = Math.max(socketBB.max[0] - socketBB.min[0], socketBB.max[1] - socketBB.min[1])
+  const plateOpening = Math.max(socketDim * 0.85, (p.plateOpeningMm || 14) + 2 * fitTol)
+  const housingPocket = Math.max(socketDim + 0.4, (p.housingPocketMm || 18.5) + 2 * fitTol)
 
   // --- Normalized image bbox ---
   let minX = Infinity
@@ -505,13 +645,89 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   const skirtLen = slabBottomZ - skirtBottomZ
 
   const parts = []
+  const useDualMesh = Boolean(p.meshLidSolid && p.meshBaseSolid && p.meshTransform)
+  const useMeshSplit =
+    !useDualMesh && Boolean(p.meshSolid && p.meshTransform && p.meshSplitLidRatio > 0.05)
+  const useMeshAsTop = Boolean(p.meshSolid && p.meshTransform && p.meshAsTop && !useMeshSplit && !useDualMesh)
 
-  // --- Cap plate ---
-  const cap = extrudeAt(plate, backing + imageDepth, slabBottomZ)
+  let splitLidSolid = null
+  let splitBaseSolid = null
+  let splitCutSection = null
+  if (useDualMesh) {
+    const mt = p.meshTransform
+    splitLidSolid = placeTransformedMesh(p.meshLidSolid, mt, track)
+    splitBaseSolid = placeTransformedMesh(p.meshBaseSolid, mt, track)
+    const lbb = splitLidSolid.boundingBox()
+    const bbb = splitBaseSolid.boundingBox()
+    // Samakan Z: dasar potongan lid duduk di slabBottomZ
+    const lidMinZ = lbb.min[2]
+    const baseMaxZ = bbb.max[2]
+    splitLidSolid = track(splitLidSolid.translate([0, 0, slabBottomZ - lidMinZ]))
+    splitBaseSolid = track(splitBaseSolid.translate([0, 0, slabBottomZ - baseMaxZ]))
+    splitCutSection = safeSliceSection(splitBaseSolid, slabBottomZ, track) || safeSliceSection(splitLidSolid, slabBottomZ, track)
+  } else if (useMeshSplit) {
+    const mt = p.meshTransform
+    const placed = placeTransformedMesh(p.meshSolid, mt, track)
+    const pbb = placed.boundingBox()
+    const meshH = Math.max(0.5, pbb.max[2] - pbb.min[2])
+    const cutZ = pbb.max[2] - meshH * p.meshSplitLidRatio
+    const mw = Math.max(0.5, pbb.max[0] - pbb.min[0])
+    const md = Math.max(0.5, pbb.max[1] - pbb.min[1])
+    const reg = p.meshSplitRegion
+    const useRegion = reg.wu < 0.995 || reg.wv < 0.995 || Math.abs(reg.u - 0.5) > 0.01 || Math.abs(reg.v - 0.5) > 0.01
+    const regionMm = useRegion
+      ? {
+          cx: pbb.min[0] + mw * reg.u,
+          cy: pbb.min[1] + md * reg.v,
+          w: Math.max(1, mw * reg.wu),
+          d: Math.max(1, md * reg.wv)
+        }
+      : null
+    const split = splitSolidByZ(wasm, placed, cutZ, track, regionMm)
+    if (split.lid.isEmpty() || split.base.isEmpty()) {
+      throw new Error('Split mesh gagal — naik/turunkan rasio lid, perbesar wilayah potong, atau cek orientasi (Z ke atas)')
+    }
+    const dz = slabBottomZ - cutZ
+    splitLidSolid = track(split.lid.translate([0, 0, dz]))
+    splitBaseSolid = track(split.base.translate([0, 0, dz]))
+    splitCutSection = split.cutSection
+    const baseH = Math.max(0.1, splitBaseSolid.boundingBox().max[2] - splitBaseSolid.boundingBox().min[2])
+    if (baseH < Math.abs(socketBB.min[2]) + p.floorThickness + 1) {
+      warnings.push(
+        'Bagian bawah mesh tipis untuk socket. Perbesar tinggi mesh, turunkan rasio lid, atau naikkan Ukuran maks.'
+      )
+    }
+  }
+
+  // --- Top / cap ---
+  let base = null
+  const meshStemPocket =
+    useMeshSplit || useDualMesh || useMeshAsTop
+      ? Math.max(0.8, Math.min(6, p.meshStemBuryMm || 2.5))
+      : 0
+
+  if ((useMeshSplit || useDualMesh) && splitLidSolid) {
+    // Lid mesh: stem ditenggelamkan ke dalam (bukan pad di luar).
+    base = splitLidSolid
+    if (splitCutSection && !sectionIsEmpty(splitCutSection)) {
+      const seatThickness = Math.max(0.35, Math.min(0.75, backing * 0.45))
+      const seat = extrudeAt(splitCutSection, seatThickness, slabBottomZ - seatThickness)
+      base = simplifySolid(track(base.add(seat)), track)
+    }
+  } else if (useMeshAsTop) {
+    const mt = p.meshTransform
+    base = track(
+      p.meshSolid
+        .scale([mt.scaleX, mt.scaleY, mt.scaleZ])
+        .translate([mt.translateX, mt.translateY, slabBottomZ + mt.translateZ])
+    )
+  } else {
+    const cap = extrudeAt(plate, backing + imageDepth, slabBottomZ)
+    base = cap
+  }
 
   // Simplified inlay: skip multicolor carving; optional single-region extrude
-  let base = cap
-  if (regions.length === 1) {
+  if (!useMeshAsTop && !useMeshSplit && !useDualMesh && regions.length === 1) {
     const r = regions[0]
     const validRings = placeRings(r.rings || []).filter((ring) => ring.length >= 3 && getRingArea(ring) > 0.001)
     if (validRings.length > 0) {
@@ -530,9 +746,38 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
     }
   }
 
-  for (const st of stemAts) base = track(base.add(st))
+  if (!useMeshAsTop && !useMeshSplit && !useDualMesh && p.meshSolid && p.meshTransform) {
+    const mt = p.meshTransform
+    const relief = track(
+      p.meshSolid
+        .scale([mt.scaleX, mt.scaleY, mt.scaleZ])
+        .translate([mt.translateX, mt.translateY, slabTopZ + mt.translateZ])
+    )
+    if (!relief.isEmpty()) base = track(base.add(relief))
+  }
 
-  if (skirtLen > 0.4) {
+  if (meshStemPocket > 0.01) {
+    // Stem hanya overlap tipis ke underside lid. Pocket/boss dibuat turun, supaya tidak merusak wajah mesh.
+    const stemJoinOverlap = Math.min(0.18, meshStemPocket * 0.08)
+    for (const st of stemAts) {
+      base = track(base.add(track(st.translate([0, 0, stemJoinOverlap]))))
+    }
+    const bossSize = Math.max(
+      7,
+      stemBB.max[0] - stemBB.min[0] + 1.6,
+      stemBB.max[1] - stemBB.min[1] + 1.6
+    )
+    const bossH = meshStemPocket
+    for (const sw of applied) {
+      const bossSection = track(roundedRect(bossSize, bossSize, 1.2).translate([sw.x, sw.y]))
+      const boss = extrudeAt(bossSection, bossH + stemJoinOverlap, slabBottomZ - bossH)
+      base = track(base.add(boss))
+    }
+  } else {
+    for (const st of stemAts) base = track(base.add(st))
+  }
+
+  if (!useMeshAsTop && !useMeshSplit && !useDualMesh && skirtLen > 0.4) {
     const stemGuard = 12 + 2 * skirtThickness
     let skirtBasePlate = plate
     for (const sw of applied) {
@@ -559,17 +804,65 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
 
   parts.unshift(toPart(base, 'cap', 'top', p.baseFilamentRgb, 'top-base'))
 
-  // --- Body: solid − well − socket ---
-  const bodyBlock = extrudeAt(bodyFootprint, bodyTopZ - bodyBottomZ, bodyBottomZ)
-  const well = extrudeAt(wellFootprint, bodyTopZ - wellFloorZ + 1, wellFloorZ)
+  // --- Body: mesh bawah (split/dual) atau solid − well − socket ---
+  const useMeshBody = (useMeshSplit || useDualMesh) && splitBaseSolid
+  const meshBodyTopZ = useMeshBody ? splitBaseSolid.boundingBox().max[2] : bodyTopZ
+  const meshWellFloorZ = useMeshBody
+    ? Math.min(cavityFloorZ, slabBottomZ - Math.max(travel, 1.2))
+    : wellFloorZ
+  const bodyBlock = useMeshBody
+    ? splitBaseSolid
+    : extrudeAt(bodyFootprint, bodyTopZ - bodyBottomZ, bodyBottomZ)
+  let bodyCavityFootprint = wellFootprint
+  if (useMeshBody) {
+    let seatSection = splitCutSection && !sectionIsEmpty(splitCutSection)
+      ? grow(splitCutSection, Math.max(0.12, p.meshCavityToleranceMm))
+      : null
+    if (!seatSection || sectionIsEmpty(seatSection)) {
+      const projected = safeSliceSection(splitLidSolid, slabBottomZ, track)
+      seatSection = projected && !sectionIsEmpty(projected)
+        ? grow(projected, Math.max(0.12, p.meshCavityToleranceMm))
+        : wellFootprint
+    }
+    const stemGuard = Math.max(12, stemBB.max[0] - stemBB.min[0] + 2.8, stemBB.max[1] - stemBB.min[1] + 2.8)
+    for (const sw of applied) {
+      const guard = track(roundedRect(stemGuard, stemGuard, 1.8).translate([sw.x, sw.y]))
+      seatSection = track(seatSection.add(guard))
+    }
+    bodyCavityFootprint = simp(seatSection, 0.04)
+  }
+  const well = extrudeAt(bodyCavityFootprint, meshBodyTopZ - meshWellFloorZ + 1, meshWellFloorZ)
   let body = bodyBlock
+
+  if (useMeshBody) {
+    const bb = splitBaseSolid.boundingBox()
+    const needMinZ = bodyBottomZ
+    if (bb.min[2] > needMinZ + 0.15) {
+      // Lantai penuh di bawah pot agar kedalaman socket MX (≈11.5mm) muat
+      const padW = Math.max(bb.max[0] - bb.min[0], housingPocket) + 6
+      const padD = Math.max(bb.max[1] - bb.min[1], housingPocket) + 6
+      const padCx = (bb.min[0] + bb.max[0]) / 2
+      const padCy = (bb.min[1] + bb.max[1]) / 2
+      const padFoot = track(track(CrossSection.square([padW, padD], true)).translate([padCx, padCy]))
+      const floorPad = extrudeAt(padFoot, bb.min[2] - needMinZ + 0.15, needMinZ)
+      body = track(body.add(floorPad))
+      warnings.push('Ditambah lantai di bawah mesh agar socket MX muat penuh.')
+    }
+    // Dek switch datar di Z=0 agar plate cutout rapi
+    for (const sw of applied) {
+      const deck = track(roundedRect(housingPocket + 3, housingPocket + 3, 2).translate([sw.x, sw.y]))
+      const deckH = 0.7
+      const deckSolid = extrudeAt(deck, deckH, cavityFloorZ - deckH)
+      body = track(body.add(deckSolid))
+    }
+  }
 
   // Simplified keychain loop
   const kc = p.keychain
   if (kc && kc.enabled) {
     const holeR = Math.max(1.5, (kc.holeDiameterMm ?? 5.2) / 2)
-    const th = Math.max(2.5, Math.min(4.0, (bodyTopZ - bodyBottomZ) * 0.35))
-    const zb = bodyTopZ - th
+    const th = Math.max(2.5, Math.min(4.0, (meshBodyTopZ - bodyBottomZ) * 0.35))
+    const zb = meshBodyTopZ - th
     const { p: edgeP, dir } = edgePointAt(bodyFootprint, kc.angleDeg ?? 270)
     const tangent = [-dir[1], dir[0]]
     const px = edgeP[0] + tangent[0] * (kc.offsetMm ?? 0)
@@ -593,6 +886,37 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   }
 
   body = track(body.subtract(well))
+
+  // Mesh base: lubang MX eksplisit (plate + housing + socket) — boolean socket saja sering
+  // tidak bersih / tidak pas ukuran pada pot organik.
+  if (useMeshBody) {
+    const plateCutBase = roundedRect(plateOpening, plateOpening, Math.min(1.2, plateOpening * 0.08))
+    const housingCutBase = roundedRect(housingPocket, housingPocket, Math.min(2.2, housingPocket * 0.12))
+    const wellTop = meshBodyTopZ + 0.6
+    const plateBottom = cavityFloorZ - 0.35
+    const housingTop = cavityFloorZ + 0.25
+    for (const sw of applied) {
+      const plateCs = track(
+        (Math.abs(sw.rotation) > 0.001 ? track(plateCutBase.rotate(sw.rotation)) : plateCutBase).translate([
+          sw.x,
+          sw.y
+        ])
+      )
+      const housingCs = track(
+        (Math.abs(sw.rotation) > 0.001 ? track(housingCutBase.rotate(sw.rotation)) : housingCutBase).translate([
+          sw.x,
+          sw.y
+        ])
+      )
+      // Plate cutout: dari lantai well menembus atas (lid seat)
+      const plateH = Math.max(0.5, wellTop - plateBottom)
+      body = track(body.subtract(extrudeAt(plateCs, plateH, plateBottom)))
+      // Housing pocket: ruang badan switch di bawah plate
+      const houseH = Math.max(0.5, housingTop - bodyBottomZ)
+      body = track(body.subtract(extrudeAt(housingCs, houseH, bodyBottomZ)))
+    }
+  }
+
   for (const sk of socketAts) body = track(body.subtract(sk))
 
   if (!body.isEmpty()) {

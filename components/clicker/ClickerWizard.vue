@@ -4,6 +4,8 @@ import { CLICKER_DEFAULTS } from '~/utils/clickerPresets.js'
 import { getSwitchPreset } from '~/utils/clickerPresets.js'
 import ToolColorBar from '~/components/ToolColorBar.vue'
 
+const WizardLeadIcon = markRaw(CursorArrowRaysIcon)
+
 const emit = defineEmits(['complete'])
 
 const toast = useToast()
@@ -18,6 +20,10 @@ const draft = reactive({
   text: CLICKER_DEFAULTS.text,
   fontUrl: CLICKER_DEFAULTS.fontUrl,
   svgContent: '',
+  meshBuffer: CLICKER_DEFAULTS.meshBuffer,
+  meshFilename: CLICKER_DEFAULTS.meshFilename,
+  meshLibraryFileId: CLICKER_DEFAULTS.meshLibraryFileId,
+  meshReliefHeightMm: CLICKER_DEFAULTS.meshReliefHeightMm,
   maxSizeMm: CLICKER_DEFAULTS.maxSizeMm,
   displayMode: CLICKER_DEFAULTS.displayMode,
   keyringEnabled: CLICKER_DEFAULTS.keyringEnabled,
@@ -81,6 +87,10 @@ function validateStep() {
       showError('Unggah SVG untuk lid')
       return false
     }
+    if (draft.shapeMode === 'mesh' && !draft.meshBuffer) {
+      showError('Pilih atau upload mesh .3mf untuk lid')
+      return false
+    }
   }
   if (step.value === 2) {
     if (draft.fitToleranceMm < 0 || draft.fitToleranceMm > 0.5) {
@@ -116,6 +126,10 @@ function submit() {
     text: String(draft.text || '').trim(),
     fontUrl: draft.fontUrl,
     svgContent: String(draft.svgContent || ''),
+    meshBuffer: draft.meshBuffer,
+    meshFilename: String(draft.meshFilename || ''),
+    meshLibraryFileId: draft.meshLibraryFileId,
+    meshReliefHeightMm: Number(draft.meshReliefHeightMm),
     maxSizeMm: Number(draft.maxSizeMm),
     displayMode: draft.displayMode,
     keyringEnabled: !!draft.keyringEnabled,
@@ -149,7 +163,7 @@ function submit() {
       <header class="shrink-0 px-5 pt-5 pb-3 border-b border-ink-100">
         <div class="flex items-center gap-2.5">
           <span class="inline-flex items-center justify-center w-9 h-9 rounded-panel bg-accent-500/10 text-accent-600">
-            <CursorArrowRaysIcon class="w-5 h-5" />
+            <component :is="WizardLeadIcon" class="w-5 h-5" />
           </span>
           <div>
             <h2 id="clicker-wizard-title" class="text-base font-bold text-ink-900">Clicker Generator</h2>
@@ -178,6 +192,10 @@ function submit() {
             v-model:text="draft.text"
             v-model:font-url="draft.fontUrl"
             v-model:svg-content="draft.svgContent"
+            v-model:mesh-buffer="draft.meshBuffer"
+            v-model:mesh-filename="draft.meshFilename"
+            v-model:mesh-library-file-id="draft.meshLibraryFileId"
+            v-model:mesh-relief-height-mm="draft.meshReliefHeightMm"
             v-model:max-size-mm="draft.maxSizeMm"
             v-model:display-mode="draft.displayMode"
             v-model:keyring-enabled="draft.keyringEnabled"

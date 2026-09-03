@@ -1,10 +1,4 @@
 <script setup>
-definePageMeta({
-  layout: 'tool',
-  toolTitle: 'Clicker Generator',
-  toolFullBleed: true
-})
-
 import {
   ArrowPathIcon,
   ArrowDownTrayIcon,
@@ -22,10 +16,20 @@ import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExpo
 import { generateClicker } from '~/utils/clickerGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
 import { getSwitchPreset } from '~/utils/clickerPresets.js'
+import { useUiLayout } from '~/composables/useUiLayout.js'
+import { useToolColorMode } from '~/composables/useToolColorMode.js'
 import ToolColorBar from '~/components/ToolColorBar.vue'
 import ToolPanelShell from '~/components/ToolPanelShell.vue'
 import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
 import { buildPartLegend } from '~/utils/previewPartLabels.js'
+
+definePageMeta({
+  layout: 'tool',
+  toolTitle: 'Clicker Generator',
+  toolFullBleed: true
+})
+
+const SwitchPanelIcon = markRaw(CursorArrowRaysIcon)
 
 const { layoutConfig, deviceLabel, modeLabel } = useUiLayout()
 
@@ -52,12 +56,12 @@ const activePreset = computed(() => getSwitchPreset(form.switchPresetId))
 const activeToolPanel = ref('design')
 
 const TOOL_PANELS = [
-  { id: 'design', label: 'Desain', icon: PencilSquareIcon },
-  { id: 'switch', label: 'Switch', icon: CursorArrowRaysIcon },
-  { id: 'size', label: 'Ukuran', icon: ArrowsPointingInIcon },
-  { id: 'colors', label: 'Warna', icon: PaintBrushIcon },
-  { id: 'base', label: 'Info', icon: Square3Stack3DIcon },
-  { id: 'export', label: 'Export', icon: DocumentArrowDownIcon, needsResult: true }
+  { id: 'design', label: 'Desain', icon: markRaw(PencilSquareIcon) },
+  { id: 'switch', label: 'Switch', icon: SwitchPanelIcon },
+  { id: 'size', label: 'Ukuran', icon: markRaw(ArrowsPointingInIcon) },
+  { id: 'colors', label: 'Warna', icon: markRaw(PaintBrushIcon) },
+  { id: 'base', label: 'Info', icon: markRaw(Square3Stack3DIcon) },
+  { id: 'export', label: 'Export', icon: markRaw(DocumentArrowDownIcon), needsResult: true }
 ]
 
 const toolPanels = TOOL_PANELS
@@ -192,7 +196,7 @@ async function runGenerate() {
   }
 }
 
-async function downloadPart(part) {
+async function resolvePartExport(part) {
   if (!result.value) return
   const slug = result.value.slug
   const fmt = exportFormat.value
@@ -234,7 +238,13 @@ async function downloadPart(part) {
       filename = result.value.lidFilename || result.value.accentFilename
     }
   }
+  return { blob, filename }
+}
 
+async function downloadPart(part) {
+  const resolved = await resolvePartExport(part)
+  const blob = resolved?.blob
+  const filename = resolved?.filename
   if (!blob) {
     toast.error('Part lid tidak tersedia')
     return
@@ -270,11 +280,13 @@ async function saveToGallery() {
   if (!result.value || !isAdmin.value) return
   saving.value = true
   try {
-    await uploadBlob(result.value.getBaseBlob(), result.value.baseFilename)
-    if (result.value.getAccentBlob()) {
-      await uploadBlob(result.value.getAccentBlob(), result.value.accentFilename)
-    }
-    toast.success('Model disimpan ke Galeri 3D')
+    const base = await resolvePartExport('base')
+    const lid = await resolvePartExport('lid')
+    if (!base?.blob) throw new Error('Part base tidak tersedia')
+    await uploadBlob(base.blob, base.filename)
+    if (lid?.blob) await uploadBlob(lid.blob, lid.filename)
+    const fmtLabel = exportFormats.find((f) => f.id === exportFormat.value)?.label || exportFormat.value
+    toast.success(`Model disimpan ke Galeri 3D (${fmtLabel})`)
   } catch (e) {
     toast.error(e?.message || 'Gagal menyimpan ke galeri')
   } finally {
@@ -332,6 +344,10 @@ watch(canSimulateClick, (ok) => {
               v-model:text="form.text"
               v-model:font-url="form.fontUrl"
               v-model:svg-content="form.svgContent"
+              v-model:mesh-buffer="form.meshBuffer"
+              v-model:mesh-filename="form.meshFilename"
+              v-model:mesh-library-file-id="form.meshLibraryFileId"
+              v-model:mesh-relief-height-mm="form.meshReliefHeightMm"
               v-model:max-size-mm="form.maxSizeMm"
               v-model:display-mode="form.displayMode"
               v-model:keyring-enabled="form.keyringEnabled"
@@ -456,6 +472,9 @@ watch(canSimulateClick, (ok) => {
           <p v-if="result" class="text-[10px] text-ink-400">
             {{ deviceLabel }} · mode {{ modeLabel }} · legend preview dapat dipindah & minimize
           </p>
+          <p v-if="result?.warnings?.length" class="text-[10px] text-amber-700">
+            {{ result.warnings[0] }}
+          </p>
         </div>
 
         <div
@@ -505,7 +524,7 @@ watch(canSimulateClick, (ok) => {
                       :title="canSimulateClick ? `Travel ${clickTravelMm} mm` : 'Simulasi tersedia di Perakitan, selain mode Print'"
                       @click="simulatingClick = !simulatingClick"
                     >
-                      <CursorArrowRaysIcon class="w-3.5 h-3.5" />
+                      <component :is="SwitchPanelIcon" class="w-3.5 h-3.5" />
                       {{ simulatingClick ? 'Stop klik' : 'Simulasi klik' }}
                     </button>
                   </div>

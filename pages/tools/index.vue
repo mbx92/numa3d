@@ -1,38 +1,53 @@
 <script setup>
+import {
+  SparklesIcon,
+  ArrowRightIcon,
+  ArrowDownTrayIcon,
+  CursorArrowRaysIcon,
+  LightBulbIcon,
+  CubeTransparentIcon
+} from '@heroicons/vue/24/outline'
+
 definePageMeta({
   layout: 'tool',
   toolTitle: 'Tools'
 })
-
-import { SparklesIcon, ArrowRightIcon, ArrowDownTrayIcon, CursorArrowRaysIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
 
 const tools = [
   {
     to: '/tools/keychain',
     title: 'Keychain Generator',
     description: 'Buat keychain 2-part (base + teks insert) dengan theme, warna, dan export 3MF/STL.',
-    icon: SparklesIcon,
+    icon: markRaw(SparklesIcon),
     tags: ['3MF', 'STL', 'Multi-color']
   },
   {
     to: '/tools/clicker',
     title: 'Clicker Generator',
     description: 'Base + lid clicker MX — desain dari teks/SVG, preview/print mode, export 3MF/STL.',
-    icon: CursorArrowRaysIcon,
+    icon: markRaw(CursorArrowRaysIcon),
     tags: ['Switch', '3MF', 'STL']
+  },
+  {
+    to: '/tools/mesh-clicker',
+    title: 'Mesh → Clicker',
+    description: 'Ubah model .3mf/.stl dari Galeri jadi clicker: potong atas/bawah → lid/base + socket MX.',
+    icon: markRaw(CubeTransparentIcon),
+    tags: ['Galeri', '3MF', 'STL', 'Switch'],
+    beta: true
   },
   {
     to: '/tools/lightbox',
     title: 'Lightbox Generator',
     description: 'Lightbox LED dari gambar/teks/SVG — multi-layer warna, cavity LED, export 3MF.',
-    icon: LightBulbIcon,
+    icon: markRaw(LightBulbIcon),
     tags: ['LED', '3MF', 'AMS']
   },
   {
     to: '/tools/font-downloader',
     title: 'Font Downloader',
     description: 'Cari & unduh font Google Fonts ke server untuk dipakai di generator keychain dan tools lain.',
-    icon: ArrowDownTrayIcon,
+    icon: markRaw(ArrowDownTrayIcon),
     tags: ['Google Fonts', 'TTF', 'Keychain']
   }
 ]
@@ -59,7 +74,15 @@ const tools = [
             <component :is="tool.icon" class="w-5 h-5" />
           </div>
           <div class="min-w-0 flex-1">
-            <h2 class="font-semibold text-ink-900 group-hover:text-accent-700">{{ tool.title }}</h2>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h2 class="font-semibold text-ink-900 group-hover:text-accent-700">{{ tool.title }}</h2>
+              <span
+                v-if="tool.beta"
+                class="badge text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 ring-1 ring-amber-200/80"
+              >
+                Beta
+              </span>
+            </div>
             <p class="text-sm text-ink-500 mt-1 leading-relaxed">{{ tool.description }}</p>
           </div>
         </div>

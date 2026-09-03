@@ -1,5 +1,5 @@
 <script setup>
-import { DESIGN_MODES } from '~/utils/lightboxPresets.js'
+import { DESIGN_MODES, QR_LIGHTBOX } from '~/utils/lightboxPresets.js'
 import { readImageFile } from '~/utils/imageToLayers.js'
 
 const designMode = defineModel('designMode', { type: String, default: 'text' })
@@ -9,10 +9,21 @@ const svgContent = defineModel('svgContent', { type: String, default: '' })
 const imageDataUrl = defineModel('imageDataUrl', { type: String, default: '' })
 const maxSizeMm = defineModel('maxSizeMm', { type: Number, default: 80 })
 const maxColors = defineModel('maxColors', { type: Number, default: 4 })
+const borderMm = defineModel('borderMm', { type: Number, default: 4 })
 
 const modes = DESIGN_MODES
 const imageError = ref('')
 const imagePreview = computed(() => imageDataUrl.value || '')
+const isSvgMode = computed(() => designMode.value === 'svg' || designMode.value === 'svg-qr')
+const isQrMode = computed(() => designMode.value === 'svg-qr')
+
+watch(designMode, (mode) => {
+  if (mode === 'svg-qr') {
+    borderMm.value = 0
+    // Caption opsional — jangan bawa default "NUMA" dari mode teks
+    if (!text.value || text.value === 'NUMA') text.value = ''
+  }
+})
 
 async function onImageFile(event) {
   imageError.value = ''
@@ -36,7 +47,7 @@ function clearImage() {
   <div class="space-y-3">
     <div>
       <span class="text-xs font-medium text-ink-700">Sumber desain</span>
-      <div class="grid grid-cols-3 gap-1.5 mt-1.5">
+      <div class="grid grid-cols-2 gap-1.5 mt-1.5">
         <button
           v-for="m in modes"
           :key="m.id"
@@ -89,13 +100,17 @@ function clearImage() {
     </template>
 
     <KeychainSvgUpload
-      v-if="designMode === 'svg'"
+      v-if="isSvgMode"
       v-model:svg-content="svgContent"
       :svg-size-mm="maxSizeMm"
       :svg-gap-mm="0"
-      label="Logo SVG"
-      hint="Warna dari fill path"
-      size-label="Ukuran maks."
+      :label="isQrMode ? 'SVG QR code' : 'Logo SVG'"
+      :hint="
+        isQrMode
+          ? `Frame kotak rapi · gap ${QR_LIGHTBOX.frameGapMm} mm · ruang stand bawah ~${QR_LIGHTBOX.standClearanceMm} mm`
+          : 'Frame mengikuti siluet path SVG'
+      "
+      :size-label="isQrMode ? 'Ukuran QR' : 'Ukuran maks.'"
       :size-min="40"
       :size-max="150"
       :size-step="2"
@@ -103,7 +118,30 @@ function clearImage() {
       @update:svg-size-mm="maxSizeMm = $event"
     />
 
-    <label v-if="designMode !== 'svg'" class="block space-y-1">
+    <template v-if="isQrMode">
+      <label class="block space-y-1">
+        <span class="text-xs font-medium text-ink-700">Teks bawah (opsional)</span>
+        <input
+          v-model="text"
+          class="input text-sm font-semibold"
+          maxlength="28"
+          placeholder="Contoh: NUMA · Scan QRIS"
+        />
+      </label>
+      <KeychainFontPicker
+        v-if="String(text || '').trim()"
+        v-model="fontUrl"
+        :preview-text="text"
+        :show-downloader-link="false"
+      />
+      <p class="text-[10px] text-ink-500 leading-snug rounded-md border border-ink-100 bg-ink-50 px-2 py-1.5">
+        Mode QR: frame rounded-rect, gap
+        <span class="font-mono">{{ QR_LIGHTBOX.frameGapMm }} mm</span>, teks di bawah QR (di atas lip stand)
+        agar kode tetap terbaca.
+      </p>
+    </template>
+
+    <label v-if="!isSvgMode" class="block space-y-1">
       <span class="text-xs font-medium text-ink-700">Ukuran maks. (mm)</span>
       <div class="flex items-center gap-2">
         <input v-model.number="maxSizeMm" type="range" min="40" max="150" step="2" class="flex-1" />

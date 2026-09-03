@@ -52,7 +52,7 @@ const draft = reactive({
 
 const wizardColors = computed(() => {
   const type = 'filament'
-  if (draft.designMode === 'text' || draft.designMode === 'svg') {
+  if (draft.designMode === 'text' || draft.designMode === 'svg' || draft.designMode === 'svg-qr') {
     return [
       { key: 'background', label: 'Latar', hint: 'Layer belakang face (translucent)', materialType: type },
       { key: 'text', label: 'Teks / Logo', hint: 'Warna utama desain', materialType: type },
@@ -85,8 +85,8 @@ function validateStep() {
       showError('Isi teks')
       return false
     }
-    if (draft.designMode === 'svg' && !String(draft.svgContent || '').trim()) {
-      showError('Unggah SVG')
+    if ((draft.designMode === 'svg' || draft.designMode === 'svg-qr') && !String(draft.svgContent || '').trim()) {
+      showError(draft.designMode === 'svg-qr' ? 'Unggah SVG QR' : 'Unggah SVG')
       return false
     }
     if (draft.designMode === 'image' && !String(draft.imageDataUrl || '').trim()) {
@@ -193,6 +193,7 @@ function submit() {
             v-model:image-data-url="draft.imageDataUrl"
             v-model:max-size-mm="draft.maxSizeMm"
             v-model:max-colors="draft.maxColors"
+            v-model:border-mm="draft.borderMm"
           />
         </template>
 
@@ -312,11 +313,25 @@ function submit() {
         </template>
 
         <template v-else>
-          <p class="text-xs text-ink-500">Frame otomatis menyesuaikan desain + border. Override manual jika perlu.</p>
+          <p class="text-xs text-ink-500">
+            {{
+              draft.designMode === 'svg-qr'
+                ? 'Mode QR: frame kotak rapi, gap 2 mm, ruang stand di bawah agar QR tetap terbaca.'
+                : 'Frame otomatis menyesuaikan desain + border. Override manual jika perlu.'
+            }}
+          </p>
           <div class="grid grid-cols-2 gap-3">
             <label class="block space-y-1.5">
               <span class="text-xs font-medium text-ink-700">Border desain</span>
-              <input v-model.number="draft.borderMm" type="number" min="2" max="15" step="0.5" class="input-num w-full" />
+              <input
+                v-model.number="draft.borderMm"
+                type="number"
+                min="2"
+                max="15"
+                step="0.5"
+                class="input-num w-full"
+                :disabled="draft.designMode === 'svg-qr'"
+              />
             </label>
             <label class="block space-y-1.5">
               <span class="text-xs font-medium text-ink-700">Radius sudut</span>

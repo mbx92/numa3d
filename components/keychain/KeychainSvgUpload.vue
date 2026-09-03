@@ -38,7 +38,15 @@ async function onFileChange(e) {
   e.target.value = ''
   if (!file) return
   try {
-    svgContent.value = await readSvgFile(file)
+    const toast = useToast()
+    const svg = await readSvgFile(file)
+    svgContent.value = svg
+    // File besar dengan embed raster → setelah strip jadi jauh lebih kecil
+    if (file.size > 180 * 1024 && svg.length < file.size * 0.75) {
+      toast.info('Gambar latar di SVG diabaikan — hanya path vektor (QR/logo) yang dipakai')
+    } else {
+      toast.success('SVG siap')
+    }
   } catch (err) {
     useToast().error(err?.message || 'Gagal membaca SVG')
   }
@@ -77,7 +85,7 @@ function clearSvg() {
     >
       <PhotoIcon class="w-6 h-6 text-ink-400" />
       <span class="text-xs text-ink-600">Unggah file .svg</span>
-      <span class="text-[10px] text-ink-400">Maks. 256 KB · path/fill solid</span>
+      <span class="text-[10px] text-ink-400">Maks. 1 MB · path/fill solid (gambar tertanam diabaikan)</span>
       <input type="file" accept=".svg,image/svg+xml" class="sr-only" @change="onFileChange" />
     </label>
 

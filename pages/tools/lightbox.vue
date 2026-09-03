@@ -27,7 +27,7 @@ import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
 import { buildPartLegend } from '~/utils/previewPartLabels.js'
 
 const COLOR_FIELDS = computed(() => {
-  if (form.designMode === 'text' || form.designMode === 'svg') {
+  if (form.designMode === 'text' || form.designMode === 'svg' || form.designMode === 'svg-qr') {
     return [
       { key: 'background', label: 'Latar', short: 'Latar', materialType: 'filament' },
       { key: 'text', label: 'Desain', short: 'Desain', materialType: 'filament' },
@@ -110,7 +110,7 @@ const activePreviewParts = computed(() => {
 })
 
 const editableLayerPalette = computed(() => {
-  if (!result.value || !['image', 'svg'].includes(form.designMode)) return []
+  if (!result.value || !['image', 'svg', 'svg-qr'].includes(form.designMode)) return []
   return (result.value.layerPalette || []).filter((layer) => !layer.isDiffuser)
 })
 
@@ -292,8 +292,10 @@ async function runGenerate() {
 }
 
 function updateLayerPaletteColor(layer, color) {
-  if (layer.isBackground && form.designMode === 'svg') {
+  if (layer.isBackground && (form.designMode === 'svg' || form.designMode === 'svg-qr')) {
     form.colors.background = color
+  } else if (layer.name === 'Teks bawah' || layer.name === 'qr_caption') {
+    form.colors.text = color
   } else if (Number.isInteger(layer.overrideIndex)) {
     const next = Array.isArray(form.layerColors) ? [...form.layerColors] : []
     next[layer.overrideIndex] = color
@@ -471,6 +473,7 @@ function restartWizard() {
               v-model:image-data-url="form.imageDataUrl"
               v-model:max-size-mm="form.maxSizeMm"
               v-model:max-colors="form.maxColors"
+              v-model:border-mm="form.borderMm"
             />
           </template>
 
@@ -560,8 +563,19 @@ function restartWizard() {
 
           <template v-else-if="activeToolPanel === 'size'">
             <KeychainCompactField label="Border" unit="mm">
-              <input v-model.number="form.borderMm" type="number" min="2" max="15" step="0.5" class="input-num w-full text-sm" />
+              <input
+                v-model.number="form.borderMm"
+                type="number"
+                min="2"
+                max="15"
+                step="0.5"
+                class="input-num w-full text-sm"
+                :disabled="form.designMode === 'svg-qr'"
+              />
             </KeychainCompactField>
+            <p v-if="form.designMode === 'svg-qr'" class="text-[10px] text-ink-400 -mt-1">
+              Mode QR memakai gap frame–QR tetap 2 mm di layout QR + ruang stand di bawah.
+            </p>
             <KeychainCompactField label="Radius sudut" unit="mm">
               <input v-model.number="form.cornerRadiusMm" type="number" min="0" max="15" step="0.5" class="input-num w-full text-sm" />
             </KeychainCompactField>

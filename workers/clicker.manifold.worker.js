@@ -1,7 +1,7 @@
 // Geometry worker — Manifold WASM kernel (referensi Vostok Labs).
 import Module from 'manifold-3d'
 import wasmUrl from 'manifold-3d/manifold.wasm?url'
-import { parse3MF } from '../utils/clickerManifold/threemfImport.js'
+import { meshBounds, parseMeshBuffer, orientMeshToZUp } from '../utils/clickerManifold/meshImport.js'
 import { buildClicker } from '../utils/clickerManifold/buildClicker.js'
 import {
   adaptiveRingSegments,
@@ -36,16 +36,42 @@ async function getModule() {
   return modulePromise
 }
 
-function assetToSolid(wasm, buf) {
-  const raw = parse3MF(buf)
+function rawToSolid(wasm, raw) {
   const mesh = new wasm.Mesh({
     numProp: 3,
     vertProperties: raw.vertProperties,
     triVerts: raw.triVerts
   })
   mesh.merge()
-  const solid = wasm.Manifold.ofMesh(mesh)
-  return solid
+  return wasm.Manifold.ofMesh(mesh)
+}
+
+function meshBufferToSolid(wasm, buf, filename = '', upAxis = 'auto') {
+  const parsed = parseMeshBuffer(buf, filename)
+  const { raw } = orientMeshToZUp(parsed, upAxis)
+  return { raw, solid: rawToSolid(wasm, raw) }
+}
+
+function assetToSolid(wasm, buf) {
+  return meshBufferToSolid(wasm, buf, 'part.3mf').solid
+}
+
+function resolveMeshTransform(raw, footprint, opts) {
+  const bounds = footprint.mesh?.bounds || meshBounds(raw)
+  const scaleXY = Number(footprint.mesh?.scale) || (Number(opts.maxSizeMm) || 40) / Math.max(bounds.width, bounds.depth, 0.001)
+  const sourceH = Math.max(bounds.height, 0.001)
+  const maxHeight = Math.max(4, Number(opts.meshReliefHeightMm) || 35)
+  const proportionalHeight = sourceH * scaleXY
+  const scaleZ = proportionalHeight > maxHeight ? maxHeight / sourceH : scaleXY
+  return {
+    scaleX: scaleXY,
+    scaleY: scaleXY,
+    scaleZ,
+    translateX: -bounds.centerX * scaleXY,
+    translateY: -bounds.centerY * scaleXY,
+    translateZ: -bounds.minZ * scaleZ - 0.05,
+    targetHeightMm: sourceH * scaleZ
+  }
 }
 
 function slugify(text) {
@@ -154,6 +180,11 @@ function transformAssembly(parts, displayMode) {
 async function buildFromOpts(opts) {
   const resolved = resolveClickerOptions(opts)
   const footprintOpts = { ...resolved, ...opts, baseShape: resolved.baseShape }
+  if (opts.meshBaseBuffer instanceof ArrayBuffer && !(opts.meshBuffer instanceof ArrayBuffer)) {
+    footprintOpts.meshBuffer = opts.meshBaseBuffer
+    footprintOpts.meshFilename = opts.meshBaseFilename || opts.meshFilename || 'base.stl'
+  }
+  footprintOpts.meshUpAxis = opts.meshUpAxis || 'auto'
   const footprint = await resolveFootprint(footprintOpts)
   const plateShapes = buildPlateShapes(footprint, footprintOpts)
   const outlineSegs = adaptiveRingSegments(plateShapes, 64, 128, 0.45)
@@ -180,6 +211,52 @@ async function buildFromOpts(opts) {
 
   const wasm = await getModule()
   if (!socket || !stem) throw new Error('Manifold assets belum diinisialisasi')
+  let meshSolid = null
+  let meshTransform = null
+  let meshLidSolid = null
+  let meshBaseSolid = null
+  let meshWarnings = []
+  const meshSplitLidRatio = Math.max(0, Math.min(0.75, Number(opts.meshSplitLidRatio) || 0))
+  const meshUpAxis = opts.meshUpAxis || 'auto'
+  const meshSplitRegionRaw = opts.meshSplitRegion && typeof opts.meshSplitRegion === 'object' ? opts.meshSplitRegion : {}
+  const meshSplitRegion = {
+    u: Math.max(0, Math.min(1, Number(meshSplitRegionRaw.u) || 0.5)),
+    v: Math.max(0, Math.min(1, Number(meshSplitRegionRaw.v) || 0.5)),
+    wu: Math.max(0.02, Math.min(1, Number(meshSplitRegionRaw.wu) || 1)),
+    wv: Math.max(0.02, Math.min(1, Number(meshSplitRegionRaw.wv) || 1))
+  }
+  const hasDualMesh =
+    opts.shapeMode === 'mesh' &&
+    opts.meshLidBuffer instanceof ArrayBuffer &&
+    opts.meshBaseBuffer instanceof ArrayBuffer
+
+  if (opts.shapeMode === 'mesh') {
+    if (hasDualMesh) {
+      const lidMesh = meshBufferToSolid(wasm, opts.meshLidBuffer, opts.meshLidFilename || 'lid.stl', meshUpAxis)
+      const baseMesh = meshBufferToSolid(wasm, opts.meshBaseBuffer, opts.meshBaseFilename || 'base.stl', meshUpAxis)
+      meshLidSolid = lidMesh.solid
+      meshBaseSolid = baseMesh.solid
+      // Transform dari footprint (pakai base untuk skala XY)
+      meshTransform = resolveMeshTransform(baseMesh.raw, footprint, opts)
+      meshSolid = baseMesh.solid
+      const tri =
+        lidMesh.raw.triVerts.length / 3 + baseMesh.raw.triVerts.length / 3
+      if (tri > 80000) {
+        meshWarnings = ['Mesh cukup berat; jika preview lambat, gunakan model yang sudah disederhanakan.']
+      }
+    } else {
+      if (!(opts.meshBuffer instanceof ArrayBuffer)) {
+        throw new Error('Pilih file mesh (.3mf / .stl) untuk mode Mesh')
+      }
+      const mesh = meshBufferToSolid(wasm, opts.meshBuffer, opts.meshFilename || '', meshUpAxis)
+      meshSolid = mesh.solid
+      meshTransform = resolveMeshTransform(mesh.raw, footprint, opts)
+      const triangleCount = mesh.raw.triVerts.length / 3
+      if (triangleCount > 80000) {
+        meshWarnings = ['Mesh cukup berat; jika preview lambat, gunakan model yang sudah disederhanakan.']
+      }
+    }
+  }
 
   const { parts, warnings } = buildClicker(wasm, socket, stem, regions, outline, {
     ...resolved,
@@ -193,8 +270,19 @@ async function buildFromOpts(opts) {
     capWidthMm: footprint.capWidthMm || resolved.maxSizeMm,
     switches: footprint.switches || opts.switches || resolved.switches,
     baseFilamentRgb: hexToRgbBytes(lidHex),
-    bodyColorRgb: hexToRgbBytes(colors.base)
+    bodyColorRgb: hexToRgbBytes(colors.base),
+    meshSolid,
+    meshLidSolid,
+    meshBaseSolid,
+    meshTransform,
+    meshSplitLidRatio: hasDualMesh ? 0 : meshSplitLidRatio,
+    meshSplitRegion,
+    meshStemBuryMm: Math.max(0.8, Math.min(6, Number(opts.meshStemBuryMm) || 2.5)),
+    meshAsTop: opts.shapeMode === 'mesh' && !hasDualMesh && meshSplitLidRatio <= 0.05
   })
+  meshSolid?.delete?.()
+  if (meshLidSolid && meshLidSolid !== meshSolid) meshLidSolid.delete?.()
+  if (meshBaseSolid && meshBaseSolid !== meshSolid) meshBaseSolid.delete?.()
 
   const displayMode = opts.displayMode || 'preview'
   const placed = transformAssembly(parts, displayMode)
@@ -215,7 +303,7 @@ async function buildFromOpts(opts) {
 
   return {
     slug,
-    warnings,
+    warnings: [...meshWarnings, ...warnings],
     shapeMode: opts.shapeMode,
     baseShape: resolved.baseShape,
     displayMode,

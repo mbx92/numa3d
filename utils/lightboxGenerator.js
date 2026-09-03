@@ -135,7 +135,7 @@ async function prepareWorkerOpts(opts) {
 
 
 
-  if (mode === 'svg') {
+  if (mode === 'svg' || mode === 'svg-qr') {
 
     const svgContent = String(cloned.svgContent || '').trim()
 

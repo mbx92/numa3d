@@ -4,7 +4,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { resolveLightboxOptions, validateLightboxSize, resolveStandFit } from './lightboxPresets.js'
 import { computeOuterSize, resolveDesignLayers } from './lightboxFootprint.js'
-import { subtractShapes2D } from './shapeClipper.js'
+import { subtractShapes2D, offsetShapes, cloneShapes } from './shapeClipper.js'
+import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import { packGeometry } from './geometryPack.js'
 
 const EXTRUDE = { bevelEnabled: false, curveSegments: 6 }
@@ -126,9 +127,13 @@ function addCableBackHole(shape, opts, hw, hd) {
 
 function withDiffuserLayer(design, opts) {
   if (!opts.diffuserEnabled) return design
+  const shapes =
+    design.followOutline && design.outerShapes?.length
+      ? cloneShapes(design.outerShapes)
+      : [rectShape(design.widthMm, design.heightMm)]
   const diffuser = {
     color: opts.diffuserColor || '#ffffff',
-    shapes: [rectShape(design.widthMm, design.heightMm)],
+    shapes,
     isBackground: true,
     isDiffuser: true,
     name: 'diffuser'
@@ -138,7 +143,9 @@ function withDiffuserLayer(design, opts) {
     layers: [diffuser, ...design.layers],
     bounds: design.bounds,
     widthMm: design.widthMm,
-    heightMm: design.heightMm
+    heightMm: design.heightMm,
+    outerShapes: design.outerShapes,
+    followOutline: design.followOutline
   }
 }
 
@@ -149,6 +156,25 @@ function facePanelShape(opts) {
 }
 
 function expandBackgroundToFullFace(design, opts) {
+  // SVG: pertahankan siluet luar mengikuti pola desain
+  if (design.followOutline && design.outerShapes?.length) {
+    const outline = cloneShapes(design.outerShapes)
+    const bounds = computeBoundsFromShapes(outline)
+    return {
+      ...design,
+      layers: design.layers.map((layer) => {
+        if (!layer.isBackground) return layer
+        return {
+          ...layer,
+          shapes: cloneShapes(outline),
+          name: layer.name || (layer.isDiffuser ? 'diffuser_outline' : 'background_outline')
+        }
+      }),
+      outerShapes: outline,
+      bounds
+    }
+  }
+
   const fullFace = () => [facePanelShape(opts)]
   return {
     ...design,
@@ -213,7 +239,7 @@ function buildFaceLayers(design, opts, zStart) {
   return { parts, totalDepth: z - zStart + (colorLayers.length ? colorDepth : 0) }
 }
 
-function buildFrameBody(opts, outerW, outerD) {
+function buildFrameBody(opts, outerW, outerD, outerShapes = null) {
   const hw = outerW / 2
   const hd = outerD / 2
   const wall = opts.wallThicknessMm
@@ -222,27 +248,39 @@ function buildFrameBody(opts, outerW, outerD) {
   const totalH = backPanel + cavity + wall
   const parts = []
 
-  const outerShape = roundedRectShape(hw, hd, opts.cornerRadiusMm)
-  const innerHw = hw - wall
-  const innerHd = hd - wall
-  const innerShape = roundedRectShape(innerHw, innerHd, Math.max(0, opts.cornerRadiusMm - wall))
+  const useOutline = Array.isArray(outerShapes) && outerShapes.length > 0
+  const shellOuter = useOutline
+    ? cloneShapes(outerShapes)
+    : [roundedRectShape(hw, hd, opts.cornerRadiusMm)]
 
-  const ringShapes = subtractShapes2D([outerShape], [innerShape])
+  let shellInner = useOutline
+    ? offsetShapes(shellOuter, -wall)
+    : [roundedRectShape(hw - wall, hd - wall, Math.max(0, opts.cornerRadiusMm - wall))]
+  if (!shellInner?.length) {
+    // Fallback jika inset gagal pada siluet rumit
+    shellInner = useOutline
+      ? offsetShapes(shellOuter, -Math.max(0.6, wall * 0.65))
+      : [roundedRectShape(Math.max(2, hw - wall), Math.max(2, hd - wall), Math.max(0, opts.cornerRadiusMm - wall))]
+  }
+
+  const ringShapes = subtractShapes2D(shellOuter, shellInner)
   const wallGeo = extrudeShapes(ringShapes, totalH - backPanel)
   if (wallGeo) {
     wallGeo.translate(0, 0, backPanel)
     parts.push({ geometry: wallGeo, color: opts.colors.frame, role: 'frame', name: 'frame_shell' })
   }
 
-  const backShape = roundedRectShape(hw, hd, opts.cornerRadiusMm)
-  addCableBackHole(backShape, opts, hw, hd)
-  if (opts.hangingHoleMm > 0) {
-    const maxY = hd - wall - opts.hangingHoleMm / 2
-    const cy = Math.min(hd - opts.hangingHoleOffsetMm, maxY)
-    addCircularBackHole(backShape, 0, cy, opts.hangingHoleMm)
+  const backShapes = cloneShapes(shellOuter)
+  for (const backShape of backShapes) {
+    addCableBackHole(backShape, opts, hw, hd)
+    if (opts.hangingHoleMm > 0) {
+      const maxY = hd - wall - opts.hangingHoleMm / 2
+      const cy = Math.min(hd - opts.hangingHoleOffsetMm, maxY)
+      addCircularBackHole(backShape, 0, cy, opts.hangingHoleMm)
+    }
   }
 
-  const backGeo = extrudeShapes([backShape], backPanel)
+  const backGeo = extrudeShapes(backShapes, backPanel)
   if (backGeo) {
     parts.push({ geometry: backGeo, color: opts.colors.back, role: 'back', name: 'back_panel' })
   }
@@ -566,10 +604,17 @@ export async function generateLightboxCore(userOpts = {}) {
   const opts = resolveLightboxOptions(userOpts)
   let design = withDiffuserLayer(await resolveDesignLayers(opts), opts)
 
-  const outer = computeOuterSize(design.widthMm, design.heightMm, opts)
-  opts.outerWidthMm = outer.outerWidthMm
-  opts.outerDepthMm = outer.outerDepthMm
-  validateLightboxSize(opts, { width: design.widthMm, height: design.heightMm })
+  if (design.followOutline && design.outerShapes?.length) {
+    // Siluet SVG sudah termasuk border; dinding di-inset ke dalam —
+    // jangan inflate AABB / jangan validasi min seolah desain masih "isi saja".
+    opts.outerWidthMm = design.widthMm
+    opts.outerDepthMm = design.heightMm
+  } else {
+    const outer = computeOuterSize(design.widthMm, design.heightMm, opts)
+    opts.outerWidthMm = outer.outerWidthMm
+    opts.outerDepthMm = outer.outerDepthMm
+    validateLightboxSize(opts, { width: design.widthMm, height: design.heightMm })
+  }
   design = expandBackgroundToFullFace(design, opts)
   let imageOverrideIndex = 0
   let svgOverrideIndex = 0
@@ -577,20 +622,28 @@ export async function generateLightboxCore(userOpts = {}) {
     let overrideIndex = null
     if (opts.designMode === 'image' && !layer.isDiffuser) {
       overrideIndex = imageOverrideIndex++
-    } else if (opts.designMode === 'svg' && !layer.isDiffuser && !layer.isBackground) {
+    } else if (
+      (opts.designMode === 'svg' || opts.designMode === 'svg-qr') &&
+      !layer.isDiffuser &&
+      !layer.isBackground &&
+      layer.name !== 'qr_caption'
+    ) {
       overrideIndex = svgOverrideIndex++
     }
     return {
       index,
       overrideIndex,
-      name: layer.name || (layer.isDiffuser ? 'Diffuser' : layer.isBackground ? 'Background' : `Color ${index + 1}`),
+      name:
+        layer.name === 'qr_caption'
+          ? 'Teks bawah'
+          : layer.name || (layer.isDiffuser ? 'Diffuser' : layer.isBackground ? 'Background' : `Color ${index + 1}`),
       color: layer.color || (layer.isBackground ? opts.colors.background : opts.colors.text),
       isBackground: !!layer.isBackground,
       isDiffuser: !!layer.isDiffuser
     }
   })
 
-  const frame = buildFrameBody(opts, opts.outerWidthMm, opts.outerDepthMm)
+  const frame = buildFrameBody(opts, opts.outerWidthMm, opts.outerDepthMm, design.outerShapes)
   const ledPreviewParts = buildLedStripPreview(opts, opts.outerWidthMm, opts.outerDepthMm)
   const faceZ = frame.totalH
   const face = buildFaceLayers(design, opts, faceZ)

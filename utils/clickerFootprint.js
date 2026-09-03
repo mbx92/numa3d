@@ -8,6 +8,7 @@ import {
   scaleShapes,
   translateSvgShapes
 } from './svgToShapes.js'
+import { meshBounds, parseMeshBuffer, orientMeshToZUp } from './clickerManifold/meshImport.js'
 import {
   boundsFromShape,
   fitShapeRadius,
@@ -131,6 +132,95 @@ function rectFootprint(widthMm, depthMm) {
   shape.closePath()
   const bounds = { minX: -hw, maxX: hw, minY: -hd, maxY: hd, width: widthMm, height: depthMm }
   return { shapes: [], plateShapes: [shape], bounds, source: 'rect' }
+}
+
+function cross(o, a, b) {
+  return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+}
+
+function convexHull(points) {
+  const sorted = [...points]
+    .sort((a, b) => (a[0] === b[0] ? a[1] - b[1] : a[0] - b[0]))
+    .filter((p, i, arr) => i === 0 || p[0] !== arr[i - 1][0] || p[1] !== arr[i - 1][1])
+  if (sorted.length <= 3) return sorted
+
+  const lower = []
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+      lower.pop()
+    }
+    lower.push(p)
+  }
+
+  const upper = []
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i]
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+      upper.pop()
+    }
+    upper.push(p)
+  }
+
+  lower.pop()
+  upper.pop()
+  return lower.concat(upper)
+}
+
+function shapeFromRing(ring) {
+  const shape = new THREE.Shape()
+  ring.forEach(([x, y], i) => {
+    if (i === 0) shape.moveTo(x, y)
+    else shape.lineTo(x, y)
+  })
+  shape.closePath()
+  return shape
+}
+
+function meshFootprint(opts) {
+  if (!(opts.meshBuffer instanceof ArrayBuffer)) throw new Error('Unggah atau pilih mesh untuk mode Mesh')
+  const parsed = parseMeshBuffer(opts.meshBuffer, opts.meshFilename || '')
+  const { raw } = orientMeshToZUp(parsed, opts.meshUpAxis || 'auto')
+  const b = meshBounds(raw)
+  const maxDim = Math.max(b.width, b.depth, 0.001)
+  if (maxDim <= 0.001) throw new Error('3MF: ukuran mesh tidak valid')
+
+  const scale = (Number(opts.maxSizeMm) || 40) / maxDim
+  const vp = raw.vertProperties
+  const np = raw.numProp || 3
+  const points = []
+  const stride = Math.max(1, Math.ceil((vp.length / np) / 2500))
+  for (let i = 0, vertex = 0; i < vp.length; i += np, vertex++) {
+    if (vertex % stride !== 0) continue
+    points.push([(vp[i] - b.centerX) * scale, (vp[i + 1] - b.centerY) * scale])
+  }
+
+  let hull = convexHull(points)
+  if (hull.length < 3) {
+    const w = Math.max(20, b.width * scale)
+    const d = Math.max(20, b.depth * scale)
+    return {
+      ...rectFootprint(w, d),
+      source: 'mesh',
+      mesh: { bounds: b, scale }
+    }
+  }
+
+  const maxHullPoints = 160
+  if (hull.length > maxHullPoints) {
+    const step = Math.ceil(hull.length / maxHullPoints)
+    hull = hull.filter((_, i) => i % step === 0)
+  }
+
+  const shape = shapeFromRing(hull)
+  const bounds = computeBoundsFromShapes([shape])
+  return {
+    shapes: [],
+    plateShapes: [shape],
+    bounds,
+    artworkBounds: bounds,
+    source: 'mesh',
+    mesh: { bounds: b, scale }
+  }
 }
 
 function fitShapesIntoTile(shapes, centerX, centerY, maxW, maxH) {
@@ -274,6 +364,8 @@ export async function resolveFootprint(opts) {
     const scaled = scaleToMaxSize(shapes, maxSizeMm)
     return resolvePlateShapes({ ...scaled, source: 'text' }, opts)
   }
+
+  if (mode === 'mesh') return meshFootprint(opts)
 
   return rectTextFootprint(opts)
 }

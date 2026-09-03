@@ -88,7 +88,21 @@ function exportParts(parts) {
 }
 
 function cloneWorkerOpts(opts) {
-  return JSON.parse(JSON.stringify(opts ?? {}))
+  const cloneValue = (value) => {
+    if (value == null) return value
+    if (value instanceof ArrayBuffer) return value.slice(0)
+    if (ArrayBuffer.isView(value)) {
+      return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength)
+    }
+    if (Array.isArray(value)) return value.map(cloneValue)
+    if (typeof value === 'object') {
+      const out = {}
+      for (const key of Object.keys(value)) out[key] = cloneValue(value[key])
+      return out
+    }
+    return value
+  }
+  return cloneValue(opts ?? {})
 }
 
 function prepareWorkerOpts(opts) {
@@ -138,6 +152,7 @@ function buildLiveResult(raw) {
 
   return {
     slug: raw.slug,
+    warnings: raw.warnings || [],
     shapeMode: raw.shapeMode,
     displayMode: raw.displayMode,
     switchPresetId: raw.switchPresetId,
@@ -260,7 +275,13 @@ function generateViaManifoldWorker(opts) {
         else resolve(buildLiveResult(event.data.result))
       }
       w.addEventListener('message', handler)
-      w.postMessage({ id, opts: prepared })
+      const transfer = []
+      if (prepared.meshBuffer instanceof ArrayBuffer) transfer.push(prepared.meshBuffer)
+      if (prepared.meshLidBuffer instanceof ArrayBuffer) transfer.push(prepared.meshLidBuffer)
+      if (prepared.meshBaseBuffer instanceof ArrayBuffer) transfer.push(prepared.meshBaseBuffer)
+      // Jangan transfer buffer yang sama dua kali
+      const unique = [...new Set(transfer)]
+      w.postMessage({ id, opts: prepared }, unique)
     })
   })
 }
@@ -295,6 +316,7 @@ export async function generateClicker(userOpts = {}) {
     try {
       return await generateViaManifoldWorker(userOpts)
     } catch (e) {
+      if (userOpts.shapeMode === 'mesh') throw e
       console.warn('[clicker] Manifold fallback ke clipper:', e?.message || e)
       manifoldFailed = true
     }

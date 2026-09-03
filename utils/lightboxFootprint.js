@@ -12,6 +12,8 @@ import {
   translateSvgShapes
 } from './svgToShapes.js'
 import { imageToLayers } from './imageToLayers.js'
+import { buildInsertPlateFootprint, cloneShapes } from './shapeClipper.js'
+import { QR_LIGHTBOX } from './lightboxPresets.js'
 
 const fontCache = new Map()
 
@@ -71,6 +73,33 @@ function scaleToMaxSize(shapes, maxSizeMm) {
   return centerShapes(scaleShapes(shapes, scale, cx, cy))
 }
 
+function scaleToFitBox(shapes, maxWidthMm, maxHeightMm) {
+  const bounds = computeBoundsFromShapes(shapes)
+  const scale = Math.min(
+    maxWidthMm / Math.max(bounds.width, 0.001),
+    maxHeightMm / Math.max(bounds.height, 0.001)
+  )
+  const cx = (bounds.minX + bounds.maxX) / 2
+  const cy = (bounds.minY + bounds.maxY) / 2
+  return centerShapes(scaleShapes(shapes, scale, cx, cy))
+}
+
+async function resolveQrCaptionShapes(opts, maxWidthMm, maxHeightMm) {
+  const caption = String(opts.text || '').trim()
+  if (!caption) return null
+  if (!opts.fontUrl) throw new Error('Pilih font untuk teks di bawah QR')
+
+  let textShapes
+  if (opts.textShapes?.length) {
+    textShapes = deserializeShapes(opts.textShapes)
+  } else {
+    const font = await loadFont(opts.fontUrl)
+    textShapes = textToShapes(caption, font)
+  }
+  if (!textShapes.length) return null
+  return scaleToFitBox(textShapes, maxWidthMm, maxHeightMm)
+}
+
 function backgroundRect(bounds, paddingMm = 0) {
   const hw = bounds.width / 2 + paddingMm
   const hh = bounds.height / 2 + paddingMm
@@ -81,6 +110,16 @@ function backgroundRect(bounds, paddingMm = 0) {
   shape.lineTo(-hw, hh)
   shape.closePath()
   return [shape]
+}
+
+/** Siluet luar dari union SVG + margin (ikuti pola SVG, bukan kotak AABB). */
+function outlineFromDesignShapes(shapes, borderMm = 4) {
+  const margin = Math.max(0.8, Number(borderMm) || 4)
+  // Bridge kecil supaya modul QR/path berdekatan menyatu jadi satu siluet luar
+  const bridge = Math.min(1.2, margin * 0.35)
+  const { outer } = buildInsertPlateFootprint(shapes, margin, bridge)
+  if (outer?.length) return cloneShapes(outer)
+  return backgroundRect(computeBoundsFromShapes(shapes), margin)
 }
 
 function colorOverride(layerColors, index, fallback) {
@@ -153,7 +192,7 @@ export async function resolveDesignLayers(opts) {
     }
   }
 
-  if (mode === 'svg') {
+  if (mode === 'svg' || mode === 'svg-qr') {
     let svgLayers
     if (opts.svgLayers?.length) {
       svgLayers = deserializeShapeLayers(opts.svgLayers)
@@ -168,23 +207,95 @@ export async function resolveDesignLayers(opts) {
       ]
     } else {
       const raw = String(opts.svgContent || '').trim()
-      if (!raw) throw new Error('Unggah SVG untuk mode SVG')
+      if (!raw) throw new Error(mode === 'svg-qr' ? 'Unggah SVG QR untuk mode QR' : 'Unggah SVG untuk mode SVG')
       svgLayers = parseSvgToShapeLayers(raw)
     }
     const shapes = svgLayers.flatMap((layer) => layer.shapes || [])
     if (!shapes.length) throw new Error('SVG tidak punya area fill solid')
     const scaled = scaleLayersToMaxSize(svgLayers, maxSizeMm)
     const bgColor = colors.background || '#f5f5f5'
-    const bgShapes = backgroundRect(scaled.bounds, 2)
     const colorLayers = applyLayerColorOverrides(scaled.layers, opts.layerColors)
+    const designShapes = colorLayers.flatMap((layer) => layer.shapes || [])
+
+    // QR: frame rectangular rapi, safe gap eksplisit, padding bawah untuk stand (+ caption opsional)
+    if (mode === 'svg-qr') {
+      const safeGap = QR_LIGHTBOX.frameGapMm
+      const captionGap = QR_LIGHTBOX.captionGapMm
+      const rail = Number(opts.standRailHeightMm) || 0
+      const standClearance = Math.max(
+        QR_LIGHTBOX.standClearanceMm,
+        opts.standEnabled === false || opts.standModelId === 'none' ? safeGap : rail + 4
+      )
+      const qrBounds = computeBoundsFromShapes(designShapes)
+      const captionScaled = await resolveQrCaptionShapes(
+        opts,
+        qrBounds.width * 0.92,
+        Math.min(QR_LIGHTBOX.captionMaxHeightMm, Math.max(5, standClearance * 0.55))
+      )
+      const captionH = captionScaled?.bounds.height || 0
+      const lowerContentH = captionH > 0 ? captionGap + captionH + standClearance : standClearance
+      const bandBelowQr = safeGap + lowerContentH
+      const widthMm = qrBounds.width + safeGap * 2
+      const heightMm = qrBounds.height + safeGap + bandBelowQr
+      const panelBounds = {
+        minX: -widthMm / 2,
+        maxX: widthMm / 2,
+        minY: -heightMm / 2,
+        maxY: heightMm / 2,
+        width: widthMm,
+        height: heightMm
+      }
+
+      const qrCenterX = (qrBounds.minX + qrBounds.maxX) / 2
+      const qrCenterY = (qrBounds.minY + qrBounds.maxY) / 2
+      const qrTargetCenterY = panelBounds.minY + bandBelowQr + qrBounds.height / 2
+      const shiftedLayers = colorLayers.map((layer) => ({
+        ...layer,
+        shapes: translateSvgShapes(layer.shapes, -qrCenterX, qrTargetCenterY - qrCenterY),
+        isBackground: false
+      }))
+
+      const layers = [
+        { color: bgColor, shapes: backgroundRect(panelBounds, 0), isBackground: true, name: 'qr_background' },
+        ...shiftedLayers
+      ]
+
+      if (captionScaled?.shapes?.length) {
+        const captionCenterY = panelBounds.minY + safeGap + standClearance + captionH / 2
+        const fgColor = colors.text || '#111827'
+        layers.push({
+          color: fgColor,
+          shapes: translateSvgShapes(captionScaled.shapes, 0, captionCenterY),
+          isBackground: false,
+          name: 'qr_caption'
+        })
+      }
+
+      return {
+        layers,
+        followOutline: false,
+        qrMode: true,
+        qrFrameGapMm: safeGap,
+        qrStandClearanceMm: standClearance,
+        bounds: panelBounds,
+        widthMm,
+        heightMm
+      }
+    }
+
+    const borderMm = Number(opts.borderMm) || 4
+    const outerShapes = outlineFromDesignShapes(designShapes, borderMm)
+    const outerBounds = computeBoundsFromShapes(outerShapes)
     return {
       layers: [
-        { color: bgColor, shapes: bgShapes, isBackground: true },
+        { color: bgColor, shapes: outerShapes, isBackground: true, name: 'svg_outline' },
         ...colorLayers.map((layer) => ({ ...layer, isBackground: false }))
       ],
-      bounds: computeBoundsFromShapes([...bgShapes, ...colorLayers.flatMap((layer) => layer.shapes || [])]),
-      widthMm: scaled.bounds.width + 4,
-      heightMm: scaled.bounds.height + 4
+      outerShapes,
+      followOutline: true,
+      bounds: outerBounds,
+      widthMm: outerBounds.width,
+      heightMm: outerBounds.height
     }
   }
 
@@ -222,7 +333,8 @@ export function serializeDesignLayers(layers) {
 }
 
 export function computeOuterSize(designWidthMm, designHeightMm, opts) {
-  const border = Number(opts.borderMm) || 4
+  const rawBorder = Number(opts.borderMm)
+  const border = Number.isFinite(rawBorder) ? Math.max(rawBorder, 0) : 4
   const wall = Number(opts.wallThicknessMm) || 2
   const minW = designWidthMm + border * 2 + wall * 2
   const minD = designHeightMm + border * 2 + wall * 2

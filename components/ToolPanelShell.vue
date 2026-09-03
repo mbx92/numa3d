@@ -1,5 +1,6 @@
 <script setup>
 import { ArrowPathIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/vue/24/outline'
+import { useUiLayout } from '~/composables/useUiLayout.js'
 
 const props = defineProps({
   panels: { type: Array, required: true },

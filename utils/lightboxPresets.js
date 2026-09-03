@@ -6,8 +6,21 @@
 export const DESIGN_MODES = [
   { id: 'image', label: 'Gambar', description: 'Upload PNG/JPG — kuantisasi warna otomatis' },
   { id: 'text', label: 'Teks', description: 'Teks dengan font — latar putih + warna huruf' },
-  { id: 'svg', label: 'SVG', description: 'Logo vektor — warna dari fill path SVG' }
+  { id: 'svg', label: 'SVG', description: 'Logo vektor — frame mengikuti siluet' },
+  { id: 'svg-qr', label: 'QR SVG', description: 'QR code — frame rapi + ruang stand' }
 ]
+
+/** Layout khusus lightbox QR (bukan siluet modul). */
+export const QR_LIGHTBOX = {
+  /** Jarak QR ↔ tepi dalam frame (mm). */
+  frameGapMm: 2,
+  /** Padding ekstra bawah agar lip stand tidak menutupi QR / teks. */
+  standClearanceMm: 12,
+  /** Jarak QR ↔ caption (mm). */
+  captionGapMm: 2,
+  /** Tinggi maks. caption (mm). */
+  captionMaxHeightMm: 8
+}
 
 export const CABLE_HOLE_SIDES = [
   { id: 'bottom', label: 'Bawah' },
@@ -148,7 +161,10 @@ export function resolveLightboxOptions(userOpts = {}) {
       ? 0
       : Math.min(Math.max(numberOr(userOpts.standRailHeightMm, standPreset.standRailHeightMm), 0), 20)
   const standSlotMm = Math.max(numberOr(userOpts.standSlotMm, standPreset.standSlotMm), 0)
-  const borderMm = Math.max(Number(userOpts.borderMm) || 4, 1)
+  const borderMm =
+    userOpts.designMode === 'svg-qr'
+      ? 0
+      : Math.max(Number(userOpts.borderMm) || 4, 1)
   const cornerRadiusMm = Math.max(Number(userOpts.cornerRadiusMm) || 4, 0)
   const cableHoleMm = Math.max(Number(userOpts.cableHoleMm) || 0, 0)
   const hangingHoleMm = Math.max(Number(userOpts.hangingHoleMm) || 0, 0)

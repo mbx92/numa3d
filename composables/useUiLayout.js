@@ -5,6 +5,7 @@ import {
   normalizeUiLayoutModes,
   resolveLayoutConfig
 } from '~/utils/uiLayoutModes.js'
+import { useDeviceTier } from '~/composables/useDeviceTier.js'
 
 const settingsKey = 'app-settings-ui-layout'
 

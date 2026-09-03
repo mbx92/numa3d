@@ -3,7 +3,25 @@ import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import { getAttachmentReach } from './shapeClipper.js'
 
-const MAX_SVG_BYTES = 256 * 1024
+const MAX_SVG_BYTES = 1024 * 1024
+
+/** Buang <image> / data-URI raster — generator hanya pakai path vektor. */
+export function stripSvgRasterImages(svgString) {
+  const raw = String(svgString || '')
+  if (!raw) return { svg: '', stripped: false, beforeBytes: 0, afterBytes: 0 }
+  const beforeBytes = new TextEncoder().encode(raw).length
+  // Self-closing or paired <image> with optional huge data: href
+  const cleaned = raw
+    .replace(/<image\b[^>]*\/>/gi, '')
+    .replace(/<image\b[^>]*>[\s\S]*?<\/image>/gi, '')
+  const afterBytes = new TextEncoder().encode(cleaned).length
+  return {
+    svg: cleaned,
+    stripped: afterBytes < beforeBytes,
+    beforeBytes,
+    afterBytes
+  }
+}
 
 export function readSvgFile(file) {
   if (!file) return Promise.reject(new Error('File tidak dipilih'))
@@ -11,9 +29,22 @@ export function readSvgFile(file) {
     return Promise.reject(new Error('Hanya file .svg yang didukung'))
   }
   if (file.size > MAX_SVG_BYTES) {
-    return Promise.reject(new Error('SVG terlalu besar (maks. 256 KB)'))
+    return Promise.reject(new Error('SVG terlalu besar (maks. 1 MB)'))
   }
-  return file.text()
+  return file.text().then((text) => {
+    const { svg, stripped, beforeBytes, afterBytes } = stripSvgRasterImages(text)
+    if (!String(svg).trim()) {
+      throw new Error('SVG tidak punya path vektor — gambar tertanam tidak didukung')
+    }
+    // Simpan metadata ringan di string via property? Return plain string for callers.
+    // Callers expect string — attach non-enumerable hint if needed later.
+    if (stripped && beforeBytes - afterBytes > 8 * 1024) {
+      console.info(
+        `[svg] Dibuang gambar tertanam ${(beforeBytes / 1024).toFixed(0)} KB → ${(afterBytes / 1024).toFixed(0)} KB`
+      )
+    }
+    return svg
+  })
 }
 
 function mapShapePoints(shape, fn) {

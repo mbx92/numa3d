@@ -15,7 +15,9 @@ const props = defineProps({
   selectedPartId: { type: String, default: '' },
   explodeFactor: { type: Number, default: 0 },
   autoExplode: { type: Boolean, default: false },
-  assemblyResetToken: { type: Number, default: 0 }
+  assemblyResetToken: { type: Number, default: 0 },
+  /** Model clicker Z-up → putar agar berdiri di grid Three.js (Y-up). */
+  zUpModel: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:selectedPartId', 'select-part'])
@@ -405,9 +407,12 @@ function computeExplodeVectors() {
 function mountParts() {
   clearScene()
   rootGroup = new THREE.Group()
+  const orientGroup = new THREE.Group()
+  if (props.zUpModel) orientGroup.rotation.x = -Math.PI / 2
   const staticGroup = new THREE.Group()
   clickGroup = new THREE.Group()
-  rootGroup.add(staticGroup, clickGroup)
+  orientGroup.add(staticGroup, clickGroup)
+  rootGroup.add(orientGroup)
   let added = 0
 
   for (let i = 0; i < (props.parts || []).length; i++) {

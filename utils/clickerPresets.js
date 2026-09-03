@@ -6,7 +6,8 @@
 export const SHAPE_MODES = [
   { id: 'rect', label: 'Shape', description: 'Tile per huruf dengan shape pilihan' },
   { id: 'svg', label: 'SVG', description: 'Upload logo / ikon vektor' },
-  { id: 'text', label: 'Teks', description: 'Huruf atau kata sebagai lid' }
+  { id: 'text', label: 'Teks', description: 'Huruf atau kata sebagai lid' },
+  { id: 'mesh', label: 'Mesh', description: 'Model .3mf / .stl dari Galeri atau upload' }
 ]
 
 export const BASE_SHAPES = [
@@ -81,10 +82,15 @@ export const SWITCH_PRESET_LIST = Object.values(SWITCH_PRESETS)
 export const CLICKER_DEFAULTS = {
   label: 'Clicker',
   shapeMode: 'rect',
-  baseShape: 'outline',
+  baseShape: 'square',
   text: 'CLICK',
   fontUrl: '/fonts/BarlowCondensed-BlackItalic.woff',
   svgContent: '',
+  meshBuffer: null,
+  meshFilename: '',
+  meshLibraryFileId: null,
+  meshReliefHeightMm: 35,
+  meshStemBuryMm: 2.5,
   maxSizeMm: 40,
   displayMode: 'preview',
   switchPresetId: 'cherry_mx',
@@ -119,6 +125,39 @@ export const CLICKER_DEFAULTS = {
     lid: '#f5a623',
     text: '#111827',
     floor: '#1a202c'
+  }
+}
+
+/** Defaults khusus tool Mesh → Clicker (split atas/bawah + switch). */
+export const MESH_CLICKER_DEFAULTS = {
+  ...CLICKER_DEFAULTS,
+  label: 'Mesh Clicker',
+  shapeMode: 'mesh',
+  baseShape: 'outline',
+  text: '',
+  svgContent: '',
+  meshBuffer: null,
+  meshFilename: '',
+  meshLibraryFileId: null,
+  meshReliefHeightMm: 45,
+  meshSplitLidRatio: 0.32,
+  /** Fraksi AABB mesh: pusat (u,v) + ukuran (wu,wv). <1 = potong lokal. */
+  meshSplitRegion: { u: 0.5, v: 0.5, wu: 1, wv: 1 },
+  meshUpAxis: 'auto',
+  meshSourceMode: 'split', // 'split' | 'parts'
+  meshLidBuffer: null,
+  meshLidFilename: '',
+  meshBaseBuffer: null,
+  meshBaseFilename: '',
+  meshStemBuryMm: 2.5,
+  fitToleranceMm: 0.25,
+  maxSizeMm: 45,
+  displayMode: 'preview',
+  colors: {
+    base: '#8b5a2b',
+    lid: '#e8b86d',
+    text: '#e8b86d',
+    floor: '#5c3d1e'
   }
 }
 
