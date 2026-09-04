@@ -491,7 +491,7 @@ function scheduleMount() {
       mountParts()
       error.value = ''
     } catch (e) {
-    <div v-if="loading" class="absolute inset-0 flex items-center justify-center text-sm text-ink-500">Memuat...</div>
+      error.value = e?.message || 'Gagal memuat preview'
     }
   })
 }
@@ -584,7 +584,7 @@ async function init() {
     await nextTick()
     scheduleMount()
   } catch (e) {
-    <div v-if="loading" class="absolute inset-0 flex items-center justify-center text-sm text-ink-500">Memuat...</div>
+      error.value = e?.message || 'Gagal memuat preview'
   } finally {
     loading.value = false
   }
