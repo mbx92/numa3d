@@ -7,7 +7,7 @@ const emit = defineEmits(['complete'])
 
 const toast = useToast()
 
-const steps = ['Desain', 'Warna', 'LED & Frame', 'Ukuran']
+const steps = ['Desain', 'Warna', 'Cahaya & stand', 'Ukuran']
 const step = ref(0)
 
 const draft = reactive({
@@ -166,7 +166,7 @@ function submit() {
           </span>
           <div>
             <h2 id="lightbox-wizard-title" class="text-base font-bold text-ink-900">Lightbox Generator</h2>
-            <p class="text-xs text-ink-500">Langkah {{ step + 1 }} dari {{ steps.length }} · {{ steps[step] }}</p>
+            <p class="text-xs text-ink-500">Langkah {{ step + 1 }} dari {{ steps.length }} - {{ steps[step] }}</p>
           </div>
         </div>
         <div class="flex gap-1.5 mt-4">
@@ -202,7 +202,7 @@ function submit() {
             {{
               draft.designMode === 'image'
                 ? 'Warna face otomatis dari gambar. Atur frame & back di bawah.'
-                : 'Warna layer face + frame — cocok AMS/multi-material.'
+                : 'Warna layer face + frame - cocok untuk AMS/multi-material.'
             }}
           </p>
           <ToolColorBar
@@ -215,101 +215,126 @@ function submit() {
         </template>
 
         <template v-else-if="step === 2">
-          <p class="text-xs text-ink-500">Back lebih dalam dari front — ruang untuk LED strip & kabel (seperti MakerWorld).</p>
-          <label class="flex items-center justify-between gap-3 rounded-lg border border-ink-100 p-3">
-            <span>
-              <span class="block text-xs font-medium text-ink-800">Aksen LED strip</span>
-              <span class="block text-[10px] text-ink-400">Preview strip + titik LED di cavity</span>
-            </span>
-            <input v-model="draft.ledStripEnabled" type="checkbox" class="h-4 w-4 rounded border-ink-300 text-accent-600" />
-          </label>
-          <div v-if="draft.ledStripEnabled" class="grid grid-cols-[1fr_auto_auto] gap-3">
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Lebar strip</span>
-              <input v-model.number="draft.ledStripWidthMm" type="number" min="2" max="8" step="0.5" class="input-num w-full" />
-            </label>
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">PCB</span>
-              <input v-model="draft.ledStripColor" type="color" class="h-10 w-11 rounded-md border border-ink-200 cursor-pointer" />
-            </label>
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">LED</span>
-              <input v-model="draft.ledLightColor" type="color" class="h-10 w-11 rounded-md border border-ink-200 cursor-pointer" />
-            </label>
-          </div>
-          <label class="flex items-center justify-between gap-3 rounded-lg border border-ink-100 p-3">
-            <span>
-              <span class="block text-xs font-medium text-ink-800">Diffuser face</span>
-              <span class="block text-[10px] text-ink-400">Layer solid tipis di balik desain</span>
-            </span>
-            <input v-model="draft.diffuserEnabled" type="checkbox" class="h-4 w-4 rounded border-ink-300 text-accent-600" />
-          </label>
-          <div v-if="draft.diffuserEnabled" class="grid grid-cols-[1fr_auto] gap-3">
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Tebal diffuser</span>
-              <input v-model.number="draft.diffuserDepthMm" type="number" min="0.2" max="2" step="0.1" class="input-num w-full" />
-            </label>
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Warna</span>
-              <input v-model="draft.diffuserColor" type="color" class="h-10 w-11 rounded-md border border-ink-200 cursor-pointer" />
-            </label>
-          </div>
+          <p class="text-xs text-ink-500">Atur cahaya, tebal muka, rongga LED, dan stand.</p>
 
-          <LightboxStandPicker
-            v-model:stand-model-id="draft.standModelId"
-            v-model:stand-enabled="draft.standEnabled"
-            v-model:stand-width-mm="draft.standWidthMm"
-            v-model:stand-depth-mm="draft.standDepthMm"
-            v-model:stand-base-height-mm="draft.standBaseHeightMm"
-            v-model:stand-rail-height-mm="draft.standRailHeightMm"
-            v-model:stand-slot-mm="draft.standSlotMm"
-            v-model:stand-color="draft.standColor"
-          />
+          <section class="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-xs font-semibold text-ink-800">Strip LED</p>
+                <p class="text-[10px] text-ink-400">Hanya tampilan di layar, tidak ikut dicetak</p>
+              </div>
+              <input v-model="draft.ledStripEnabled" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-300 text-accent-600" />
+            </div>
+            <div v-if="draft.ledStripEnabled" class="grid grid-cols-[1fr_auto_auto] items-end gap-2 border-t border-ink-50 pt-2">
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Lebar (mm)</span>
+                <input v-model.number="draft.ledStripWidthMm" type="number" min="2" max="8" step="0.5" class="input-num w-full text-sm" />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Warna papan</span>
+                <input v-model="draft.ledStripColor" type="color" class="h-9 w-10 rounded-md border border-ink-200 cursor-pointer" />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Warna lampu</span>
+                <input v-model="draft.ledLightColor" type="color" class="h-9 w-10 rounded-md border border-ink-200 cursor-pointer" />
+              </label>
+            </div>
+          </section>
 
-          <div class="grid grid-cols-2 gap-3">
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Kedalaman cavity LED</span>
-              <input v-model.number="draft.backCavityDepthMm" type="number" min="8" max="30" step="1" class="input-num w-full" />
-            </label>
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Tebal back panel</span>
-              <input v-model.number="draft.backPanelMm" type="number" min="1" max="6" step="0.5" class="input-num w-full" />
-            </label>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Lubang kabel (Ø mm)</span>
-              <input v-model.number="draft.cableHoleMm" type="number" min="0" max="12" step="0.5" class="input-num w-full" />
-              <span class="text-[10px] text-ink-400">0 = tanpa lubang</span>
-            </label>
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Posisi lubang</span>
-              <select v-model="draft.cableHoleSide" class="input text-sm">
-                <option v-for="s in cableSides" :key="s.id" :value="s.id">{{ s.label }}</option>
-              </select>
-            </label>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Lubang gantung (Ø mm)</span>
-              <input v-model.number="draft.hangingHoleMm" type="number" min="0" max="12" step="0.5" class="input-num w-full" />
-              <span class="text-[10px] text-ink-400">0 = tanpa lubang</span>
-            </label>
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Jarak dari atas</span>
-              <input v-model.number="draft.hangingHoleOffsetMm" type="number" min="4" max="30" step="0.5" class="input-num w-full" />
-            </label>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Layer latar (mm)</span>
-              <input v-model.number="draft.backLayerDepthMm" type="number" min="0.4" max="3" step="0.1" class="input-num w-full" />
-            </label>
-            <label class="block space-y-1.5">
-              <span class="text-xs font-medium text-ink-700">Layer warna (mm)</span>
-              <input v-model.number="draft.colorLayerDepthMm" type="number" min="0.3" max="1.5" step="0.1" class="input-num w-full" />
-            </label>
-          </div>
+          <section class="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-xs font-semibold text-ink-800">Diffuser</p>
+                <p class="text-[10px] text-ink-400">Lapisan tipis agar cahaya lebih rata</p>
+              </div>
+              <input v-model="draft.diffuserEnabled" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-300 text-accent-600" />
+            </div>
+            <div v-if="draft.diffuserEnabled" class="grid grid-cols-[1fr_auto] items-end gap-2 border-t border-ink-50 pt-2">
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Tebal (mm)</span>
+                <input v-model.number="draft.diffuserDepthMm" type="number" min="0.2" max="2" step="0.1" class="input-num w-full text-sm" />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Warna</span>
+                <input v-model="draft.diffuserColor" type="color" class="h-9 w-10 rounded-md border border-ink-200 cursor-pointer" />
+              </label>
+            </div>
+          </section>
+
+          <section class="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
+            <div>
+              <p class="text-xs font-semibold text-ink-800">Tebal muka</p>
+              <p class="text-[10px] text-ink-400">Latar dan tinggi timbul teks/gambar/QR</p>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Latar (mm)</span>
+                <input v-model.number="draft.backLayerDepthMm" type="number" min="0.4" max="3" step="0.1" class="input-num w-full text-sm" />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Desain timbul (mm)</span>
+                <input v-model.number="draft.colorLayerDepthMm" type="number" min="0.3" max="1.5" step="0.1" class="input-num w-full text-sm" />
+              </label>
+            </div>
+          </section>
+
+          <section class="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
+            <div>
+              <p class="text-xs font-semibold text-ink-800">Rongga dan belakang</p>
+              <p class="text-[10px] text-ink-400">Ruang dalam untuk LED dan kabel</p>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Dalam rongga (mm)</span>
+                <input v-model.number="draft.backCavityDepthMm" type="number" min="8" max="30" step="1" class="input-num w-full text-sm" />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Panel belakang (mm)</span>
+                <input v-model.number="draft.backPanelMm" type="number" min="1" max="6" step="0.5" class="input-num w-full text-sm" />
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2 border-t border-ink-50 pt-2">
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Lubang kabel (mm)</span>
+                <input v-model.number="draft.cableHoleMm" type="number" min="0" max="12" step="0.5" class="input-num w-full text-sm" />
+                <span class="text-[10px] text-ink-400">Isi 0 jika tidak perlu</span>
+              </label>
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Posisi lubang</span>
+                <select v-model="draft.cableHoleSide" class="input text-sm">
+                  <option v-for="s in cableSides" :key="s.id" :value="s.id">{{ s.label }}</option>
+                </select>
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Lubang gantung (mm)</span>
+                <input v-model.number="draft.hangingHoleMm" type="number" min="0" max="12" step="0.5" class="input-num w-full text-sm" />
+                <span class="text-[10px] text-ink-400">Isi 0 jika tidak perlu</span>
+              </label>
+              <label class="block space-y-1">
+                <span class="text-[11px] font-medium text-ink-600">Jarak dari atas (mm)</span>
+                <input v-model.number="draft.hangingHoleOffsetMm" type="number" min="4" max="30" step="0.5" class="input-num w-full text-sm" />
+              </label>
+            </div>
+          </section>
+
+          <section class="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
+            <div>
+              <p class="text-xs font-semibold text-ink-800">Stand</p>
+              <p class="text-[10px] text-ink-400">Boleh dilewati</p>
+            </div>
+            <LightboxStandPicker
+              v-model:stand-model-id="draft.standModelId"
+              v-model:stand-enabled="draft.standEnabled"
+              v-model:stand-width-mm="draft.standWidthMm"
+              v-model:stand-depth-mm="draft.standDepthMm"
+              v-model:stand-base-height-mm="draft.standBaseHeightMm"
+              v-model:stand-rail-height-mm="draft.standRailHeightMm"
+              v-model:stand-slot-mm="draft.standSlotMm"
+              v-model:stand-color="draft.standColor"
+            />
+          </section>
         </template>
 
         <template v-else>

@@ -491,7 +491,7 @@ function scheduleMount() {
       mountParts()
       error.value = ''
     } catch (e) {
-      error.value = e?.message || 'Gagal memuat preview'
+    <div v-if="loading" class="absolute inset-0 flex items-center justify-center text-sm text-ink-500">Memuat...</div>
     }
   })
 }
@@ -584,7 +584,7 @@ async function init() {
     await nextTick()
     scheduleMount()
   } catch (e) {
-    error.value = e?.message || 'Gagal memuat preview'
+    <div v-if="loading" class="absolute inset-0 flex items-center justify-center text-sm text-ink-500">Memuat...</div>
   } finally {
     loading.value = false
   }
@@ -637,29 +637,43 @@ onMounted(init)
 
 onUnmounted(() => {
   intersectionObserver?.disconnect()
+  intersectionObserver = null
   resizeObserver?.disconnect()
+  resizeObserver = null
   stopAnimation()
   renderer?.domElement?.removeEventListener('pointerdown', onCanvasPointerDown)
   renderer?.domElement?.removeEventListener('pointerup', onCanvasPointerUp)
   renderer?.domElement?.removeEventListener('pointercancel', onCanvasPointerUp)
   renderer?.domElement?.removeEventListener('pointerleave', onCanvasPointerLeave)
   transform?.dispose()
+  transform = null
   clearScene()
   orbit?.dispose()
+  orbit = null
   if (gridHelper) {
     scene?.remove(gridHelper)
     disposeGrid(gridHelper)
     gridHelper = null
   }
-  renderer?.dispose()
-  renderer?.domElement?.remove()
+  if (renderer) {
+    try {
+      renderer.forceContextLoss()
+    } catch (_) {
+      /* ignore */
+    }
+    renderer.dispose()
+    renderer.domElement?.remove()
+    renderer = null
+  }
+  scene = null
+  camera = null
 })
 </script>
 
 <template>
   <div class="relative w-full h-full min-h-0 bg-ink-50 overflow-hidden">
     <div ref="container" class="absolute inset-0" />
-    <div v-if="loading" class="absolute inset-0 flex items-center justify-center text-sm text-ink-500">Memuat…</div>
+    <div v-if="loading" class="absolute inset-0 flex items-center justify-center text-sm text-ink-500">Memuat...</div>
     <div v-if="error" class="absolute inset-0 flex items-center justify-center text-sm text-red-600 p-3 text-center">{{ error }}</div>
   </div>
 </template>

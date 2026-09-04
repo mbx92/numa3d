@@ -505,7 +505,7 @@ function buildLiveResult(raw) {
 
         face3mfCache = new Blob(
 
-          [partsTo3mfBuffer(faceExportParts, `${raw.slug}_front_side`, { assembly: true })],
+          [partsTo3mfBuffer(faceExportParts, `${raw.slug}_front`, { assembly: true })],
 
           { type: 'model/3mf' }
 
@@ -531,7 +531,7 @@ function buildLiveResult(raw) {
 
         body3mfCache = new Blob(
 
-          [partsTo3mfBuffer(bodyExportParts, `${raw.slug}_back`, { assembly: false })],
+          [partsTo3mfBuffer(bodyExportParts, `${raw.slug}_body`, { assembly: false })],
 
           { type: 'model/3mf' }
 

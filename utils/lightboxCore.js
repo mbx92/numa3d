@@ -473,18 +473,33 @@ function buildStandPedestal(fit, opts) {
 
 function buildStandClip(fit, opts) {
   const { standW, slotMm } = fit
-  const standD = opts.standDepthMm
   const baseH = opts.standBaseHeightMm
   const lipH = opts.standRailHeightMm
   const color = opts.standColor || opts.colors.frame
-  const lipD = Math.max(2.5, standD * 0.22)
-  const bumpD = Math.max(2, standD * 0.15)
+
+  let standD = opts.standDepthMm
+  let lipD = Math.max(2.5, standD * 0.22)
+  let bumpD = Math.max(2, standD * 0.15)
+
+  // Slot nyata = slotMm (dulu lip/bump di tepi standD, slotMm hanya shadow)
+  const minDepth = slotMm + lipD + bumpD
+  if (standD < minDepth) standD = minDepth
+
+  const frontY = -slotMm / 2 - lipD / 2
+  const backY = slotMm / 2 + bumpD / 2
+
   return {
     parts: [
       standPart(solidBox(standW, standD, baseH, 0, 0, baseH / 2), color, 'stand_base'),
-      standPart(solidBox(standW, lipD, lipH, 0, -standD / 2 + lipD / 2, baseH + lipH / 2), color, 'stand_front_lip'),
-      standPart(solidBox(standW * 0.6, bumpD, lipH * 0.7, 0, standD / 2 - bumpD / 2, baseH + lipH * 0.35), color, 'stand_back_bump'),
-      previewBox(standW * 0.75, slotMm, 0.06, 0, 0, baseH + 0.05, '#0b0d10', 'standSlot', 'stand_slot_shadow', { opacity: 0.2 })
+      standPart(solidBox(standW, lipD, lipH, 0, frontY, baseH + lipH / 2), color, 'stand_front_lip'),
+      standPart(
+        solidBox(standW * 0.6, bumpD, lipH * 0.7, 0, backY, baseH + lipH * 0.35),
+        color,
+        'stand_back_bump'
+      ),
+      previewBox(standW * 0.75, slotMm, 0.06, 0, 0, baseH + 0.05, '#0b0d10', 'standSlot', 'stand_slot_shadow', {
+        opacity: 0.2
+      })
     ],
     heightMm: baseH + lipH
   }
@@ -655,18 +670,18 @@ export async function generateLightboxCore(userOpts = {}) {
 
   const frameExportParts = frame.parts.filter((p) => p.role === 'frame')
   const backExportParts = frame.parts.filter((p) => p.role === 'back')
-  const frontSidePrintParts = [...frameExportParts, ...face.parts].map((part) =>
-    cloneFrontSidePrintPart(part, totalHeight)
-  )
+  // Front = face saja; body/shell = frame + back (satu part cetak)
+  const frontSidePrintParts = face.parts.map((part) => cloneFrontSidePrintPart(part, totalHeight))
+  const bodyPrintParts = [...frameExportParts, ...backExportParts]
   const facePreviewParts = frontSidePrintParts
-  const bodyPreviewParts = backExportParts
+  const bodyPreviewParts = bodyPrintParts
   const frontSidePreviewParts = facePreviewParts
   const backPreviewParts = bodyPreviewParts
   const standPreviewParts = stand.parts
   const assemblyPreviewParts = [...frame.parts, ...ledPreviewParts, ...face.parts, ...faceGlowParts, ...standAssemblyParts]
 
   const faceGeos = frontSidePrintParts.map((p) => p.geometry)
-  const bodyGeos = backExportParts.map((p) => p.geometry)
+  const bodyGeos = bodyPrintParts.map((p) => p.geometry)
   const faceMerged = mergeParts(faceGeos.map((g) => g.clone()))
   const bodyMerged = mergeParts(bodyGeos.map((g) => g.clone()))
   const standMerged = standExportParts.length ? mergeParts(standExportParts.map((p) => p.geometry.clone())) : null
@@ -679,13 +694,13 @@ export async function generateLightboxCore(userOpts = {}) {
   const result = {
     slug,
     designMode: opts.designMode,
-    frontSideFilename: `${slug}_front_side.stl`,
-    backFilename: `${slug}_back.stl`,
-    baseFilename: `${slug}_front_side.stl`,
-    bodyFilename: `${slug}_back.stl`,
+    frontSideFilename: `${slug}_front.stl`,
+    backFilename: `${slug}_body.stl`,
+    baseFilename: `${slug}_front.stl`,
+    bodyFilename: `${slug}_body.stl`,
     standFilename: `${slug}_stand_${opts.standModelId}.stl`,
-    accentFilename: `${slug}_front_side.stl`,
-    lidFilename: `${slug}_back.stl`,
+    accentFilename: `${slug}_front.stl`,
+    lidFilename: `${slug}_body.stl`,
     basePreviewColor: opts.colors.background,
     dimensions: {
       widthMm: Number(opts.outerWidthMm.toFixed(1)),

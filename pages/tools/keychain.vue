@@ -587,7 +587,7 @@ function restartWizard() {
           <ClientOnly>
             <template v-if="activePreviewParts.length">
               <KeychainPreview
-                :key="`${activePreview}-${previewKey}`"
+                :key="previewKey"
                 v-model:selected-part-id="selectedPartId"
                 :parts="activePreviewParts"
                 :show-grid="showPreviewGrid"
