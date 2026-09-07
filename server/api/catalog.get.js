@@ -2,9 +2,9 @@ import { asc, sql, inArray } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { getHppForProducts } from '../utils/productHpp.js'
 import { getSettings } from '../utils/settings.js'
-import { suggestedPrice } from '../utils/hpp.js'
+import { decorateProductPricing } from '../utils/productPricing.js'
 
-// Katalog produk: kartu produk lengkap dengan foto, HPP, harga jual saran,
+// Katalog produk: kartu produk lengkap dengan foto, HPP, harga jual,
 // dan performa penjualan sepanjang waktu (unit terjual + margin).
 export default defineEventHandler(async () => {
   const db = useDb()
@@ -34,12 +34,10 @@ export default defineEventHandler(async () => {
     .groupBy(schema.productFiles.productId)
   const fileMap = new Map(fileRows.map((r) => [r.productId, Number(r.count)]))
 
-  const margin = settings?.defaultMarginPercent ?? 40
   return products.map((p) => {
     const hpp = hppMap.get(p.id)
     const sold = soldMap.get(p.id)
-    const hasRecipe = (hpp?.recipeRows?.length ?? 0) > 0
-    const total = hpp?.total ?? 0
+    const pricing = decorateProductPricing(p, hpp, settings)
     return {
       id: p.id,
       name: p.name,
@@ -47,10 +45,7 @@ export default defineEventHandler(async () => {
       status: p.status,
       imageKey: p.imageKey,
       stockQuantity: p.stockQuantity || 0,
-      hasRecipe,
-      hpp: total,
-      suggestedPrice: hasRecipe ? Math.ceil(suggestedPrice(total, margin) / 500) * 500 : 0,
-      marginPercent: margin,
+      ...pricing,
       fileCount: fileMap.get(p.id) || 0,
       unitsSold: Number(sold?.units || 0),
       grossRevenue: Number(sold?.grossRevenue || 0),

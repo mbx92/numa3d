@@ -120,6 +120,31 @@ function edgePointFromBounds(bounds, angleDeg) {
   }
 }
 
+function keyringStrapHoleShapes(bounds, angleDeg, holeMm, offsetMm = 0) {
+  const holeR = Math.max(1.5, holeMm / 2)
+  const edge = edgePointFromBounds(bounds, angleDeg)
+  const dir = edge.dir
+  const tangent = { x: -dir.y, y: dir.x }
+  const inset = Math.max(holeR + 2.0, 4.5)
+  let hcx
+  let hcy
+  if (Math.abs(dir.x) >= Math.abs(dir.y)) {
+    hcx = dir.x < 0 ? bounds.minX + inset : bounds.maxX - inset
+    hcy = bounds.maxY - inset + offsetMm
+  } else {
+    hcx = bounds.minX + inset + offsetMm
+    hcy = dir.y < 0 ? bounds.minY + inset : bounds.maxY - inset
+  }
+  const slotOffset = holeR * 0.42
+  const p0 = { x: hcx - tangent.x * slotOffset, y: hcy - tangent.y * slotOffset }
+  const p1 = { x: hcx + tangent.x * slotOffset, y: hcy + tangent.y * slotOffset }
+  return [
+    circleAt(p0.x, p0.y, holeR),
+    circleAt(p1.x, p1.y, holeR),
+    bridgeShapeBetween(p0, p1, holeR * 2)
+  ]
+}
+
 /** Base button-in-bezel — siluet mengikuti bentuk desain. */
 function buildBaseBody(opts, mech) {
   const floor = opts.floorThicknessMm
@@ -131,15 +156,32 @@ function buildBaseBody(opts, mech) {
   const wellTopZ = oh - topRim
   const bezelH = Math.max(1, wellTopZ - wellFloorZ)
 
+  const keyringAllowed =
+    opts.keyringEnabled === true
+    && opts.shapeMode === 'rect'
+    && opts.flexiEnabled !== true
+  const keyringStyle = opts.keyringStyle === 'hole' ? 'hole' : 'loop'
+  const holeMm = Number(opts.keyringHoleMm) || 5.2
+  const angleDeg = Number(opts.keyringAngleDeg) || 270
+
+  let bodyShapes = mech.bodyShapes
+  if (keyringAllowed && keyringStyle === 'hole') {
+    const punched = subtractShapes2D(
+      mech.bodyShapes,
+      keyringStrapHoleShapes(mech.bodyBounds, angleDeg, holeMm, Number(opts.keyringOffsetMm) || 0)
+    )
+    if (punched.length) bodyShapes = punched
+  }
+
   const parts = []
 
   // Lantai solid mengikuti siluet body
-  const floorGeo = extrudeShapes(mech.bodyShapes, floor)
+  const floorGeo = extrudeShapes(bodyShapes, floor)
   if (floorGeo) parts.push(floorGeo)
 
   // Dinding pocket switch (ring antara body & pocket)
   const pocketWallH = switchDepth
-  const pocketWalls = buildBezelRing(mech.bodyShapes, [mech.pocketShape])
+  const pocketWalls = buildBezelRing(bodyShapes, [mech.pocketShape])
   const pocketWallGeo = extrudeShapes(pocketWalls, pocketWallH)
   if (pocketWallGeo) {
     pocketWallGeo.translate(0, 0, floor)
@@ -153,7 +195,7 @@ function buildBaseBody(opts, mech) {
   if (wellFloorGeo) parts.push(wellFloorGeo)
 
   // Bezel — border mengelilingi well (raised frame)
-  const bezelShapes = buildBezelRing(mech.bodyShapes, mech.wellShapes)
+  const bezelShapes = buildBezelRing(bodyShapes, mech.wellShapes)
   const bezelGeo = extrudeShapes(bezelShapes, bezelH)
   if (bezelGeo) bezelGeo.translate(0, 0, wellFloorZ)
   if (bezelGeo) parts.push(bezelGeo)
@@ -164,21 +206,22 @@ function buildBaseBody(opts, mech) {
   if (rimGeo) rimGeo.translate(0, 0, wellTopZ)
   if (rimGeo) parts.push(rimGeo)
 
-  // Keyring loop tab
-  if (opts.keyringEnabled) {
-    const hole = Number(opts.keyringHoleMm) || 5.2
-    const loopR = Math.max(3.2, hole / 2 + 1.8, (Number(opts.keyringTabMm) || 10) / 2)
-    const tabThick = Math.max(2.5, Math.min(4, oh * 0.35))
-    const edge = edgePointFromBounds(mech.bodyBounds, Number(opts.keyringAngleDeg) || 270)
-    const overlap = Math.min(loopR * 0.42, Math.max(1.1, loopR - hole / 2 - 0.2))
+  // Keyring protruding loop tab (hole style already punched into bodyShapes)
+  // Eyelet sized to read clearly from 3/4 view: thicker wall + more stick-out past edge.
+  if (keyringAllowed && keyringStyle === 'loop') {
+    const loopR = Math.max(4.2, holeMm / 2 + 2.5, (Number(opts.keyringTabMm) || 12) / 2)
+    const tabThick = Math.max(2.8, Math.min(4.5, oh * 0.4))
+    const edge = edgePointFromBounds(mech.bodyBounds, angleDeg)
+    // Less overlap → more protrusion past the body edge (keychain-eyelet look)
+    const overlap = Math.min(loopR * 0.32, Math.max(1.0, loopR - holeMm / 2 - 0.4))
     const tabX = edge.x + edge.dir.x * (loopR - overlap)
     const tabY = edge.y + edge.dir.y * (loopR - overlap)
     const innerP = { x: edge.x - edge.dir.x * overlap, y: edge.y - edge.dir.y * overlap }
-    const outerP = { x: tabX + edge.dir.x * loopR * 0.18, y: tabY + edge.dir.y * loopR * 0.18 }
+    const outerP = { x: tabX + edge.dir.x * loopR * 0.32, y: tabY + edge.dir.y * loopR * 0.32 }
 
     const tabOuter = circleAt(tabX, tabY, loopR)
-    const tabBridge = bridgeShapeBetween(innerP, outerP, Math.max(hole * 1.08, loopR * 0.9))
-    const tabHole = circleAt(tabX, tabY, hole / 2)
+    const tabBridge = bridgeShapeBetween(innerP, outerP, Math.max(holeMm * 1.2, loopR * 1.05))
+    const tabHole = circleAt(tabX, tabY, holeMm / 2)
     const tabShapes = subtractShapes2D([tabOuter, tabBridge], [tabHole])
     const tabGeo = extrudeShapes(tabShapes, tabThick)
     if (tabGeo) tabGeo.translate(0, 0, oh - tabThick)

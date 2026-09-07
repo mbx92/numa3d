@@ -240,10 +240,18 @@ async function runGenerate() {
     }))
     assemblyPreviewParts.value = out.assemblyPreviewParts.map((p) => ({
       geometry: p.geometry,
+      modelUrl: p.modelUrl,
+      modelNodeNames: p.modelNodeNames,
+      modelFitMm: p.modelFitMm,
+      modelTopZ: p.modelTopZ,
+      modelAxis: p.modelAxis,
+      position: p.position,
+      rotationZ: p.rotationZ,
       color: p.color,
       line: p.line,
       role: p.role,
-      name: p.name
+      name: p.name,
+      opacity: p.opacity
     }))
     selectedPartId.value = ''
     explodeFactor.value = 0
@@ -305,16 +313,20 @@ async function resolvePartExport(part) {
 }
 
 async function downloadPart(part) {
-  const resolved = await resolvePartExport(part)
-  const blob = resolved?.blob
-  const filename = resolved?.filename
-  if (!blob) {
-    toast.error('Part tidak tersedia')
-    return
+  try {
+    const resolved = await resolvePartExport(part)
+    const blob = resolved?.blob
+    const filename = resolved?.filename
+    if (!blob) {
+      toast.error('Part tidak tersedia')
+      return
+    }
+    downloadBlob(blob, filename)
+    const fmtLabel = exportFormats.find((f) => f.id === exportFormat.value)?.label || exportFormat.value
+    toast.success(`Unduh ${part === 'base' ? 'base' : 'lid'} (${fmtLabel})`)
+  } catch (error) {
+    toast.error(error.message || 'Export gagal')
   }
-  downloadBlob(blob, filename)
-  const fmtLabel = exportFormats.find((f) => f.id === exportFormat.value)?.label || exportFormat.value
-  toast.success(`Unduh ${part === 'base' ? 'base' : 'lid'} (${fmtLabel})`)
 }
 
 function uploadBlob(blob, filename) {
@@ -383,6 +395,8 @@ watch(
     if (mode === 'parts') previewStage.value = result.value ? 'result' : 'cut'
   }
 )
+const { downloadPlate, exportingPlate } = usePrintPlateExport(result)
+
 </script>
 
 <template>
@@ -431,6 +445,7 @@ watch(
         <template v-else-if="activeToolPanel === 'switch'">
           <ClickerSwitchPicker
             v-model="form.switchPresetId"
+            v-model:switch-preview-model-id="form.switchPreviewModelId"
             v-model:stem-fit-pct="form.stemFitPct"
             v-model:socket-fit-pct="form.socketFitPct"
             v-model:slip-tolerance-mm="form.slipToleranceMm"
@@ -531,6 +546,7 @@ watch(
                 <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
               </select>
             </KeychainCompactField>
+              <PrintPlateExport v-if="exportFormat === '3mf'" :busy="exportingPlate" mesh @download="downloadPlate" />
             <div class="space-y-2">
               <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('base')">
                 <ArrowDownTrayIcon class="w-4 h-4" /> Base

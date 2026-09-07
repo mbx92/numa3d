@@ -5,6 +5,7 @@ import { requireAdmin } from '../utils/rbac.js'
 import { logAudit } from '../utils/audit.js'
 import { clampShareTtlDays } from '../utils/invoice.js'
 import { parseUiLayoutModesBody } from '../utils/uiLayoutModes.js'
+import { normalizePriceRoundStep } from '../utils/hpp.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -17,6 +18,7 @@ export default defineEventHandler(async (event) => {
       electricityRatePerKwh: Math.round(Number(body.electricityRatePerKwh) || 1445),
       machineUsageHoursPerMonth: Math.max(Math.round(Number(body.machineUsageHoursPerMonth) || 100), 1),
       defaultMarginPercent: Number(body.defaultMarginPercent) || 40,
+      priceRoundStep: normalizePriceRoundStep(body.priceRoundStep),
       invoiceBusinessName: String(body.invoiceBusinessName || '').trim() || 'Numa3D',
       invoiceAddress: String(body.invoiceAddress || '').trim() || null,
       invoicePhone: String(body.invoicePhone || '').trim() || null,

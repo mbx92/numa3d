@@ -3,6 +3,7 @@ import { useDb, schema } from '../../../db/index.js'
 import { logAudit } from '../../../utils/audit.js'
 import { allocateInvoiceNumber } from '../../../utils/invoice.js'
 import { parseSalePayment } from '../../../utils/salePayment.js'
+import { snapshotHppPerUnit } from '../../../utils/saleHpp.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -39,6 +40,7 @@ export default defineEventHandler(async (event) => {
         : order.pricePerUnit
     const saleDate = body.date || order.date
     const payment = parseSalePayment(body, order.channel, saleDate)
+    const hppPerUnit = await snapshotHppPerUnit({ customOrderId: id, tx })
     const invoiceNumber = await allocateInvoiceNumber(tx, schema, saleDate)
     const [sale] = await tx
       .insert(schema.sales)
@@ -48,6 +50,7 @@ export default defineEventHandler(async (event) => {
         customOrderId: id,
         quantity: qty,
         salePricePerUnit: price,
+        hppPerUnit,
         channel: order.channel,
         marketplaceFeePercent:
           body.marketplaceFeePercent !== null && body.marketplaceFeePercent !== undefined && body.marketplaceFeePercent !== ''

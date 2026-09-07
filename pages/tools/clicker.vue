@@ -179,10 +179,18 @@ async function runGenerate() {
     }))
     assemblyPreviewParts.value = out.assemblyPreviewParts.map((p) => ({
       geometry: p.geometry,
+      modelUrl: p.modelUrl,
+      modelNodeNames: p.modelNodeNames,
+      modelFitMm: p.modelFitMm,
+      modelTopZ: p.modelTopZ,
+      modelAxis: p.modelAxis,
+      position: p.position,
+      rotationZ: p.rotationZ,
       color: p.color,
       line: p.line,
       role: p.role,
-      name: p.name
+      name: p.name,
+      opacity: p.opacity
     }))
     selectedPartId.value = ''
     explodeFactor.value = 0
@@ -242,16 +250,20 @@ async function resolvePartExport(part) {
 }
 
 async function downloadPart(part) {
-  const resolved = await resolvePartExport(part)
-  const blob = resolved?.blob
-  const filename = resolved?.filename
-  if (!blob) {
-    toast.error('Part lid tidak tersedia')
-    return
+  try {
+    const resolved = await resolvePartExport(part)
+    const blob = resolved?.blob
+    const filename = resolved?.filename
+    if (!blob) {
+      toast.error('Part lid tidak tersedia')
+      return
+    }
+    downloadBlob(blob, filename)
+    const fmtLabel = exportFormats.find((f) => f.id === exportFormat.value)?.label || exportFormat.value
+    toast.success(`Unduh ${part === 'base' ? 'base' : 'lid'} (${fmtLabel})`)
+  } catch (error) {
+    toast.error(error.message || 'Export gagal')
   }
-  downloadBlob(blob, filename)
-  const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
-  toast.success(`Unduh ${part === 'base' ? 'base' : 'lid'} (${fmtLabel})`)
 }
 
 function uploadBlob(blob, filename) {
@@ -314,6 +326,8 @@ function restartWizard() {
 watch(canSimulateClick, (ok) => {
   if (!ok) simulatingClick.value = false
 })
+const { downloadPlate, exportingPlate } = usePrintPlateExport(result)
+
 </script>
 
 <template>
@@ -341,6 +355,12 @@ watch(canSimulateClick, (ok) => {
             <ClickerDesignPicker
               v-model:shape-mode="form.shapeMode"
               v-model:base-shape="form.baseShape"
+              v-model:per-letter-shapes="form.perLetterShapes"
+              v-model:letter-shapes="form.letterShapes"
+              v-model:flexi-enabled="form.flexiEnabled"
+              v-model:flexi-connection-style="form.flexiConnectionStyle"
+              v-model:flexi-clearance-mm="form.flexiClearanceMm"
+              v-model:flexi-strap-hole-mm="form.flexiStrapHoleMm"
               v-model:text="form.text"
               v-model:font-url="form.fontUrl"
               v-model:svg-content="form.svgContent"
@@ -350,7 +370,10 @@ watch(canSimulateClick, (ok) => {
               v-model:mesh-relief-height-mm="form.meshReliefHeightMm"
               v-model:max-size-mm="form.maxSizeMm"
               v-model:display-mode="form.displayMode"
+              v-model:snap-fit-enabled="form.snapFitEnabled"
               v-model:keyring-enabled="form.keyringEnabled"
+              v-model:keyring-style="form.keyringStyle"
+              v-model:keyring-hole-mm="form.keyringHoleMm"
               v-model:keyring-angle-deg="form.keyringAngleDeg"
             />
           </template>
@@ -358,6 +381,7 @@ watch(canSimulateClick, (ok) => {
           <template v-else-if="activeToolPanel === 'switch'">
             <ClickerSwitchPicker
               v-model="form.switchPresetId"
+              v-model:switch-preview-model-id="form.switchPreviewModelId"
               v-model:stem-fit-pct="form.stemFitPct"
               v-model:socket-fit-pct="form.socketFitPct"
               v-model:slip-tolerance-mm="form.slipToleranceMm"
@@ -437,6 +461,7 @@ watch(canSimulateClick, (ok) => {
                   <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
                 </select>
               </KeychainCompactField>
+              <PrintPlateExport v-if="exportFormat === '3mf'" :busy="exportingPlate" @download="downloadPlate" />
               <div class="space-y-2">
                 <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('base')">
                   <ArrowDownTrayIcon class="w-4 h-4" /> Base

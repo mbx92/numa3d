@@ -6,7 +6,7 @@ import {
   EXPORT_FORMATS,
   exportFilename,
   exportMime,
-  partsTo3mfBuffer,
+  printGroupsTo3mfBuffer,
   partsToColoredStlBuffer,
   partsToGlbBuffer,
   partsToMultiSolidStlBuffer
@@ -78,13 +78,29 @@ async function getManifoldWorker() {
 }
 
 function mapPreviewPart(p, geos) {
-  const geometry = unpackGeometry(p.geometry)
-  geos.push(geometry)
-  return { geometry, color: p.color, line: !!p.line, role: p.role || null, name: p.role || null }
+  const geometry = p.geometry ? unpackGeometry(p.geometry) : null
+  if (geometry) geos.push(geometry)
+  const name = p.role === 'switch' ? 'Switch' : null
+  return {
+    geometry,
+    modelUrl: p.modelUrl || null,
+    modelNodeNames: p.modelNodeNames || null,
+    modelFitMm: p.modelFitMm,
+    modelTopZ: p.modelTopZ,
+    modelAxis: p.modelAxis || null,
+    position: p.position || null,
+    rotationZ: p.rotationZ,
+    color: p.color,
+    line: !!p.line,
+    role: p.role || null,
+    name,
+    opacity: p.opacity,
+    previewOnly: !!p.previewOnly
+  }
 }
 
 function exportParts(parts) {
-  return parts.filter((p) => !p.line && p.geometry?.attributes?.position?.count)
+  return parts.filter((p) => !p.previewOnly && !p.line && p.geometry?.attributes?.position?.count)
 }
 
 function cloneWorkerOpts(opts) {
@@ -137,6 +153,7 @@ function buildLiveResult(raw) {
         }
       ]
     : baseExportParts
+  if (raw.baseMergedExportGeometry) geos.push(base3mfParts[0].geometry)
 
   let baseBlobCache = null
   let baseColorStlCache = null
@@ -152,6 +169,9 @@ function buildLiveResult(raw) {
 
   return {
     slug: raw.slug,
+    getPlate3mfBlob() {
+      return new Blob([printGroupsTo3mfBuffer([{ name: 'Base', parts: base3mfParts }, { name: 'Lid', parts: lidExportParts, faceDown: raw.shapeMode !== 'mesh' }], raw.slug)], { type: 'model/3mf' })
+    },
     warnings: raw.warnings || [],
     shapeMode: raw.shapeMode,
     displayMode: raw.displayMode,
@@ -216,7 +236,7 @@ function buildLiveResult(raw) {
     getBase3mfBlob() {
       if (!base3mfCache) {
         base3mfCache = new Blob(
-          [partsTo3mfBuffer(base3mfParts, `${raw.slug}_base`, { assembly: false })],
+          [printGroupsTo3mfBuffer([{ name: 'Base', parts: base3mfParts }], `${raw.slug}_base`)],
           { type: 'model/3mf' }
         )
       }
@@ -226,7 +246,7 @@ function buildLiveResult(raw) {
       if (!lidExportParts.length) return null
       if (!lid3mfCache) {
         lid3mfCache = new Blob(
-          [partsTo3mfBuffer(lidExportParts, `${raw.slug}_lid`, { assembly: true })],
+          [printGroupsTo3mfBuffer([{ name: 'Lid', parts: lidExportParts, faceDown: raw.shapeMode !== 'mesh' }], `${raw.slug}_lid`)],
           { type: 'model/3mf' }
         )
       }
@@ -312,14 +332,31 @@ function generateViaWorker(opts) {
 }
 
 export async function generateClicker(userOpts = {}) {
+  const glyphCount = Array.from(String(userOpts.text || '')).filter((ch) => ch.trim()).length
+  const snapFitNeedsManifold =
+    userOpts.shapeMode === 'rect'
+    && userOpts.flexiEnabled !== true
+    && (userOpts.snapFitEnabled === true || userOpts.keyringLinkEnabled === true)
+    && glyphCount >= 2
+  const requiresManifold =
+    userOpts.shapeMode === 'mesh'
+    || (userOpts.shapeMode === 'rect' && userOpts.flexiEnabled === true)
+    || snapFitNeedsManifold
   if (typeof window !== 'undefined' && typeof Worker !== 'undefined' && !manifoldFailed) {
     try {
       return await generateViaManifoldWorker(userOpts)
     } catch (e) {
-      if (userOpts.shapeMode === 'mesh') throw e
+      if (requiresManifold) throw e
       console.warn('[clicker] Manifold fallback ke clipper:', e?.message || e)
       manifoldFailed = true
     }
+  }
+  if (requiresManifold) {
+    throw new Error(
+      snapFitNeedsManifold && !(userOpts.shapeMode === 'rect' && userOpts.flexiEnabled === true)
+        ? 'Clip kunci snap-fit antar huruf membutuhkan Manifold worker'
+        : 'Mode flexi membutuhkan Manifold worker agar engsel print-in-place ikut dibuat'
+    )
   }
   if (typeof window !== 'undefined' && typeof Worker !== 'undefined') {
     return generateViaWorker(userOpts)

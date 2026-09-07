@@ -1,13 +1,16 @@
 <script setup>
-import { SWITCH_PRESET_LIST, getSwitchPreset } from '~/utils/clickerPresets.js'
+import { SWITCH_PRESET_LIST, SWITCH_PREVIEW_MODELS, getSwitchPreset, getSwitchPreviewModel } from '~/utils/clickerPresets.js'
 
 const modelValue = defineModel({ type: String, default: 'cherry_mx' })
+const switchPreviewModelId = defineModel('switchPreviewModelId', { type: String, default: 'cherry_mx_glb' })
 const stemFitPct = defineModel('stemFitPct', { type: Number, default: 0 })
 const socketFitPct = defineModel('socketFitPct', { type: Number, default: 0 })
 const slipToleranceMm = defineModel('slipToleranceMm', { type: Number, default: 0.4 })
 
 const presets = SWITCH_PRESET_LIST
+const previewModels = SWITCH_PREVIEW_MODELS
 const active = computed(() => getSwitchPreset(modelValue.value))
+const activePreviewModel = computed(() => getSwitchPreviewModel(switchPreviewModelId.value))
 </script>
 
 <template>
@@ -40,6 +43,15 @@ const active = computed(() => getSwitchPreset(modelValue.value))
         </div>
       </dl>
     </div>
+
+    <label class="block space-y-1.5">
+      <span class="text-xs font-medium text-ink-700">Model switch di preview</span>
+      <select v-model="switchPreviewModelId" class="input text-sm">
+        <option v-for="model in previewModels" :key="model.id" :value="model.id">{{ model.name }}</option>
+      </select>
+      <p class="text-[10px] text-ink-400">{{ activePreviewModel.description }}</p>
+      <p v-if="activePreviewModel.attribution" class="text-[10px] text-ink-400">{{ activePreviewModel.attribution }}</p>
+    </label>
 
     <label class="block space-y-1">
       <span class="text-xs font-medium text-ink-700">Slip-fit lid ↔ well</span>

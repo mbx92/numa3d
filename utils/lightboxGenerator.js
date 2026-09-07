@@ -19,7 +19,7 @@ import {
 
   exportMime,
 
-  partsTo3mfBuffer,
+  printGroupsTo3mfBuffer,
 
   partsToColoredStlBuffer,
 
@@ -240,6 +240,9 @@ function buildLiveResult(raw) {
   return {
 
     slug: raw.slug,
+    getPlate3mfBlob() {
+      return new Blob([printGroupsTo3mfBuffer([{ name: 'Front & Side', parts: faceExportParts }, { name: 'Back', parts: bodyExportParts }, { name: 'Stand', parts: standExportParts }], raw.slug)], { type: 'model/3mf' })
+    },
 
     designMode: raw.designMode,
 
@@ -505,7 +508,7 @@ function buildLiveResult(raw) {
 
         face3mfCache = new Blob(
 
-          [partsTo3mfBuffer(faceExportParts, `${raw.slug}_front_side`, { assembly: true })],
+          [printGroupsTo3mfBuffer([{ name: 'Front & Side', parts: faceExportParts }], `${raw.slug}_front_side`)],
 
           { type: 'model/3mf' }
 
@@ -531,7 +534,7 @@ function buildLiveResult(raw) {
 
         body3mfCache = new Blob(
 
-          [partsTo3mfBuffer(bodyExportParts, `${raw.slug}_back`, { assembly: false })],
+          [printGroupsTo3mfBuffer([{ name: 'Back', parts: bodyExportParts }], `${raw.slug}_back`)],
 
           { type: 'model/3mf' }
 
@@ -557,7 +560,7 @@ function buildLiveResult(raw) {
 
         stand3mfCache = new Blob(
 
-          [partsTo3mfBuffer(standExportParts, `${raw.slug}_stand_${raw.dimensions?.standModelId || 'model'}`, { assembly: true })],
+          [printGroupsTo3mfBuffer([{ name: 'Stand', parts: standExportParts }], `${raw.slug}_stand_${raw.dimensions?.standModelId || 'model'}`)],
 
           { type: 'model/3mf' }
 
@@ -593,7 +596,7 @@ function buildLiveResult(raw) {
 
         assembly3mfCache = new Blob(
 
-          [partsTo3mfBuffer(assemblyExportParts, raw.slug, { assembly: true })],
+          [printGroupsTo3mfBuffer([{ name: 'Front & Side', parts: faceExportParts }, { name: 'Back', parts: bodyExportParts }, { name: 'Stand', parts: standExportParts }], raw.slug)],
 
           { type: 'model/3mf' }
 

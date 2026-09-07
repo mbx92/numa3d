@@ -1,9 +1,12 @@
 import { asc } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { getHppForProducts } from '../../utils/productHpp.js'
+import { getSettings } from '../../utils/settings.js'
+import { decorateProductPricing } from '../../utils/productPricing.js'
 
 export default defineEventHandler(async () => {
   const db = useDb()
+  const settings = await getSettings()
   const products = await db.select().from(schema.products).orderBy(asc(schema.products.name))
   const hppMap = await getHppForProducts(products.map((p) => p.id))
   return products.map((p) => {
@@ -14,8 +17,7 @@ export default defineEventHandler(async () => {
     )
     return {
       ...p,
-      hpp: hpp?.total ?? 0,
-      hasRecipe: (hpp?.recipeRows?.length ?? 0) > 0,
+      ...decorateProductPricing(p, hpp, settings),
       printMinutesPerUnit
     }
   })

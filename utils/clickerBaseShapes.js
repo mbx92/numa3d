@@ -61,32 +61,42 @@ export function makeStarShape(radius, points = 5) {
 }
 
 export function makeHeartShape(radius) {
-  const h = 1 / Math.SQRT2
-  const lobeR = 0.5
-  const lobeX = h / 2
-  const lobeY = 1.5 * h
-  const maxX = lobeX + lobeR
-  const cy = (lobeY + lobeR) / 2
-  const scale = radius / Math.max(maxX, cy)
-  const seg = 64
-  const circlePts = (ox) => {
-    const ring = []
-    for (let i = 0; i < seg; i++) {
-      const a = (Math.PI * 2 * i) / seg
-      ring.push([(ox + lobeR * Math.cos(a)) * scale, (lobeY - cy + lobeR * Math.sin(a)) * scale])
-    }
-    return ring
+  // Classic parametric heart, centered and scaled so max extent ≈ radius.
+  const steps = 96
+  const raw = []
+  for (let i = 0; i < steps; i++) {
+    const t = (Math.PI * 2 * i) / steps
+    const x = 16 * Math.sin(t) ** 3
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)
+    raw.push([x, y])
   }
-  const diamond = [
-    [0, (0 - cy) * scale],
-    [h * scale, (h - cy) * scale],
-    [0, (2 * h - cy) * scale],
-    [-h * scale, (h - cy) * scale]
-  ]
-  const left = circlePts(-lobeX)
-  const right = circlePts(lobeX)
-  const merged = [...left, ...right, ...diamond]
-  return ringFromPoints(merged)
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const [x, y] of raw) {
+    minX = Math.min(minX, x)
+    maxX = Math.max(maxX, x)
+    minY = Math.min(minY, y)
+    maxY = Math.max(maxY, y)
+  }
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  const half = Math.max(maxX - minX, maxY - minY) / 2 || 1
+  const scale = radius / half
+  return ringFromPoints(raw.map(([x, y]) => [(x - cx) * scale, (y - cy) * scale]))
+}
+
+export function makeFlowerShape(radius, petals = 6) {
+  const steps = Math.max(72, petals * 24)
+  const pts = []
+  for (let i = 0; i < steps; i++) {
+    const theta = (Math.PI * 2 * i) / steps - Math.PI / 2
+    const wave = 0.5 + 0.5 * Math.cos(petals * theta)
+    const r = radius * (0.58 + 0.42 * Math.pow(wave, 1.2))
+    pts.push([Math.cos(theta) * r, Math.sin(theta) * r])
+  }
+  return ringFromPoints(pts)
 }
 
 export function makeEggShape(radius) {
@@ -115,27 +125,50 @@ export function makeEggShape(radius) {
   return ringFromPoints(raw.map(([x, y]) => [x - cx, y - cy]))
 }
 
-/** Cari radius terkecil agar bentuk preset menampung kotak halfW × halfH. */
-export function fitShapeRadius(kind, halfW, halfH) {
-  const contains = (r) => {
-    const shape = shapeForKind(kind, r, halfW / halfH)
-    const pts = shape.getPoints(48)
-    let minX = Infinity
-    let maxX = -Infinity
-    let minY = Infinity
-    let maxY = -Infinity
-    for (const p of pts) {
-      minX = Math.min(minX, p.x)
-      maxX = Math.max(maxX, p.x)
-      minY = Math.min(minY, p.y)
-      maxY = Math.max(maxY, p.y)
-    }
-    return minX <= -halfW + 0.01 && maxX >= halfW - 0.01 && minY <= -halfH + 0.01 && maxY >= halfH - 0.01
+/** Ray-cast point-in-polygon for closed rings from Shape.getPoints(). */
+function pointInRing(x, y, pts) {
+  let inside = false
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x
+    const yi = pts[i].y
+    const xj = pts[j].x
+    const yj = pts[j].y
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside
   }
-  let hi = Math.max(1, Math.hypot(halfW, halfH))
+  return inside
+}
+
+/** True if axis-aligned box ±halfW × ±halfH sits inside the silhouette. */
+function shapeContainsRect(shape, halfW, halfH) {
+  const pts = shape.getPoints(96)
+  if (pts.length < 3) return false
+  const samples = []
+  const edge = 12
+  for (let i = 0; i <= edge; i++) {
+    const t = i / edge
+    const x = -halfW + 2 * halfW * t
+    const y = -halfH + 2 * halfH * t
+    samples.push([x, -halfH], [x, halfH], [-halfW, y], [halfW, y])
+  }
+  // Interior grid catches concave indents (flower / star) better than edges alone.
+  for (let iy = 0; iy <= 4; iy++) {
+    for (let ix = 0; ix <= 4; ix++) {
+      samples.push([-halfW + (2 * halfW * ix) / 4, -halfH + (2 * halfH * iy) / 4])
+    }
+  }
+  return samples.every(([x, y]) => pointInRing(x, y, pts))
+}
+
+/** Cari radius terkecil agar bentuk preset menampung kotak halfW × halfH (geometri, bukan AABB). */
+export function fitShapeRadius(kind, halfW, halfH) {
+  const hw = Math.max(0.01, halfW)
+  const hh = Math.max(0.01, halfH)
+  if (kind === 'circle' || !kind) return Math.hypot(hw, hh)
+  const contains = (r) => shapeContainsRect(shapeForKind(kind, r, hw / hh), hw, hh)
+  let hi = Math.max(1, Math.hypot(hw, hh))
   for (let i = 0; i < 40 && !contains(hi); i++) hi *= 2
   let lo = 1e-3
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 28; i++) {
     const mid = (lo + hi) / 2
     if (contains(mid)) hi = mid
     else lo = mid
@@ -155,6 +188,8 @@ export function shapeForKind(kind, radius, aspect = 1) {
       return makeHexagonShape(radius)
     case 'heart':
       return makeHeartShape(radius)
+    case 'flower':
+      return makeFlowerShape(radius)
     case 'star':
       return makeStarShape(radius)
     case 'egg':

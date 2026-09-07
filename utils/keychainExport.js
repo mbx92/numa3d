@@ -1,6 +1,7 @@
 // Export keychain dengan warna — 3MF (Bambu), GLB, STL multi-part, STL berwarna (Prusa).
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { layoutPrintGroups, PRINT_PLATE } from './printPlateLayout.js'
 
 const CRC_TABLE = new Uint32Array(256)
 for (let i = 0; i < 256; i++) {
@@ -274,7 +275,7 @@ export function partsToMultiSolidStlBuffer(parts) {
 
 /** 3MF — objek terpisah + warna material (Bambu Studio / Orca Slicer). */
 export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
-  const { assembly = true } = options
+  const { assembly = true, printGroups, plate = PRINT_PLATE } = options
   const meshParts = meshExportParts(parts)
   if (!meshParts.length) throw new Error('Tidak ada mesh untuk export 3MF')
 
@@ -291,16 +292,16 @@ export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
   const materialsId = 1
   let nextObjectId = 2
   const meshObjectXml = []
-  const meshObjectIds = []
+  const meshInfo = []
   let partIdx = 0
 
   for (const part of meshParts) {
     const objectId = nextObjectId++
-    meshObjectIds.push(objectId)
     const dc = hexToDisplayColor(part.color)
     const pindex = colorIndex.get(dc)
     const name = escapeXml(part.name || part.role || `part_${partIdx++}`)
     const { vertices, triangles } = geometryToMeshData(part.geometry)
+    meshInfo.push({ objectId, name, pindex })
     const vertXml = vertices
       .map((v) => `<vertex x="${v.x}" y="${v.y}" z="${v.z}"/>`)
       .join('')
@@ -313,19 +314,20 @@ export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
   }
 
   const objectXml = [...meshObjectXml]
-  let assemblyBuildId = null
-  if (assembly && meshParts.length > 1) {
-    assemblyBuildId = nextObjectId++
-    const componentsXml = meshObjectIds.map((id) => `<component objectid="${id}"/>`).join('')
+  const buildObjects = []
+  const groups = printGroups || (assembly && meshParts.length > 1 ? [{ name: modelName, parts: meshParts }] : [])
+  for (const group of groups) {
+    const id = nextObjectId++
+    const children = group.parts.map((part) => meshInfo[meshParts.indexOf(part)])
+    const componentsXml = children.map((child) => `<component objectid="${child.objectId}"/>`).join('')
     objectXml.push(
-      `<object id="${assemblyBuildId}" type="model" name="${escapeXml(modelName)}"><components>${componentsXml}</components></object>`
+      `<object id="${id}" type="model" name="${escapeXml(group.name)}"><components>${componentsXml}</components></object>`
     )
+    buildObjects.push({ id, name: group.name, children })
   }
+  if (!groups.length) for (const child of meshInfo) buildObjects.push({ id: child.objectId, children: [child] })
 
-  const buildItemsXml =
-    assemblyBuildId != null
-      ? `<item objectid="${assemblyBuildId}"/>`
-      : meshObjectIds.map((id) => `<item objectid="${id}"/>`).join('')
+  const buildItemsXml = buildObjects.map(({ id }) => `<item objectid="${id}" printable="1"/>`).join('')
 
   const baseXml = baseEntries
     .map((b) => `<base name="${escapeXml(b.name)}" displaycolor="${b.displaycolor}"/>`)
@@ -333,7 +335,8 @@ export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
 
   const modelXml = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
-  <metadata name="Application">Numa3D Keychain</metadata>
+  <metadata name="Application">Numa3D</metadata>
+  ${printGroups ? '<metadata name="BambuStudio:3mfVersion">1</metadata><metadata name="OrcaSlicer">2.3.2</metadata>' : ''}
   <metadata name="Title">${escapeXml(modelName)}</metadata>
   <resources>
     <basematerials id="${materialsId}">
@@ -347,6 +350,30 @@ export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
 </model>`
 
   const enc = new TextEncoder()
+  // Orca's project dialect preserves object/volume grouping and filament slots.
+  // The OrcaSlicer tag selects that importer; Application still identifies Numa3D.
+  const projectEntries = printGroups ? [
+    { name: 'Metadata/model_settings.config', data: enc.encode(`<?xml version="1.0" encoding="UTF-8"?>
+<config>
+${buildObjects.map((obj) => `<object id="${obj.id}"><metadata key="name" value="${escapeXml(obj.name)}"/><metadata key="extruder" value="${obj.children[0].pindex + 1}"/>${obj.children.map((child) => `<part id="${child.objectId}" subtype="normal_part"><metadata key="name" value="${child.name}"/><metadata key="extruder" value="${child.pindex + 1}"/></part>`).join('')}</object>`).join('\n')}
+<plate><metadata key="plater_id" value="1"/><metadata key="plater_name" value="Numa3D ${plate.width} x ${plate.depth}"/><metadata key="locked" value="false"/>
+${buildObjects.map((obj, i) => `<model_instance><metadata key="object_id" value="${obj.id}"/><metadata key="instance_id" value="0"/><metadata key="identify_id" value="${i + 1}"/></model_instance>`).join('\n')}
+</plate></config>`) },
+    { name: 'Metadata/project_settings.config', data: enc.encode(JSON.stringify({
+      name: 'project_settings',
+      version: '2.3.2.0',
+      // Refer to the installed printer preset, without embedding machine G-code.
+      // 0.4 mm matches the Kobra X preset in the user's OrcaSlicer installation.
+      printer_settings_id: 'Anycubic Kobra X 0.4 nozzle',
+      printer_model: 'Anycubic Kobra X',
+      nozzle_diameter: ['0.4'],
+      print_settings_id: '',
+      filament_settings_id: baseEntries.map(() => ''),
+      printable_area: [`0x0`, `${plate.width}x0`, `${plate.width}x${plate.depth}`, `0x${plate.depth}`],
+      printable_height: String(plate.height),
+      filament_colour: baseEntries.map((b) => b.displaycolor.slice(0, 7))
+    })) }
+  ] : []
   return createZip([
     {
       name: '[Content_Types].xml',
@@ -354,6 +381,7 @@ export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+  ${printGroups ? '<Default Extension="config" ContentType="application/octet-stream"/>' : ''}
 </Types>`)
     },
     {
@@ -363,8 +391,19 @@ export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
   <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>`)
     },
-    { name: '3D/3dmodel.model', data: enc.encode(modelXml) }
+    { name: '3D/3dmodel.model', data: enc.encode(modelXml) },
+    ...projectEntries
   ])
+}
+
+/** One OrcaSlicer plate; groups are physical parts, volumes are their colors. */
+export function printGroupsTo3mfBuffer(groups, modelName = 'Numa3D', plate = PRINT_PLATE) {
+  const laidOut = layoutPrintGroups(groups, plate)
+  try {
+    return partsTo3mfBuffer(laidOut.flatMap((group) => group.parts), modelName, { printGroups: laidOut, plate })
+  } finally {
+    for (const group of laidOut) for (const part of group.parts) part.geometry.dispose()
+  }
 }
 
 function partsToScene(parts, namePrefix = 'part') {
@@ -399,7 +438,7 @@ export function partsToGlbBuffer(parts) {
 }
 
 export const EXPORT_FORMATS = [
-  { id: '3mf', label: '3MF (part terpisah + warna)', ext: '3mf', mime: 'model/3mf' },
+  { id: '3mf', label: '3MF (OrcaSlicer · plate 260 × 260)', ext: '3mf', mime: 'model/3mf' },
   { id: 'stl-parts', label: 'STL multi-part (split di slicer)', ext: 'stl', mime: 'model/stl' },
   { id: 'glb', label: 'GLB (material)', ext: 'glb', mime: 'model/gltf-binary' },
   { id: 'stl-color', label: 'STL berwarna (PrusaSlicer)', ext: 'stl', mime: 'model/stl' },

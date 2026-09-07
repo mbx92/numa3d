@@ -231,51 +231,55 @@ async function runGenerate() {
 }
 
 async function downloadPart(part) {
-  if (!result.value) return
-  const slug = result.value.slug
-  const fmt = exportFormat.value
-  let blob
-  let filename
+  try {
+    if (!result.value) return
+    const slug = result.value.slug
+    const fmt = exportFormat.value
+    let blob
+    let filename
 
-  if (part === 'base') {
-    if (fmt === '3mf') {
-      blob = result.value.getBase3mfBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else if (fmt === 'glb') {
-      blob = await result.value.getBaseGlbBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else if (fmt === 'stl-parts') {
-      blob = result.value.getBaseMultiStlBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else if (fmt === 'stl-color') {
-      blob = result.value.getBaseColoredStlBlob()
-      filename = exportFilename(slug, 'base', fmt)
+    if (part === 'base') {
+      if (fmt === '3mf') {
+        blob = result.value.getBase3mfBlob()
+        filename = exportFilename(slug, 'base', fmt)
+      } else if (fmt === 'glb') {
+        blob = await result.value.getBaseGlbBlob()
+        filename = exportFilename(slug, 'base', fmt)
+      } else if (fmt === 'stl-parts') {
+        blob = result.value.getBaseMultiStlBlob()
+        filename = exportFilename(slug, 'base', fmt)
+      } else if (fmt === 'stl-color') {
+        blob = result.value.getBaseColoredStlBlob()
+        filename = exportFilename(slug, 'base', fmt)
+      } else {
+        blob = result.value.getBaseBlob()
+        filename = result.value.baseFilename
+      }
     } else {
-      blob = result.value.getBaseBlob()
-      filename = result.value.baseFilename
+      if (fmt === '3mf') {
+        blob = result.value.getText3mfBlob()
+        filename = exportFilename(slug, 'text', fmt)
+      } else if (fmt === 'glb') {
+        blob = await result.value.getTextGlbBlob()
+        filename = exportFilename(slug, 'text', fmt)
+      } else if (fmt === 'stl-parts') {
+        blob = result.value.getTextMultiStlBlob()
+        filename = exportFilename(slug, 'text', fmt)
+      } else if (fmt === 'stl-color') {
+        blob = result.value.getTextColoredStlBlob()
+        filename = exportFilename(slug, 'text', fmt)
+      } else {
+        blob = result.value.getTextBlob()
+        filename = result.value.textFilename
+      }
     }
-  } else {
-    if (fmt === '3mf') {
-      blob = result.value.getText3mfBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else if (fmt === 'glb') {
-      blob = await result.value.getTextGlbBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else if (fmt === 'stl-parts') {
-      blob = result.value.getTextMultiStlBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else if (fmt === 'stl-color') {
-      blob = result.value.getTextColoredStlBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else {
-      blob = result.value.getTextBlob()
-      filename = result.value.textFilename
-    }
+
+    downloadBlob(blob, filename)
+    const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
+    toast.success(`Unduh ${part === 'base' ? 'base' : 'teks'} (${fmtLabel})`)
+  } catch (error) {
+    toast.error(error.message || 'Export gagal')
   }
-
-  downloadBlob(blob, filename)
-  const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
-  toast.success(`Unduh ${part === 'base' ? 'base' : 'teks'} (${fmtLabel})`)
 }
 
 function uploadBlob(blob, filename) {
@@ -341,6 +345,8 @@ function restartWizard() {
   disposePrev = null
   prevDispose?.()
 }
+const { downloadPlate, exportingPlate } = usePrintPlateExport(result)
+
 </script>
 
 <template>
@@ -540,6 +546,7 @@ function restartWizard() {
                   <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
                 </select>
               </KeychainCompactField>
+              <PrintPlateExport v-if="exportFormat === '3mf'" :busy="exportingPlate" @download="downloadPlate" />
               <div class="space-y-2">
                 <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('base')">
                   <ArrowDownTrayIcon class="w-4 h-4" /> Base
@@ -558,7 +565,7 @@ function restartWizard() {
                   {{ saving ? 'Menyimpan…' : 'Galeri' }}
                 </button>
               </div>
-              <p class="text-[10px] text-ink-400 leading-relaxed">3MF untuk ACE Pro 2 · STL multi-part untuk split manual.</p>
+              <p class="text-[10px] text-ink-400 leading-relaxed">3MF OrcaSlicer · Bagian warna tetap tergabung dalam satu objek.</p>
             </template>
             <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
           </template>

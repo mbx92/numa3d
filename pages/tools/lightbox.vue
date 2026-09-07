@@ -305,85 +305,89 @@ function updateLayerPaletteColor(layer, color) {
 }
 
 async function downloadPart(part) {
-  if (!(await ensureFreshResult())) return
-  const slug = result.value.slug
-  const fmt = exportFormat.value
-  let blob
-  let filename
+  try {
+    if (!(await ensureFreshResult())) return
+    const slug = result.value.slug
+    const fmt = exportFormat.value
+    let blob
+    let filename
 
-  if (part === 'assembly') {
-    if (fmt === '3mf') {
-      blob = result.value.getAssembly3mfBlob()
-      filename = exportFilename(slug, 'assembly', fmt)
-    } else if (fmt === 'glb') {
-      blob = await result.value.getAssemblyGlbBlob()
-      filename = exportFilename(slug, 'assembly', fmt)
-    } else {
-      toast.error('Assembly hanya tersedia untuk 3MF dan GLB')
+    if (part === 'assembly') {
+      if (fmt === '3mf') {
+        blob = result.value.getAssembly3mfBlob()
+        filename = exportFilename(slug, 'assembly', fmt)
+      } else if (fmt === 'glb') {
+        blob = await result.value.getAssemblyGlbBlob()
+        filename = exportFilename(slug, 'assembly', fmt)
+      } else {
+        toast.error('Assembly hanya tersedia untuk 3MF dan GLB')
+        return
+      }
+    } else if (part === 'face') {
+      if (fmt === '3mf') {
+        blob = result.value.getFrontSide3mfBlob?.() || result.value.getFace3mfBlob()
+        filename = exportFilename(slug, 'face', fmt)
+      } else if (fmt === 'glb') {
+        blob = await (result.value.getFrontSideGlbBlob?.() || result.value.getFaceGlbBlob())
+        filename = exportFilename(slug, 'face', fmt)
+      } else if (fmt === 'stl-parts') {
+        blob = result.value.getFrontSideMultiStlBlob?.() || result.value.getFaceMultiStlBlob()
+        filename = exportFilename(slug, 'face', fmt)
+      } else if (fmt === 'stl-color') {
+        blob = result.value.getFrontSideColoredStlBlob?.() || result.value.getFaceColoredStlBlob()
+        filename = exportFilename(slug, 'face', fmt)
+      } else {
+        blob = result.value.getFrontSideBlob?.() || result.value.getFaceBlob()
+        filename = result.value.frontSideFilename || result.value.baseFilename
+      }
+    } else if (part === 'body') {
+      if (fmt === '3mf') {
+        blob = result.value.getBack3mfBlob?.() || result.value.getBody3mfBlob()
+        filename = exportFilename(slug, 'body', fmt)
+      } else if (fmt === 'glb') {
+        blob = await (result.value.getBackGlbBlob?.() || result.value.getBodyGlbBlob())
+        filename = exportFilename(slug, 'body', fmt)
+      } else if (fmt === 'stl-parts') {
+        blob = result.value.getBackMultiStlBlob?.() || result.value.getBodyMultiStlBlob()
+        filename = exportFilename(slug, 'body', fmt)
+      } else if (fmt === 'stl-color') {
+        blob = result.value.getBackColoredStlBlob?.() || result.value.getBodyColoredStlBlob()
+        filename = exportFilename(slug, 'body', fmt)
+      } else {
+        blob = result.value.getBackBlob?.() || result.value.getBodyBlob()
+        filename = result.value.backFilename || result.value.bodyFilename
+      }
+    } else if (part === 'stand') {
+      const standPartName = `stand_${result.value.dimensions?.standModelId || form.standModelId || 'model'}`
+      if (fmt === '3mf') {
+        blob = result.value.getStand3mfBlob()
+        filename = exportFilename(slug, standPartName, fmt)
+      } else if (fmt === 'glb') {
+        blob = await result.value.getStandGlbBlob()
+        filename = exportFilename(slug, standPartName, fmt)
+      } else if (fmt === 'stl-parts') {
+        blob = result.value.getStandMultiStlBlob()
+        filename = exportFilename(slug, standPartName, fmt)
+      } else if (fmt === 'stl-color') {
+        blob = result.value.getStandColoredStlBlob()
+        filename = exportFilename(slug, standPartName, fmt)
+      } else {
+        blob = result.value.getStandBlob()
+        filename = result.value.standFilename
+      }
+    }
+
+    if (!blob) {
+      toast.error('Part tidak tersedia')
       return
     }
-  } else if (part === 'face') {
-    if (fmt === '3mf') {
-      blob = result.value.getFrontSide3mfBlob?.() || result.value.getFace3mfBlob()
-      filename = exportFilename(slug, 'face', fmt)
-    } else if (fmt === 'glb') {
-      blob = await (result.value.getFrontSideGlbBlob?.() || result.value.getFaceGlbBlob())
-      filename = exportFilename(slug, 'face', fmt)
-    } else if (fmt === 'stl-parts') {
-      blob = result.value.getFrontSideMultiStlBlob?.() || result.value.getFaceMultiStlBlob()
-      filename = exportFilename(slug, 'face', fmt)
-    } else if (fmt === 'stl-color') {
-      blob = result.value.getFrontSideColoredStlBlob?.() || result.value.getFaceColoredStlBlob()
-      filename = exportFilename(slug, 'face', fmt)
-    } else {
-      blob = result.value.getFrontSideBlob?.() || result.value.getFaceBlob()
-      filename = result.value.frontSideFilename || result.value.baseFilename
-    }
-  } else if (part === 'body') {
-    if (fmt === '3mf') {
-      blob = result.value.getBack3mfBlob?.() || result.value.getBody3mfBlob()
-      filename = exportFilename(slug, 'body', fmt)
-    } else if (fmt === 'glb') {
-      blob = await (result.value.getBackGlbBlob?.() || result.value.getBodyGlbBlob())
-      filename = exportFilename(slug, 'body', fmt)
-    } else if (fmt === 'stl-parts') {
-      blob = result.value.getBackMultiStlBlob?.() || result.value.getBodyMultiStlBlob()
-      filename = exportFilename(slug, 'body', fmt)
-    } else if (fmt === 'stl-color') {
-      blob = result.value.getBackColoredStlBlob?.() || result.value.getBodyColoredStlBlob()
-      filename = exportFilename(slug, 'body', fmt)
-    } else {
-      blob = result.value.getBackBlob?.() || result.value.getBodyBlob()
-      filename = result.value.backFilename || result.value.bodyFilename
-    }
-  } else if (part === 'stand') {
-    const standPartName = `stand_${result.value.dimensions?.standModelId || form.standModelId || 'model'}`
-    if (fmt === '3mf') {
-      blob = result.value.getStand3mfBlob()
-      filename = exportFilename(slug, standPartName, fmt)
-    } else if (fmt === 'glb') {
-      blob = await result.value.getStandGlbBlob()
-      filename = exportFilename(slug, standPartName, fmt)
-    } else if (fmt === 'stl-parts') {
-      blob = result.value.getStandMultiStlBlob()
-      filename = exportFilename(slug, standPartName, fmt)
-    } else if (fmt === 'stl-color') {
-      blob = result.value.getStandColoredStlBlob()
-      filename = exportFilename(slug, standPartName, fmt)
-    } else {
-      blob = result.value.getStandBlob()
-      filename = result.value.standFilename
-    }
+    downloadBlob(blob, filename)
+    const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
+    const partLabel = part === 'face' ? 'front & side' : part === 'body' ? 'back' : part
+    toast.success(`Unduh ${partLabel} (${fmtLabel})`)
+  } catch (error) {
+    toast.error(error.message || 'Export gagal')
   }
-
-  if (!blob) {
-    toast.error('Part tidak tersedia')
-    return
-  }
-  downloadBlob(blob, filename)
-  const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
-  const partLabel = part === 'face' ? 'front & side' : part === 'body' ? 'back' : part
-  toast.success(`Unduh ${partLabel} (${fmtLabel})`)
 }
 
 function uploadBlob(blob, filename) {
@@ -441,6 +445,8 @@ function restartWizard() {
   disposePrev = null
   prevDispose?.()
 }
+const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFreshResult)
+
 </script>
 
 <template>
@@ -649,9 +655,10 @@ function restartWizard() {
                 <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
               </select>
             </KeychainCompactField>
+              <PrintPlateExport v-if="exportFormat === '3mf'" :busy="exportingPlate" @download="downloadPlate" />
             <div class="space-y-2">
-              <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('assembly')">
-                <ArrowDownTrayIcon class="w-4 h-4" /> Assembly (3MF/GLB)
+              <button v-if="exportFormat === 'glb'" type="button" class="btn-secondary w-full text-sm" @click="downloadPart('assembly')">
+                <ArrowDownTrayIcon class="w-4 h-4" /> Assembly (GLB)
               </button>
               <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('face')">
                 <ArrowDownTrayIcon class="w-4 h-4" /> Front & Side

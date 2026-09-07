@@ -135,12 +135,9 @@ const preview = computed(() => {
 })
 const belowCost = computed(() => preview.value.hasHpp && preview.value.qty > 0 && preview.value.margin < 0)
 
-// Isi harga jual dari harga saran (HPP + margin default) untuk mempercepat input.
-const { data: settings } = await useFetch('/api/settings')
 function applySuggestedPrice() {
-  const hpp = selectedProduct.value?.hpp || 0
-  const m = Math.min(Math.max(settings.value?.defaultMarginPercent ?? 40, 0), 95) / 100
-  form.value.salePricePerUnit = Math.ceil(hpp / (1 - m) / 500) * 500
+  const price = selectedProduct.value?.sellingPrice || 0
+  if (price) form.value.salePricePerUnit = price
 }
 
 watch(
@@ -524,7 +521,11 @@ async function remove(s) {
                 Produk ini belum punya recipe — harga saran tidak tersedia.
               </p>
               <p v-else class="text-xs text-ink-500">
-                HPP {{ formatIDR(selectedProduct.hpp) }} / unit · stok {{ formatNumber(selectedProduct.stockQuantity) }}
+                HPP {{ formatIDR(selectedProduct.hpp) }} / unit
+                <span v-if="selectedProduct.sellingPrice">
+                  · jual {{ formatIDR(selectedProduct.sellingPrice) }}{{ selectedProduct.listPrice ? '' : ' (saran)' }}
+                </span>
+                · stok {{ formatNumber(selectedProduct.stockQuantity) }}
               </p>
             </div>
           </div>
@@ -550,7 +551,7 @@ async function remove(s) {
             <div class="flex items-end justify-between gap-2 mb-1">
               <label class="label !mb-0">Harga jual / unit</label>
               <button
-                v-if="selectedProduct?.hasRecipe"
+                v-if="selectedProduct?.sellingPrice"
                 type="button"
                 class="text-xs font-medium text-accent-600 hover:text-accent-700"
                 @click="applySuggestedPrice"

@@ -1,6 +1,8 @@
 import { desc, eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { hppForCustomOrder } from '../../utils/customOrders.js'
+import { getSettings } from '../../utils/settings.js'
+import { suggestedPrettyPrice } from '../../utils/hpp.js'
 
 function pickProduction(jobs) {
   const rank = { in_progress: 3, queued: 2, done: 1, cancelled: 0 }
@@ -41,6 +43,12 @@ export default defineEventHandler(async (event) => {
     machine: row.machine,
     packaging: row.packaging
   })
+  const settings = await getSettings()
+  const suggestedPrice = suggestedPrettyPrice(
+    hpp.total,
+    settings?.defaultMarginPercent,
+    settings?.priceRoundStep
+  )
 
   return {
     ...row.order,
@@ -50,6 +58,7 @@ export default defineEventHandler(async (event) => {
     packagingName: row.packaging?.name || null,
     hpp: hpp.total,
     hppBreakdown: hpp.breakdown,
+    suggestedPrice,
     production: pickProduction(jobs),
     productions: jobs,
     sale: sale || null,

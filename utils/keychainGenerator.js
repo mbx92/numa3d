@@ -8,7 +8,7 @@ import {
   EXPORT_FORMATS,
   exportFilename,
   exportMime,
-  partsTo3mfBuffer,
+  printGroupsTo3mfBuffer,
   partsToColoredStlBuffer,
   partsToGlbBuffer,
   partsToMultiSolidStlBuffer
@@ -92,6 +92,7 @@ function buildLiveResult(raw) {
         }
       ]
     : baseExportParts
+  if (raw.baseMergedExportGeometry) geos.push(base3mfParts[0].geometry)
 
   let baseBlobCache = null
   let textBlobCache = null
@@ -106,6 +107,9 @@ function buildLiveResult(raw) {
 
   return {
     slug: raw.slug,
+    getPlate3mfBlob() {
+      return new Blob([printGroupsTo3mfBuffer([{ name: 'Base', parts: base3mfParts }, { name: 'Teks', parts: textExportParts }], raw.slug)], { type: 'model/3mf' })
+    },
     themeId: raw.themeId,
     themeName: raw.themeName,
     attachmentType: raw.attachmentType,
@@ -153,7 +157,7 @@ function buildLiveResult(raw) {
     getBase3mfBlob() {
       if (!base3mfCache) {
         base3mfCache = new Blob(
-          [partsTo3mfBuffer(base3mfParts, `${raw.slug}_base`, { assembly: false })],
+          [printGroupsTo3mfBuffer([{ name: 'Base', parts: base3mfParts }], `${raw.slug}_base`)],
           { type: 'model/3mf' }
         )
       }
@@ -162,7 +166,7 @@ function buildLiveResult(raw) {
     getText3mfBlob() {
       if (!text3mfCache) {
         text3mfCache = new Blob(
-          [partsTo3mfBuffer(textExportParts, `${raw.slug}_text`, { assembly: true })],
+          [printGroupsTo3mfBuffer([{ name: 'Teks', parts: textExportParts }], `${raw.slug}_text`)],
           { type: 'model/3mf' }
         )
       }

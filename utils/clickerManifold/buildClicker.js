@@ -59,18 +59,39 @@ function resolveRgb(val, fallback = [128, 128, 128]) {
   return fallback
 }
 
+function normalizeKeychainEntry(raw, params = {}) {
+  if (!raw || raw.enabled === false) return null
+  return {
+    enabled: true,
+    style: (raw.style ?? params.keyringStyle) === 'hole' ? 'hole' : 'loop',
+    holeDiameterMm: raw.holeDiameterMm ?? params.keyringHoleMm ?? 5.2,
+    outerDiameterMm: raw.outerDiameterMm ?? params.keyringTabMm ?? 12,
+    angleDeg: raw.angleDeg ?? params.keyringAngleDeg ?? 270,
+    offsetMm: raw.offsetMm ?? params.keyringOffsetMm ?? 0
+  }
+}
+
 function normalizeParams(params = {}) {
-  const keychain =
+  const fallbackKeychain =
     params.keychain ??
     (params.keyringEnabled
       ? {
           enabled: true,
+          style: params.keyringStyle === 'hole' ? 'hole' : 'loop',
           holeDiameterMm: params.keyringHoleMm ?? 5.2,
-          outerDiameterMm: params.keyringTabMm ?? 10,
+          outerDiameterMm: params.keyringTabMm ?? 12,
           angleDeg: params.keyringAngleDeg ?? 270,
           offsetMm: params.keyringOffsetMm ?? 0
         }
       : null)
+  const keychains = (Array.isArray(params.keychains) ? params.keychains : [])
+    .map((entry) => normalizeKeychainEntry(entry, params))
+    .filter(Boolean)
+  if (!keychains.length && fallbackKeychain) {
+    const one = normalizeKeychainEntry(fallbackKeychain, params)
+    if (one) keychains.push(one)
+  }
+  const keychain = keychains[0] || null
 
   return {
     imageMargin: params.imageMargin ?? params.imageMarginMm ?? 1.2,
@@ -93,6 +114,7 @@ function normalizeParams(params = {}) {
     imageOffset: params.imageOffset ?? { x: 0, y: 0 },
     switches: params.switches,
     keychain,
+    keychains,
     colorBleed: params.colorBleed ?? 0,
     outlineSmoothingRadius: params.outlineSmoothingRadius ?? 4.0,
     meshSolid: params.meshSolid ?? null,
@@ -455,6 +477,19 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
     return track(track(diamond.add(lobeL)).add(lobeR2))
   }
 
+
+  const makeFlower = (r, petals = 6) => {
+    const steps = Math.max(96, petals * 32)
+    const pts = []
+    for (let i = 0; i < steps; i++) {
+      const theta = (Math.PI * 2 * i) / steps - Math.PI / 2
+      const wave = 0.5 + 0.5 * Math.cos(petals * theta)
+      const radius = r * (0.58 + 0.42 * Math.pow(wave, 1.2))
+      pts.push([Math.cos(theta) * radius, Math.sin(theta) * radius])
+    }
+    return track(new CrossSection([pts], 'NonZero'))
+  }
+
   const makeEgg = (r) => {
     const steps = 96
     const width = 0.74
@@ -510,6 +545,8 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
           return makeHexagon(rr)
         case 'heart':
           return makeHeart(rr)
+        case 'flower':
+          return makeFlower(rr)
         case 'star':
           return makeStar(rr)
         case 'egg':
@@ -601,6 +638,9 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   const stemAts = applied.map((sw) => placeSolidAt(stemSized, sw))
 
   // --- Well / body footprints ---
+  // Union switch-clearance columns only when they stick out of the (grown) plate.
+  // Shape-mode tiles are sized to contain switchClear, so skipping avoids square bulges
+  // and tiny numerical overhangs that warp organic silhouettes.
   const socketColumnBase = roundedRect(switchClear, switchClear, 2.5)
   const capFp = grow(plate, tol)
   let wellFp = capFp
@@ -611,7 +651,10 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
         sw.y
       ])
     )
-    wellFp = track(wellFp.add(col))
+    const overhang = track(col.subtract(capFp))
+    if (!sectionIsEmpty(overhang) && sectionArea(overhang) > 0.05) {
+      wellFp = track(wellFp.add(col))
+    }
   }
 
   const bulgeArea = sectionArea(track(wellFp.subtract(capFp)))
@@ -857,32 +900,70 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
     }
   }
 
-  // Simplified keychain loop
-  const kc = p.keychain
-  if (kc && kc.enabled) {
-    const holeR = Math.max(1.5, (kc.holeDiameterMm ?? 5.2) / 2)
-    const th = Math.max(2.5, Math.min(4.0, (meshBodyTopZ - bodyBottomZ) * 0.35))
+  // Keychain loop(s) — optional hang eyelet(s) on base edge
+  const keychains = (Array.isArray(p.keychains) && p.keychains.length
+    ? p.keychains
+    : (p.keychain && p.keychain.enabled ? [p.keychain] : [])
+  ).filter((kc) => kc && kc.enabled !== false)
+  if (keychains.length) {
+    const th = Math.max(2.8, Math.min(4.5, (meshBodyTopZ - bodyBottomZ) * 0.4))
     const zb = meshBodyTopZ - th
-    const { p: edgeP, dir } = edgePointAt(bodyFootprint, kc.angleDeg ?? 270)
-    const tangent = [-dir[1], dir[0]]
-    const px = edgeP[0] + tangent[0] * (kc.offsetMm ?? 0)
-    const py = edgeP[1] + tangent[1] * (kc.offsetMm ?? 0)
+    for (const kc of keychains) {
+      const holeR = Math.max(1.5, (kc.holeDiameterMm ?? 5.2) / 2)
+      const keyringStyle = kc.style === 'hole' ? 'hole' : 'loop'
+      const { p: edgeP, dir } = edgePointAt(bodyFootprint, kc.angleDeg ?? 270)
+      const tangent = [-dir[1], dir[0]]
+      if (keyringStyle === 'hole') {
+        const b = bodyFootprint.bounds()
+        const inset = Math.max(holeR + 2.0, 4.5)
+        const offset = kc.offsetMm ?? 0
+        let hcx
+        let hcy
+        if (Math.abs(dir[0]) >= Math.abs(dir[1])) {
+          hcx = dir[0] < 0 ? b.min[0] + inset : b.max[0] - inset
+          hcy = b.max[1] - inset + offset
+        } else {
+          hcx = b.min[0] + inset + offset
+          hcy = dir[1] < 0 ? b.min[1] + inset : b.max[1] - inset
+        }
+        const slotOffset = holeR * 0.42
+        const p0 = [hcx - tangent[0] * slotOffset, hcy - tangent[1] * slotOffset]
+        const p1 = [hcx + tangent[0] * slotOffset, hcy + tangent[1] * slotOffset]
+        const endA = track(track(CrossSection.circle(holeR, 48)).translate(p0))
+        const endB = track(track(CrossSection.circle(holeR, 48)).translate(p1))
+        const bridge = bridgeBetween(p0, p1, holeR * 2)
+        const strapHole = track(track(endA.add(endB)).add(bridge))
+        const cutter = extrudeAt(strapHole, meshBodyTopZ - bodyBottomZ + 2, bodyBottomZ - 1)
+        body = track(body.subtract(cutter))
+      } else {
+        const px = edgeP[0] + tangent[0] * (kc.offsetMm ?? 0)
+        const py = edgeP[1] + tangent[1] * (kc.offsetMm ?? 0)
 
-    const loopR = Math.max(3.2, holeR + 1.8, (kc.outerDiameterMm ?? 10) / 2)
-    const overlap = Math.min(loopR * 0.42, Math.max(1.1, loopR - holeR - 0.2))
-    const hcx = px + dir[0] * (loopR - overlap)
-    const hcy = py + dir[1] * (loopR - overlap)
-    const innerP = [px - dir[0] * overlap, py - dir[1] * overlap]
-    const outerP = [hcx + dir[0] * loopR * 0.18, hcy + dir[1] * loopR * 0.18]
-    const loopCircle = track(track(CrossSection.circle(loopR, 80)).translate([hcx, hcy]))
-    const loopBridge = bridgeBetween(innerP, outerP, Math.max(holeR * 2.15, loopR * 0.9))
-    const loopFootprint = track(loopCircle.add(loopBridge))
+        // Larger eyelet: thicker wall around hole + more stick-out past edge
+        const loopR = Math.max(4.2, holeR + 2.5, (kc.outerDiameterMm ?? 12) / 2)
+        const overlap = Math.min(loopR * 0.32, Math.max(1.0, loopR - holeR - 0.4))
+        const hcx = px + dir[0] * (loopR - overlap)
+        const hcy = py + dir[1] * (loopR - overlap)
+        const innerP = [px - dir[0] * overlap, py - dir[1] * overlap]
+        const outerP = [hcx + dir[0] * loopR * 0.32, hcy + dir[1] * loopR * 0.32]
+        const loopCircle = track(track(CrossSection.circle(loopR, 80)).translate([hcx, hcy]))
+        const loopBridge = bridgeBetween(innerP, outerP, Math.max(holeR * 2.4, loopR * 1.05))
+        const loopFootprint = track(loopCircle.add(loopBridge))
 
-    const loop = extrudeAt(loopFootprint, th, zb)
-    body = track(body.add(loop))
+        const loop = extrudeAt(loopFootprint, th, zb)
+        body = track(body.add(loop))
 
-    const hole = extrudeAt(track(track(CrossSection.circle(holeR, 48)).translate([hcx, hcy])), th + 2, zb - 1)
-    body = track(body.subtract(hole))
+        const hole = extrudeAt(track(track(CrossSection.circle(holeR, 48)).translate([hcx, hcy])), th + 2, zb - 1)
+        body = track(body.subtract(hole))
+      }
+    }
+    if (keychains.length === 1) {
+      warnings.push(keychains[0].style === 'hole'
+        ? 'Lubang tali ditambahkan di base ujung.'
+        : 'Loop keyring ditambahkan di base.')
+    } else {
+      warnings.push(`Gantungan: ${keychains.length} loop/lubang di base.`)
+    }
   }
 
   body = track(body.subtract(well))

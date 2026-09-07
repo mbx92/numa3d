@@ -9,6 +9,8 @@ const emit = defineEmits(['complete'])
 
 const toast = useToast()
 
+const TEXT_PLACEHOLDER = 'Contoh: NAMA 07'
+
 const steps = ['Teks', 'Warna', 'Font & kait', 'Ukuran']
 const step = ref(0)
 

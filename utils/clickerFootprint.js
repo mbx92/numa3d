@@ -15,6 +15,7 @@ import {
   makeRoundedRectShape,
   shapeForKind
 } from './clickerBaseShapes.js'
+import { TILE_BASE_SHAPE_IDS } from './clickerPresets.js'
 
 const fontCache = new Map()
 
@@ -236,12 +237,49 @@ function fitShapesIntoTile(shapes, centerX, centerY, maxW, maxH) {
   return translateSvgShapes(scaled, dx, dy)
 }
 
+/** Margin beyond switchClear/2 so plate contains housing after slip/bezel. */
+const TILE_SWITCH_FIT_MARGIN_MM = 1.25
+
 function tileShapeForKind(kind, tileW, tileD) {
   const shapeKind = !kind || kind === 'outline' ? 'square' : kind
-  if (shapeKind === 'square') return makeRoundedRectShape(tileW / 2, tileD / 2, Math.min(tileW, tileD) * 0.18)
-  if (shapeKind === 'rect') return makeRoundedRectShape(tileW / 2, tileD / 2, Math.min(tileW, tileD) * 0.18)
-  const radius = Math.min(tileW, tileD) / 2
-  return shapeForKind(shapeKind, radius, tileW / tileD)
+  if (shapeKind === 'square' || shapeKind === 'rect') {
+    return makeRoundedRectShape(tileW / 2, tileD / 2, Math.min(tileW, tileD) * 0.18)
+  }
+  // Fallback only — prefer plateShape from tileMetaForShapeKind (already fit to switchClear).
+  const radius = Math.max(tileW, tileD) / 2
+  return shapeForKind(shapeKind, radius, tileW / Math.max(tileD, 0.001))
+}
+
+/** Size one letter tile so its silhouette fully contains the switch clearance square. */
+function tileMetaForShapeKind(shapeKind, pocket, baseTileD) {
+  const kind = !shapeKind || shapeKind === 'outline' ? 'square' : shapeKind
+  const switchClear = pocket + 3
+  const margin = TILE_SWITCH_FIT_MARGIN_MM
+  const neededHalf = switchClear / 2 + margin
+
+  if (kind === 'square' || kind === 'rect') {
+    const tileD = Math.max(baseTileD, switchClear + 2 * margin)
+    const tileW = (kind === 'rect' ? 1.12 : 1) * tileD
+    return { shapeKind: kind, tileW, tileD, plateShape: null }
+  }
+
+  const radius = fitShapeRadius(kind, neededHalf, neededHalf)
+  const plateShape = shapeForKind(kind, radius, 1)
+  const b = boundsFromShape(plateShape)
+  return {
+    shapeKind: kind,
+    tileW: Math.max(b.width, switchClear + 2 * margin),
+    tileD: Math.max(b.height, switchClear + 2 * margin),
+    plateShape,
+    fitRadius: radius
+  }
+}
+
+function resolveTileShapeKind(opts, index) {
+  const fallback = TILE_BASE_SHAPE_IDS.includes(opts.baseShape) ? opts.baseShape : 'square'
+  if (!opts.perLetterShapes) return fallback
+  const raw = Array.isArray(opts.letterShapes) ? opts.letterShapes[index] : null
+  return TILE_BASE_SHAPE_IDS.includes(raw) ? raw : fallback
 }
 
 async function rectTextFootprint(opts) {
@@ -255,26 +293,60 @@ async function rectTextFootprint(opts) {
   if (!groups.length) return rectFootprint(Number(opts.outerWidthMm) || 35, Number(opts.outerDepthMm) || 35)
 
   const pocket = Number(opts.housingPocketMm) || 18.5
-  const tileD = Math.max(22.5, pocket + 4)
-  const tileW = (opts.baseShape === 'rect' ? 1.12 : 1) * tileD
-  const gap = Math.max(1.6, Math.min(3, tileD * 0.1))
-  const pitch = tileW + gap
+  const baseTileD = Math.max(22.5, pocket + 4)
   const count = groups.length
-  const startX = -((count - 1) * pitch) / 2
-  const shapeKind = opts.baseShape || 'square'
+
+  const tileMeta = groups.map((_, i) => {
+    const shapeKind = resolveTileShapeKind(opts, i)
+    return tileMetaForShapeKind(shapeKind, pocket, baseTileD)
+  })
+
+  const rowTileD = Math.max(baseTileD, ...tileMeta.map((t) => t.tileD))
+  const snapFit = (
+    opts.snapFitEnabled === true
+    || opts.keyringLinkEnabled === true
+  ) && opts.flexiEnabled !== true && groups.length >= 2
+  const gap = opts.flexiEnabled
+    ? Math.max(10, rowTileD * 0.44)
+    : snapFit
+      ? Math.max(11, rowTileD * 0.42)
+      : Math.max(1.6, Math.min(3, rowTileD * 0.1))
+
+  let cursor = 0
+  const centers = []
+  for (let i = 0; i < count; i++) {
+    centers.push(cursor + tileMeta[i].tileW / 2)
+    cursor += tileMeta[i].tileW + (i < count - 1 ? gap : 0)
+  }
+  const totalW = cursor
+  const offsetX = -totalW / 2
 
   const plateShapes = []
   const artwork = []
   const switches = []
+  const tiles = []
   for (let i = 0; i < count; i++) {
-    const cx = startX + i * pitch
-    plateShapes.push(translateSvgShapes([tileShapeForKind(shapeKind, tileW, tileD)], cx, 0)[0])
-    artwork.push(...fitShapesIntoTile(groups[i].shapes, cx, 0, tileW * 0.54, tileD * 0.58))
+    const cx = centers[i] + offsetX
+    const { shapeKind, tileW, tileD, plateShape } = tileMeta[i]
+    const tilePlate = plateShape || tileShapeForKind(shapeKind, tileW, tileD)
+    const tileArt = fitShapesIntoTile(groups[i].shapes, 0, 0, tileW * 0.54, tileD * 0.58)
+    tiles.push({
+      plateShapes: [tilePlate],
+      shapes: tileArt,
+      shapeKind,
+      char: groups[i].char,
+      tileWidthMm: tileW,
+      tileDepthMm: tileD
+    })
+    plateShapes.push(translateSvgShapes([tilePlate], cx, 0)[0])
+    artwork.push(...translateSvgShapes(tileArt, cx, 0))
     switches.push({ x: cx, y: 0, rotation: 0 })
   }
 
   const bounds = computeBoundsFromShapes(plateShapes)
   const maxDim = Math.max(bounds.width, bounds.height, 1)
+  const primaryTileW = tileMeta[0]?.tileW || rowTileD
+  const primaryTileD = tileMeta[0]?.tileD || rowTileD
 
   return {
     plateShapes,
@@ -284,10 +356,13 @@ async function rectTextFootprint(opts) {
     switches,
     capWidthMm: maxDim,
     tileCount: count,
-    tileWidthMm: tileW,
-    tileDepthMm: tileD,
+    tileWidthMm: primaryTileW,
+    tileDepthMm: primaryTileD,
     tileGapMm: gap,
-    source: 'rect-text-row'
+    snapFitEnabled: snapFit && count >= 2,
+    keyringLinkEnabled: snapFit && count >= 2,
+    source: 'rect-text-row',
+    tiles
   }
 }
 

@@ -1,6 +1,7 @@
 const ROLE_LABELS = {
   base: 'Base',
   lid: 'Lid / cap',
+  switch: 'Switch',
   letter: 'Teks',
   accent: 'Aksen',
   plateInner: 'Plate dalam',

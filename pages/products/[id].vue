@@ -17,6 +17,7 @@ import {
 import { PRODUCT_STATUSES, productStatusLabel, productStatusClass } from '~/utils/productStatus.js'
 import { materialTypeLabel } from '~/utils/materialType.js'
 import { materialSwatchColor } from '~/utils/materialColor.js'
+import { roundPriceUp, suggestedPrice } from '~/utils/hpp.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -322,13 +323,34 @@ async function setCover(img) {
 
 // Harga jual saran
 const marginPercent = ref(settings.value?.defaultMarginPercent ?? 40)
-const suggested = computed(() => {
-  const m = Math.min(Math.max(Number(marginPercent.value) || 0, 0), 95) / 100
-  return Math.round((product.value?.hpp || 0) / (1 - m))
-})
-// Pembulatan ke atas ke Rp 500 / Rp 1.000 terdekat untuk harga "cantik"
-const rounded500 = computed(() => Math.ceil(suggested.value / 500) * 500)
-const rounded1000 = computed(() => Math.ceil(suggested.value / 1000) * 1000)
+const roundStep = computed(() => settings.value?.priceRoundStep ?? 500)
+const suggested = computed(() => suggestedPrice(product.value?.hpp || 0, marginPercent.value))
+const rounded = computed(() => roundPriceUp(suggested.value, roundStep.value))
+const rounded1000 = computed(() => roundPriceUp(suggested.value, 1000))
+const savingPrice = ref(false)
+
+async function saveListPrice(amount) {
+  if (!isAdmin.value) return
+  savingPrice.value = true
+  try {
+    await $fetch(`/api/products/${id}`, {
+      method: 'PUT',
+      body: {
+        name: product.value.name,
+        description: product.value.description,
+        status: product.value.status,
+        seriesId: product.value.seriesId,
+        listPrice: amount
+      }
+    })
+    await refresh()
+    useToast().success(amount ? 'Harga jual produk disimpan.' : 'Harga jual dikosongkan; katalog memakai saran.')
+  } catch (e) {
+    useToast().error(e.data?.statusMessage || 'Gagal menyimpan harga jual')
+  } finally {
+    savingPrice.value = false
+  }
+}
 
 const breakdownLabels = {
   materialCost: 'Material',
@@ -873,9 +895,29 @@ const tab = computed({
           <div class="text-2xl sm:text-3xl font-mono font-bold text-ink-900 break-all">{{ formatIDR(suggested) }}</div>
           <div class="text-sm text-ink-500 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>Dibulatkan:</span>
-            <span class="font-mono font-semibold text-teal-600">{{ formatIDR(rounded500) }}</span>
+            <span class="font-mono font-semibold text-teal-600">{{ formatIDR(rounded) }}</span>
             <span class="text-ink-300 hidden sm:inline">|</span>
             <span class="font-mono font-semibold text-teal-600">{{ formatIDR(rounded1000) }}</span>
+          </div>
+          <p v-if="product.listPrice" class="text-sm">
+            Harga jual tersimpan:
+            <span class="font-mono font-semibold">{{ formatIDR(product.listPrice) }}</span>
+            <span v-if="product.listPrice < product.hpp" class="text-amber-600 text-xs ml-1">di bawah HPP</span>
+          </p>
+          <p v-else class="text-sm text-ink-500">Belum ada harga jual tersimpan. Katalog memakai saran yang dibulatkan.</p>
+          <div v-if="isAdmin" class="flex flex-wrap gap-2 pt-1">
+            <button type="button" class="btn-primary" :disabled="savingPrice || !product.hasRecipe" @click="saveListPrice(rounded)">
+              Pakai {{ formatIDR(rounded) }}
+            </button>
+            <button
+              v-if="product.listPrice"
+              type="button"
+              class="btn-secondary"
+              :disabled="savingPrice"
+              @click="saveListPrice(0)"
+            >
+              Hapus harga tersimpan
+            </button>
           </div>
         </div>
       </div>

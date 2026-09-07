@@ -3,9 +3,10 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 const props = defineProps({
-  parts: { type: Array, required: true }, // [{ geometry, color, line?, role?, name? }]
+  parts: { type: Array, required: true }, // [{ geometry, color, line?, role?, name?, modelUrl? }]
   showGrid: { type: Boolean, default: false },
   simulateClick: { type: Boolean, default: false },
   interactiveClick: { type: Boolean, default: false },
@@ -35,6 +36,9 @@ let pointerStart = null
 let visible = true
 let manualPressed = false
 let manualPress = 0
+let mountSerial = 0
+const gltfLoader = new GLTFLoader()
+const gltfCache = new Map()
 
 function getPartId(part, index) {
   return part.role || part.name || `part-${index}`
@@ -366,6 +370,95 @@ function createMeshMaterial(part) {
   return mat
 }
 
+async function loadGltfScene(url) {
+  if (!gltfCache.has(url)) {
+    gltfCache.set(url, gltfLoader.loadAsync(url).then((gltf) => gltf.scene))
+  }
+  return gltfCache.get(url)
+}
+
+function cloneMaterial(material) {
+  if (!material) return material
+  if (Array.isArray(material)) return material.map((m) => cloneMaterial(m))
+  return material.clone ? material.clone() : material
+}
+
+function cloneModelObject(object, opacity) {
+  const clone = object.clone(true)
+  clone.traverse((child) => {
+    if (!child.isMesh) return
+    if (child.geometry?.clone) child.geometry = child.geometry.clone()
+    child.material = cloneMaterial(child.material)
+    const mats = Array.isArray(child.material) ? child.material : [child.material]
+    for (const mat of mats) {
+      if (!mat) continue
+      if (opacity < 0.999) {
+        mat.transparent = true
+        mat.opacity = Math.min(mat.opacity ?? 1, opacity)
+        mat.depthWrite = false
+      }
+      mat.needsUpdate = true
+    }
+  })
+  return clone
+}
+
+function selectModelNodes(sceneObject, names = [], opacity = 1) {
+  const wanted = (names || []).map((name) => String(name).toLowerCase()).filter(Boolean)
+  if (!wanted.length) return cloneModelObject(sceneObject, opacity)
+
+  sceneObject.updateMatrixWorld(true)
+  const group = new THREE.Group()
+  sceneObject.traverse((node) => {
+    if (!wanted.includes(String(node.name || '').toLowerCase())) return
+    const clone = cloneModelObject(node, opacity)
+    clone.matrix.copy(node.matrixWorld)
+    clone.matrix.decompose(clone.position, clone.quaternion, clone.scale)
+    group.add(clone)
+  })
+  return group.children.length ? group : cloneModelObject(sceneObject, opacity)
+}
+
+async function createModelPart(part) {
+  const source = await loadGltfScene(part.modelUrl)
+  const opacity = part.opacity == null ? 1 : Math.min(Math.max(Number(part.opacity) || 1, 0.05), 1)
+  const model = selectModelNodes(source, part.modelNodeNames, opacity)
+  const wrapper = new THREE.Group()
+  wrapper.add(model)
+  if (part.modelAxis === 'gltf-y-up') model.rotation.x += Math.PI / 2
+
+  wrapper.updateMatrixWorld(true)
+  let box = getBox(wrapper)
+  const size = box.getSize(new THREE.Vector3())
+  const fitMm = Math.max(1, Number(part.modelFitMm) || 18.5)
+  const footprint = Math.max(size.x, size.y, 0.001)
+  wrapper.scale.setScalar(fitMm / footprint)
+  wrapper.updateMatrixWorld(true)
+
+  box = getBox(wrapper)
+  const center = box.getCenter(new THREE.Vector3())
+  const position = part.position || {}
+  const topZ = Number(part.modelTopZ ?? position.z ?? 0) || 0
+  wrapper.position.set(-center.x, -center.y, topZ - box.max.z)
+
+  // Floor clamp: after stem-top alignment, lift if housing hangs below modelMinZ
+  const modelMinZ = Number(part.modelMinZ)
+  if (Number.isFinite(modelMinZ)) {
+    wrapper.updateMatrixWorld(true)
+    box = getBox(wrapper)
+    if (box.min.z < modelMinZ) {
+      wrapper.position.z += modelMinZ - box.min.z
+    }
+  }
+
+  const placed = new THREE.Group()
+  placed.add(wrapper)
+  placed.position.set(Number(position.x) || 0, Number(position.y) || 0, Number(position.z) || 0)
+  placed.rotation.z = Number(part.rotationZ) || 0
+  placed.userData.baseColor = part.color || '#64748b'
+  return placed
+}
+
 function addLedPointLight(parent, geo, color, index) {
   if (index % 3 !== 0) return
   geo.computeBoundingBox()
@@ -404,7 +497,7 @@ function computeExplodeVectors() {
   }
 }
 
-function mountParts() {
+async function mountParts(serial) {
   clearScene()
   rootGroup = new THREE.Group()
   const orientGroup = new THREE.Group()
@@ -416,12 +509,23 @@ function mountParts() {
   let added = 0
 
   for (let i = 0; i < (props.parts || []).length; i++) {
+    if (serial !== mountSerial) return
     const part = props.parts[i]
-    if (!part?.geometry?.attributes?.position?.count) continue
-    const geo = part.geometry.clone()
+    if (!part?.modelUrl && !part?.geometry?.attributes?.position?.count) continue
     const partId = getPartId(part, i)
     const parentRoot = part.role === props.clickRole ? clickGroup : staticGroup
     const group = props.interactiveAssembly ? ensurePartGroup(partId, parentRoot) : parentRoot
+
+    if (part.modelUrl) {
+      const model = await createModelPart(part)
+      if (serial !== mountSerial) return
+      if (props.interactiveAssembly) model.userData.partId = partId
+      group.add(model)
+      added += 1
+      continue
+    }
+
+    const geo = part.geometry.clone()
 
     if (part.line) {
       const mat = new THREE.LineBasicMaterial({ color: part.color || '#1f2937' })
@@ -480,7 +584,8 @@ function resize() {
 }
 
 function scheduleMount() {
-  requestAnimationFrame(() => {
+  const serial = ++mountSerial
+  requestAnimationFrame(async () => {
     resize()
     if (!props.parts?.length) {
       clearScene()
@@ -488,9 +593,11 @@ function scheduleMount() {
       return
     }
     try {
-      mountParts()
+      await mountParts(serial)
+      if (serial !== mountSerial) return
       error.value = ''
     } catch (e) {
+      if (serial !== mountSerial) return
       error.value = e?.message || 'Gagal memuat preview'
     }
   })
@@ -636,6 +743,7 @@ watch(
 onMounted(init)
 
 onUnmounted(() => {
+  mountSerial += 1
   intersectionObserver?.disconnect()
   resizeObserver?.disconnect()
   stopAnimation()

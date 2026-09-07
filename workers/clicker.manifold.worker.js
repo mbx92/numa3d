@@ -2,7 +2,8 @@
 import Module from 'manifold-3d'
 import wasmUrl from 'manifold-3d/manifold.wasm?url'
 import { meshBounds, parseMeshBuffer, orientMeshToZUp } from '../utils/clickerManifold/meshImport.js'
-import { buildClicker } from '../utils/clickerManifold/buildClicker.js'
+import { buildClicker, toPart } from '../utils/clickerManifold/buildClicker.js'
+import { buildFlexiClicker, buildSnapFitLinkedClicker } from '../utils/clickerManifold/buildFlexiClicker.js'
 import {
   adaptiveRingSegments,
   applyRingTransform,
@@ -53,7 +54,9 @@ function meshBufferToSolid(wasm, buf, filename = '', upAxis = 'auto') {
 }
 
 function assetToSolid(wasm, buf) {
-  return meshBufferToSolid(wasm, buf, 'part.3mf').solid
+  // Built-in MX assets already use Z-up and share calibrated assembly heights.
+  // Auto-orientation is only for uploaded meshes; it rotates these profiles sideways.
+  return meshBufferToSolid(wasm, buf, 'part.3mf', 'z').solid
 }
 
 function resolveMeshTransform(raw, footprint, opts) {
@@ -89,8 +92,82 @@ function partsToPreviewParts(parts, group, colorHex) {
     .map((p) => ({
       geometry: packGeometry(partToGeometry(p)),
       color: rgbBytesToHex(p.colorRgb) || colorHex,
-      role: group === 'top' ? 'lid' : 'base'
+      role: group === 'top' ? 'lid' : 'base',
+      name: p.name || null
     }))
+}
+
+function makeSwitchPreviewParts(wasm, placements, params, displayMode) {
+  if (displayMode === 'print' || !placements?.length) return []
+  const previewModel = params.switchPreviewModel || {}
+  if (previewModel.modelUrl) {
+    const fitMm = Math.max(12, Number(params.housingPocketMm || params.preset?.housingOuterMm || 18.5) - 0.4)
+    const bodyH = Math.max(8, Number(params.switchDepthMm || params.preset?.bodyDepthMm || 11.5))
+    const topZ = Math.max(2.8, Number(params.stemHeightMm || params.preset?.stemHeightMm || 4.0))
+    // Plate-relative: housing bottom must not go below -bodyH (same as simple-cube fallback).
+    // createModelPart clamps after stem-top alignment so tall GLBs don't poke past the floor.
+    return placements.map((sw, i) => ({
+      modelUrl: previewModel.modelUrl,
+      modelNodeNames: previewModel.modelNodeNames || [],
+      modelFitMm: fitMm,
+      modelTopZ: topZ,
+      modelMinZ: -bodyH,
+      modelAxis: 'gltf-y-up',
+      position: { x: Number(sw?.x) || 0, y: Number(sw?.y) || 0, z: 0 },
+      rotationZ: Number(sw?.rotation) || 0,
+      color: '#3f4652',
+      role: 'switch',
+      name: 'Switch',
+      opacity: 0.92,
+      previewOnly: true,
+      previewModelId: previewModel.id || null
+    }))
+  }
+  const { Manifold } = wasm
+  const trash = []
+  const track = (value) => {
+    trash.push(value)
+    return value
+  }
+  const parts = []
+  try {
+    const bodyW = Math.max(12, Number(params.housingPocketMm || params.preset?.housingOuterMm || 18.5) - 0.4)
+    const bodyH = Math.max(8, Number(params.switchDepthMm || params.preset?.bodyDepthMm || 11.5))
+    const stemW = Math.max(4.2, Number(params.stemBossMm || params.preset?.stemBossMm || 5.6))
+    const stemH = Math.max(2.8, Number(params.stemHeightMm || params.preset?.stemHeightMm || 4.0))
+    for (let i = 0; i < placements.length; i++) {
+      const sw = placements[i] || {}
+      const x = Number(sw.x) || 0
+      const y = Number(sw.y) || 0
+      const body = track(Manifold.cube([bodyW, bodyW, bodyH], true).translate([x, y, -bodyH / 2]))
+      const stem = track(Manifold.cube([stemW, stemW, stemH], true).translate([x, y, stemH / 2]))
+      parts.push({
+        geometry: packGeometry(partToGeometry(toPart(body, 'preview', 'switch', [63, 70, 82], `switch-body-${i + 1}`))),
+        color: '#3f4652',
+        role: 'switch',
+        name: 'Switch body',
+        opacity: 0.38,
+        previewOnly: true
+      })
+      parts.push({
+        geometry: packGeometry(partToGeometry(toPart(stem, 'preview', 'switch', [203, 213, 225], `switch-stem-${i + 1}`))),
+        color: '#cbd5e1',
+        role: 'switch',
+        name: 'Switch stem',
+        opacity: 0.85,
+        previewOnly: true
+      })
+    }
+    return parts
+  } finally {
+    for (const value of trash.reverse()) {
+      try {
+        value.delete?.()
+      } catch {
+        /* already freed */
+      }
+    }
+  }
 }
 
 function applyPlateLayout(parts, displayMode) {
@@ -208,6 +285,53 @@ async function buildFromOpts(opts) {
         }
       ]
     : []
+  const snapFitActive =
+    (resolved.snapFitEnabled === true || resolved.keyringLinkEnabled === true)
+    && !resolved.flexiEnabled
+    && (footprint.tiles?.length || 0) >= 2
+  if (resolved.flexiEnabled && (!footprint.tiles?.length || footprint.tiles.length < 2)) {
+    throw new Error('Mode flexi butuh minimal 2 huruf yang menghasilkan bentuk')
+  }
+  if (snapFitActive && (!footprint.tiles?.length || footprint.tiles.length < 2)) {
+    throw new Error('Clip kunci snap-fit butuh minimal 2 huruf yang menghasilkan bentuk')
+  }
+  const splitTiles =
+    (resolved.flexiEnabled || snapFitActive)
+      ? (footprint.tiles || []).map((tile) => {
+          const tilePlateShapes = buildPlateShapes(
+            { ...footprint, plateShapes: tile.plateShapes, shapes: tile.shapes || [] },
+            { ...footprintOpts, baseShape: 'outline', imageMarginMm: 0 }
+          )
+          const tileOutlineSegs = adaptiveRingSegments(tilePlateShapes, 64, 128, 0.45)
+          const tileOutlineRings = shapesToRings(tilePlateShapes, tileOutlineSegs)
+          const tileNorm = ringNormalizeTransform(tileOutlineRings)
+          const tileOutline = applyRingTransform(tileOutlineRings, tileNorm)
+          const tileArtSegs = adaptiveRingSegments(tile.shapes || [], 48, 96, 0.5)
+          const tileArtRingsRaw = shapesToRings(tile.shapes || [], tileArtSegs)
+          const tileArtRings = tileArtRingsRaw.length ? applyRingTransform(tileArtRingsRaw, tileNorm) : []
+          const tileRegions = tileArtRings.length
+            ? [
+                {
+                  rings: tileArtRings,
+                  filamentRgb: hexToRgbBytes(textHex),
+                  coverage: 1,
+                  partName: 'top-color-0'
+                }
+              ]
+            : []
+          return {
+            outline: tileOutline,
+            regions: tileRegions,
+            capWidthMm: Math.max(
+              tile.tileWidthMm || 0,
+              tile.tileDepthMm || 0,
+              footprint.tileWidthMm || 0,
+              footprint.tileDepthMm || 0,
+              22.5
+            )
+          }
+        })
+      : null
 
   const wasm = await getModule()
   if (!socket || !stem) throw new Error('Manifold assets belum diinisialisasi')
@@ -258,10 +382,22 @@ async function buildFromOpts(opts) {
     }
   }
 
-  const { parts, warnings } = buildClicker(wasm, socket, stem, regions, outline, {
+  const clickerParams = {
     ...resolved,
     ...opts,
     colors,
+    flexiEnabled: resolved.flexiEnabled,
+    flexiConnectionStyle: resolved.flexiConnectionStyle,
+    flexiClearanceMm: resolved.flexiClearanceMm,
+    flexiStrapHoleMm: resolved.flexiStrapHoleMm,
+    keyringEnabled: resolved.keyringEnabled,
+    snapFitEnabled: snapFitActive,
+    snapFitClearanceMm: resolved.snapFitClearanceMm,
+    keyringLinkEnabled: snapFitActive,
+    keyringStyle: resolved.keyringStyle,
+    keyringHoleMm: resolved.keyringHoleMm,
+    keyringAngleDeg: resolved.keyringAngleDeg,
+    keyringTabMm: resolved.keyringTabMm,
     baseShape: footprint.source === 'rect-text-row' ? 'outline' : resolved.baseShape,
     imageMarginMm: footprint.source === 'rect-text-row' ? 0 : resolved.imageMarginMm,
     imageMargin: footprint.source === 'rect-text-row' ? 0 : resolved.imageMarginMm,
@@ -279,7 +415,25 @@ async function buildFromOpts(opts) {
     meshSplitRegion,
     meshStemBuryMm: Math.max(0.8, Math.min(6, Number(opts.meshStemBuryMm) || 2.5)),
     meshAsTop: opts.shapeMode === 'mesh' && !hasDualMesh && meshSplitLidRatio <= 0.05
-  })
+  }
+  let parts
+  let warnings
+  let flexi = null
+  let snapFit = null
+  let switchPlacements
+  if (splitTiles && resolved.flexiEnabled) {
+    ;({ parts, warnings, flexi, switchPlacements } = buildFlexiClicker(
+      wasm, socket, stem, splitTiles, clickerParams
+    ))
+  } else if (splitTiles && snapFitActive) {
+    ;({ parts, warnings, snapFit, switchPlacements } = buildSnapFitLinkedClicker(
+      wasm, socket, stem, splitTiles, clickerParams
+    ))
+  } else {
+    ;({ parts, warnings, switchPlacements } = buildClicker(
+      wasm, socket, stem, regions, outline, clickerParams
+    ))
+  }
   meshSolid?.delete?.()
   if (meshLidSolid && meshLidSolid !== meshSolid) meshLidSolid.delete?.()
   if (meshBaseSolid && meshBaseSolid !== meshSolid) meshBaseSolid.delete?.()
@@ -295,9 +449,11 @@ async function buildFromOpts(opts) {
 
   const lidPreviewParts = partsToPreviewParts(parts, 'top', lidHex)
   const basePreviewParts = partsToPreviewParts(parts, 'base', colors.base)
+  const switchPreviewParts = makeSwitchPreviewParts(wasm, switchPlacements, clickerParams, displayMode)
   const assemblyPreviewParts = [
     ...partsToPreviewParts(placed, 'base', colors.base),
-    ...partsToPreviewParts(placed, 'top', lidHex)
+    ...partsToPreviewParts(placed, 'top', lidHex),
+    ...switchPreviewParts
   ]
   const slug = slugify(opts.label || opts.text)
 
@@ -319,6 +475,21 @@ async function buildFromOpts(opts) {
       tileWidthMm: footprint.tileWidthMm ? Number(footprint.tileWidthMm.toFixed(1)) : null,
       tileDepthMm: footprint.tileDepthMm ? Number(footprint.tileDepthMm.toFixed(1)) : null,
       tileGapMm: footprint.tileGapMm ? Number(footprint.tileGapMm.toFixed(1)) : null,
+      flexiJointCount: flexi?.jointCount || 0,
+      flexiConnectionStyle: flexi?.connectionStyle || null,
+      flexiClearanceMm: flexi?.clearanceMm ? Number(flexi.clearanceMm.toFixed(2)) : null,
+      flexiStrapHoleMm: flexi?.strapHoleMm ? Number(flexi.strapHoleMm.toFixed(1)) : null,
+      flexiStrapHoleCount: flexi?.strapHoleCount || 0,
+      flexiStrapTunnelCount: flexi?.strapTunnelCount || 0,
+      snapFitEnabled: !!snapFit?.enabled,
+      snapFitLinkCount: snapFit?.linkCount || 0,
+      snapFitClearanceMm: snapFit?.clearanceMm ? Number(snapFit.clearanceMm.toFixed(2)) : null,
+      snapFitThicknessMm: snapFit?.thicknessMm ? Number(snapFit.thicknessMm.toFixed(2)) : null,
+      snapFitGapMm: snapFit?.gapMm ? Number(snapFit.gapMm.toFixed(2)) : null,
+      // Legacy aliases
+      keyringLinkEnabled: !!snapFit?.enabled,
+      keyringLinkCount: snapFit?.linkCount || 0,
+      keyringLinkGapMm: snapFit?.gapMm ? Number(snapFit.gapMm.toFixed(2)) : null,
       widthMm: Number((baseGeo.boundingBox.max.x - baseGeo.boundingBox.min.x).toFixed(1)),
       depthMm: Number((baseGeo.boundingBox.max.y - baseGeo.boundingBox.min.y).toFixed(1)),
       heightMm: Number((baseGeo.boundingBox.max.z - baseGeo.boundingBox.min.z).toFixed(1))

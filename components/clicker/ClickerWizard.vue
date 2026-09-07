@@ -17,6 +17,12 @@ const draft = reactive({
   label: CLICKER_DEFAULTS.label,
   shapeMode: CLICKER_DEFAULTS.shapeMode,
   baseShape: CLICKER_DEFAULTS.baseShape,
+  perLetterShapes: CLICKER_DEFAULTS.perLetterShapes,
+  letterShapes: [...(CLICKER_DEFAULTS.letterShapes || [])],
+  flexiEnabled: CLICKER_DEFAULTS.flexiEnabled,
+  flexiConnectionStyle: CLICKER_DEFAULTS.flexiConnectionStyle,
+  flexiClearanceMm: CLICKER_DEFAULTS.flexiClearanceMm,
+  flexiStrapHoleMm: CLICKER_DEFAULTS.flexiStrapHoleMm,
   text: CLICKER_DEFAULTS.text,
   fontUrl: CLICKER_DEFAULTS.fontUrl,
   svgContent: '',
@@ -26,9 +32,13 @@ const draft = reactive({
   meshReliefHeightMm: CLICKER_DEFAULTS.meshReliefHeightMm,
   maxSizeMm: CLICKER_DEFAULTS.maxSizeMm,
   displayMode: CLICKER_DEFAULTS.displayMode,
+  snapFitEnabled: CLICKER_DEFAULTS.snapFitEnabled,
   keyringEnabled: CLICKER_DEFAULTS.keyringEnabled,
+  keyringStyle: CLICKER_DEFAULTS.keyringStyle,
+  keyringHoleMm: CLICKER_DEFAULTS.keyringHoleMm,
   keyringAngleDeg: CLICKER_DEFAULTS.keyringAngleDeg,
   switchPresetId: CLICKER_DEFAULTS.switchPresetId,
+  switchPreviewModelId: CLICKER_DEFAULTS.switchPreviewModelId,
   fitToleranceMm: CLICKER_DEFAULTS.fitToleranceMm,
   slipToleranceMm: CLICKER_DEFAULTS.slipToleranceMm,
   stemFitPct: CLICKER_DEFAULTS.stemFitPct,
@@ -123,6 +133,12 @@ function submit() {
     label: String(draft.label).trim(),
     shapeMode: draft.shapeMode,
     baseShape: draft.baseShape,
+    perLetterShapes: !!draft.perLetterShapes,
+    letterShapes: Array.isArray(draft.letterShapes) ? [...draft.letterShapes] : [],
+    flexiEnabled: !!draft.flexiEnabled,
+    flexiConnectionStyle: draft.flexiConnectionStyle,
+    flexiClearanceMm: Number(draft.flexiClearanceMm),
+    flexiStrapHoleMm: Number(draft.flexiStrapHoleMm),
     text: String(draft.text || '').trim(),
     fontUrl: draft.fontUrl,
     svgContent: String(draft.svgContent || ''),
@@ -132,9 +148,13 @@ function submit() {
     meshReliefHeightMm: Number(draft.meshReliefHeightMm),
     maxSizeMm: Number(draft.maxSizeMm),
     displayMode: draft.displayMode,
+    snapFitEnabled: !!draft.snapFitEnabled,
     keyringEnabled: !!draft.keyringEnabled,
+    keyringStyle: draft.keyringStyle,
+    keyringHoleMm: Number(draft.keyringHoleMm),
     keyringAngleDeg: Number(draft.keyringAngleDeg),
     switchPresetId: draft.switchPresetId,
+    switchPreviewModelId: draft.switchPreviewModelId,
     fitToleranceMm: Number(draft.fitToleranceMm),
     slipToleranceMm: Number(draft.slipToleranceMm),
     stemFitPct: Number(draft.stemFitPct),
@@ -189,6 +209,12 @@ function submit() {
           <ClickerDesignPicker
             v-model:shape-mode="draft.shapeMode"
             v-model:base-shape="draft.baseShape"
+            v-model:per-letter-shapes="draft.perLetterShapes"
+            v-model:letter-shapes="draft.letterShapes"
+            v-model:flexi-enabled="draft.flexiEnabled"
+            v-model:flexi-connection-style="draft.flexiConnectionStyle"
+            v-model:flexi-clearance-mm="draft.flexiClearanceMm"
+            v-model:flexi-strap-hole-mm="draft.flexiStrapHoleMm"
             v-model:text="draft.text"
             v-model:font-url="draft.fontUrl"
             v-model:svg-content="draft.svgContent"
@@ -198,7 +224,10 @@ function submit() {
             v-model:mesh-relief-height-mm="draft.meshReliefHeightMm"
             v-model:max-size-mm="draft.maxSizeMm"
             v-model:display-mode="draft.displayMode"
+            v-model:snap-fit-enabled="draft.snapFitEnabled"
             v-model:keyring-enabled="draft.keyringEnabled"
+            v-model:keyring-style="draft.keyringStyle"
+            v-model:keyring-hole-mm="draft.keyringHoleMm"
             v-model:keyring-angle-deg="draft.keyringAngleDeg"
           />
         </template>
@@ -217,6 +246,7 @@ function submit() {
         <template v-else-if="step === 2">
           <ClickerSwitchPicker
             v-model="draft.switchPresetId"
+            v-model:switch-preview-model-id="draft.switchPreviewModelId"
             v-model:stem-fit-pct="draft.stemFitPct"
             v-model:socket-fit-pct="draft.socketFitPct"
             v-model:slip-tolerance-mm="draft.slipToleranceMm"

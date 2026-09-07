@@ -1,5 +1,6 @@
 <script setup>
 import { PlusIcon, TrashIcon, CheckIcon, XMarkIcon, ArrowUpTrayIcon, EyeIcon } from '@heroicons/vue/24/outline'
+import { customOrderHppFromForm, suggestedPrettyPrice } from '~/utils/hpp.js'
 
 const statusLabel = {
   open: 'Proses',
@@ -33,6 +34,7 @@ const { data: orders, refresh } = await useFetch('/api/custom-orders', { query }
 const { data: materials } = await useFetch('/api/materials')
 const { data: machines } = await useFetch('/api/machines')
 const { data: packagingItems } = await useFetch('/api/packaging')
+const { data: settings } = await useFetch('/api/settings')
 
 const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } = usePagination(
   computed(() => orders.value || []),
@@ -62,6 +64,9 @@ function openAdd() {
     packagingQuantityUsed: 0,
     machineId: machines.value?.[0]?.id || '',
     printTimeMinutes: 0,
+    failureRatePercent: 5,
+    laborMinutes: 0,
+    laborRatePerHour: 0,
     notes: ''
   }
   pendingFiles.value = []
@@ -153,6 +158,19 @@ async function remove(row) {
 const selectedMaterial = computed(() =>
   (materials.value || []).find((m) => Number(m.id) === Number(form.value.materialId))
 )
+const hppPreview = computed(() =>
+  customOrderHppFromForm(
+    form.value,
+    { materials: materials.value, machines: machines.value, packagingItems: packagingItems.value },
+    settings.value
+  )
+)
+const suggestedPreview = computed(() =>
+  suggestedPrettyPrice(hppPreview.value.total, settings.value?.defaultMarginPercent, settings.value?.priceRoundStep)
+)
+function applySuggestedCustomPrice() {
+  if (suggestedPreview.value) form.value.pricePerUnit = suggestedPreview.value
+}
 </script>
 
 <template>
@@ -290,7 +308,17 @@ const selectedMaterial = computed(() =>
             <input v-model.number="form.quantity" type="number" min="1" class="input-num" required />
           </div>
           <div>
-            <label class="label">Harga / unit</label>
+            <div class="flex items-end justify-between gap-2 mb-1">
+              <label class="label !mb-0">Harga / unit</label>
+              <button
+                v-if="suggestedPreview"
+                type="button"
+                class="text-xs font-medium text-accent-600 hover:text-accent-700"
+                @click="applySuggestedCustomPrice"
+              >
+                Pakai saran {{ formatIDR(suggestedPreview) }}
+              </button>
+            </div>
             <IdrInput v-model="form.pricePerUnit" required />
           </div>
         </div>
@@ -332,6 +360,24 @@ const selectedMaterial = computed(() =>
             <input v-model.number="form.printTimeMinutes" type="number" min="0" class="input-num" required />
           </div>
         </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label">Gagal cetak (%)</label>
+            <input v-model.number="form.failureRatePercent" type="number" min="0" max="100" step="0.5" class="input-num" />
+          </div>
+          <div>
+            <label class="label">Kerja (menit / unit)</label>
+            <input v-model.number="form.laborMinutes" type="number" min="0" class="input-num" />
+          </div>
+        </div>
+        <div>
+          <label class="label">Upah / jam</label>
+          <IdrInput v-model="form.laborRatePerHour" />
+        </div>
+        <p class="text-xs text-ink-500">
+          HPP estimasi {{ formatIDR(hppPreview.total) }} / unit
+          <span v-if="suggestedPreview"> · saran {{ formatIDR(suggestedPreview) }}</span>
+        </p>
         <div>
           <label class="label">Catatan</label>
           <input v-model="form.notes" class="input" placeholder="opsional — nozzle, infill, warna…" />
