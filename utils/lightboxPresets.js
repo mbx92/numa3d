@@ -62,12 +62,14 @@ export function applyStandPreset(modelId, target = {}) {
 
 /** Hitung dimensi stand otomatis agar pas dengan body lightbox. */
 export function resolveStandFit(opts, outerW, outerD, lightboxThickness) {
-  const clearance = 0.8
+  // 0.8 terlalu ketat di FDM; ~2 mm absorb toleransi cetak / elephant foot
+  const clearance = 2.0
   const autoSlot = lightboxThickness + clearance
   const maxSlot =
     opts.standModelId === 'wall'
       ? autoSlot + 6
-      : Math.max(4, (opts.standDepthMm || 34) - 6)
+      : // jangan clamp di bawah ketebalan+clearance (dulu clip sering kekunci maxSlot < autoSlot)
+        Math.max(autoSlot, (opts.standDepthMm || 34) - 6)
   const slotMm = Math.min(Math.max(opts.standSlotMm > 0 ? opts.standSlotMm : autoSlot, 4), maxSlot)
 
   let autoWidth = outerW * 0.82

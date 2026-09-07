@@ -117,8 +117,8 @@ const editableLayerPalette = computed(() => {
 const previewTabs = computed(() => {
   const tabs = [
     { id: 'assembly', label: 'Perakitan', colors: [form.colors.frame, form.colors.text || form.colors.background] },
-    { id: 'face', label: 'Front & Side', color: form.colors.text || form.colors.background },
-    { id: 'body', label: 'Back', color: form.colors.back }
+    { id: 'face', label: 'Front', color: form.colors.text || form.colors.background },
+    { id: 'body', label: 'Body (frame+back)', color: form.colors.back },
   ]
   if (result.value?.standPreviewParts?.length) {
     tabs.push({ id: 'stand', label: 'Stand', color: form.colors.frame })
@@ -661,7 +661,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                 <ArrowDownTrayIcon class="w-4 h-4" /> Assembly (GLB)
               </button>
               <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('face')">
-                <ArrowDownTrayIcon class="w-4 h-4" /> Front & Side
+                <ArrowDownTrayIcon class="w-4 h-4" /> Face
               </button>
               <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('body')">
                 <ArrowDownTrayIcon class="w-4 h-4" /> Back
@@ -702,7 +702,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
           <ClientOnly>
             <template v-if="activePreviewParts.length">
               <KeychainPreview
-                :key="`${activePreview}-${previewKey}`"
+                :key="previewKey"
                 v-model:selected-part-id="selectedPartId"
                 :parts="activePreviewParts"
                 :show-grid="showPreviewGrid"

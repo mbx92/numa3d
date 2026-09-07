@@ -650,7 +650,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result)
             />
             <template v-else-if="previewStage === 'result' && activePreviewParts.length">
               <KeychainPreview
-                :key="`${activePreview}-${previewKey}`"
+                :key="previewKey"
                 v-model:selected-part-id="selectedPartId"
                 :parts="activePreviewParts"
                 :show-grid="showPreviewGrid"
