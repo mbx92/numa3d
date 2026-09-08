@@ -20,7 +20,8 @@ import {
 import { LIGHTBOX_DEFAULTS, getStandPreset } from '~/utils/lightboxPresets.js'
 import { generateLightbox } from '~/utils/lightboxGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
-import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExport.js'
+import { resolveGeneratorPartExport } from '~/utils/generatorPartExport.js'
+import { EXPORT_FORMATS, exportMime } from '~/utils/keychainExport.js'
 import ToolColorBar from '~/components/ToolColorBar.vue'
 import ToolPanelShell from '~/components/ToolPanelShell.vue'
 import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
@@ -89,7 +90,6 @@ const generating = ref(false)
 const saving = ref(false)
 const errorMsg = ref('')
 const result = ref(null)
-const resultSignature = ref('')
 const previewKey = ref(0)
 const activePreview = ref('assembly')
 const selectedPartId = ref('')
@@ -145,6 +145,8 @@ const activePreviewFilename = computed(() => {
 
 let disposePrev = null
 let generateToken = 0
+const generationState = useGeneratorState(form, result, generateModel)
+const { runGenerate, ensureFreshResult, isFresh: isResultFresh } = generationState
 let queuedGenerateTimer = null
 
 watch(
@@ -186,36 +188,20 @@ function clearPreviews() {
   assemblyPreviewParts.value = []
 }
 
-function buildFormSignature() {
-  return JSON.stringify({
-    ...form,
-    colors: { ...form.colors },
-    layerColors: Array.isArray(form.layerColors) ? [...form.layerColors] : []
-  })
-}
-
-async function ensureFreshResult() {
-  const signature = buildFormSignature()
-  if (queuedGenerateTimer) {
-    clearTimeout(queuedGenerateTimer)
-    queuedGenerateTimer = null
-  }
-  if (!result.value || resultSignature.value !== signature || generating.value) {
-    await runGenerate()
-  }
-  return !!result.value && resultSignature.value === buildFormSignature()
-}
-
 onUnmounted(() => {
+  generateToken++
+  result.value = null
   if (queuedGenerateTimer) clearTimeout(queuedGenerateTimer)
   clearPreviews()
   disposePrev?.()
 })
 
-async function runGenerate() {
+async function generateModel() {
+  if (queuedGenerateTimer) clearTimeout(queuedGenerateTimer)
+  queuedGenerateTimer = null
   const token = ++generateToken
-  const signature = buildFormSignature()
   generating.value = true
+  result.value = null
   errorMsg.value = ''
   const prevDispose = disposePrev
   disposePrev = null
@@ -223,6 +209,8 @@ async function runGenerate() {
   previewKey.value += 1
   await nextTick()
   prevDispose?.()
+  if (token !== generateToken) return
+  const revision = generationState.revision.value
   try {
     const out = await generateLightbox({ ...form, colors: { ...form.colors } })
     if (token !== generateToken) {
@@ -231,7 +219,7 @@ async function runGenerate() {
     }
     disposePrev = () => out.dispose()
     result.value = out
-    resultSignature.value = signature
+    generationState.markGenerated(revision)
     if (activePreview.value === 'stand' && !out.standPreviewParts.length) activePreview.value = 'assembly'
     previewKey.value += 1
     facePreviewParts.value = out.facePreviewParts.map((p) => ({
@@ -284,7 +272,6 @@ async function runGenerate() {
   } catch (e) {
     if (token !== generateToken) return
     result.value = null
-    resultSignature.value = ''
     errorMsg.value = e?.message || 'Gagal membuat model lightbox'
   } finally {
     if (token === generateToken) generating.value = false
@@ -307,80 +294,9 @@ function updateLayerPaletteColor(layer, color) {
 async function downloadPart(part) {
   try {
     if (!(await ensureFreshResult())) return
-    const slug = result.value.slug
     const fmt = exportFormat.value
-    let blob
-    let filename
-
-    if (part === 'assembly') {
-      if (fmt === '3mf') {
-        blob = result.value.getAssembly3mfBlob()
-        filename = exportFilename(slug, 'assembly', fmt)
-      } else if (fmt === 'glb') {
-        blob = await result.value.getAssemblyGlbBlob()
-        filename = exportFilename(slug, 'assembly', fmt)
-      } else {
-        toast.error('Assembly hanya tersedia untuk 3MF dan GLB')
-        return
-      }
-    } else if (part === 'face') {
-      if (fmt === '3mf') {
-        blob = result.value.getFrontSide3mfBlob?.() || result.value.getFace3mfBlob()
-        filename = exportFilename(slug, 'face', fmt)
-      } else if (fmt === 'glb') {
-        blob = await (result.value.getFrontSideGlbBlob?.() || result.value.getFaceGlbBlob())
-        filename = exportFilename(slug, 'face', fmt)
-      } else if (fmt === 'stl-parts') {
-        blob = result.value.getFrontSideMultiStlBlob?.() || result.value.getFaceMultiStlBlob()
-        filename = exportFilename(slug, 'face', fmt)
-      } else if (fmt === 'stl-color') {
-        blob = result.value.getFrontSideColoredStlBlob?.() || result.value.getFaceColoredStlBlob()
-        filename = exportFilename(slug, 'face', fmt)
-      } else {
-        blob = result.value.getFrontSideBlob?.() || result.value.getFaceBlob()
-        filename = result.value.frontSideFilename || result.value.baseFilename
-      }
-    } else if (part === 'body') {
-      if (fmt === '3mf') {
-        blob = result.value.getBack3mfBlob?.() || result.value.getBody3mfBlob()
-        filename = exportFilename(slug, 'body', fmt)
-      } else if (fmt === 'glb') {
-        blob = await (result.value.getBackGlbBlob?.() || result.value.getBodyGlbBlob())
-        filename = exportFilename(slug, 'body', fmt)
-      } else if (fmt === 'stl-parts') {
-        blob = result.value.getBackMultiStlBlob?.() || result.value.getBodyMultiStlBlob()
-        filename = exportFilename(slug, 'body', fmt)
-      } else if (fmt === 'stl-color') {
-        blob = result.value.getBackColoredStlBlob?.() || result.value.getBodyColoredStlBlob()
-        filename = exportFilename(slug, 'body', fmt)
-      } else {
-        blob = result.value.getBackBlob?.() || result.value.getBodyBlob()
-        filename = result.value.backFilename || result.value.bodyFilename
-      }
-    } else if (part === 'stand') {
-      const standPartName = `stand_${result.value.dimensions?.standModelId || form.standModelId || 'model'}`
-      if (fmt === '3mf') {
-        blob = result.value.getStand3mfBlob()
-        filename = exportFilename(slug, standPartName, fmt)
-      } else if (fmt === 'glb') {
-        blob = await result.value.getStandGlbBlob()
-        filename = exportFilename(slug, standPartName, fmt)
-      } else if (fmt === 'stl-parts') {
-        blob = result.value.getStandMultiStlBlob()
-        filename = exportFilename(slug, standPartName, fmt)
-      } else if (fmt === 'stl-color') {
-        blob = result.value.getStandColoredStlBlob()
-        filename = exportFilename(slug, standPartName, fmt)
-      } else {
-        blob = result.value.getStandBlob()
-        filename = result.value.standFilename
-      }
-    }
-
-    if (!blob) {
-      toast.error('Part tidak tersedia')
-      return
-    }
+    const { blob, filename } = await resolveGeneratorPartExport(result.value, part, fmt)
+    if (!blob) throw new Error('Part tidak tersedia')
     downloadBlob(blob, filename)
     const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
     const partLabel = part === 'face' ? 'front & side' : part === 'body' ? 'back' : part
@@ -394,7 +310,7 @@ function uploadBlob(blob, filename) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const fd = new FormData()
-    fd.append('file', new File([blob], filename, { type: exportMime(exportFormat.value) }))
+    fd.append('file', new File([blob], filename, { type: blob.type || exportMime(exportFormat.value) }))
     xhr.open('POST', '/api/library-files')
     xhr.withCredentials = true
     xhr.onload = () => {
@@ -407,23 +323,32 @@ function uploadBlob(blob, filename) {
       if (xhr.status >= 200 && xhr.status < 300) resolve(body)
       else reject(new Error(body?.statusMessage || 'Upload gagal'))
     }
+    xhr.timeout = 120000
+    xhr.ontimeout = () => reject(new Error('Upload melewati batas waktu'))
+    xhr.onabort = () => reject(new Error('Upload dibatalkan'))
     xhr.onerror = () => reject(new Error('Upload gagal'))
     xhr.send(fd)
   })
 }
 
 async function saveToGallery() {
-  if (!isAdmin.value || !(await ensureFreshResult())) return
+  if (saving.value || !isAdmin.value) return
   saving.value = true
-  errorMsg.value = ''
   try {
-    await uploadBlob(result.value.getFrontSideBlob?.() || result.value.getFaceBlob(), result.value.frontSideFilename || result.value.baseFilename)
-    await uploadBlob(result.value.getBackBlob?.() || result.value.getBodyBlob(), result.value.backFilename || result.value.bodyFilename)
-    const standBlob = result.value.getStandBlob?.()
-    if (standBlob) await uploadBlob(standBlob, result.value.standFilename)
-    toast.success('Model disimpan ke Galeri 3D')
+    if (!(await ensureFreshResult())) return
+    const model = result.value
+    const fmt = exportFormat.value
+    const files = await Promise.all(['face', 'body', 'stand'].map((part) =>
+      resolveGeneratorPartExport(model, part, fmt)
+    ))
+    if (!files[0]?.blob) throw new Error('Part utama tidak tersedia')
+    for (const file of files) {
+      if (file.blob) await uploadBlob(file.blob, file.filename)
+    }
+    const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
+    toast.success(`Model disimpan ke Galeri 3D (${fmtLabel})`)
   } catch (e) {
-    errorMsg.value = e?.message || 'Gagal menyimpan ke galeri'
+    toast.error(e?.message || 'Gagal menyimpan ke galeri')
   } finally {
     saving.value = false
   }
@@ -437,9 +362,13 @@ function onWizardComplete(payload) {
 }
 
 function restartWizard() {
+  generationState.invalidate()
+  if (queuedGenerateTimer) clearTimeout(queuedGenerateTimer)
+  queuedGenerateTimer = null
+  generateToken++
+  generating.value = false
   wizardDone.value = false
   result.value = null
-  resultSignature.value = ''
   clearPreviews()
   const prevDispose = disposePrev
   disposePrev = null
@@ -681,7 +610,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
               </button>
             </div>
             <GeneratorHppPanel
-              :result="result"
+              :result="isResultFresh ? result : null"
               :color-fields="COLOR_FIELDS"
               :material-ids="colorMaterialIds"
               :colors="form.colors"

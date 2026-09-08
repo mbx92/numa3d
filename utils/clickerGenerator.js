@@ -1,3 +1,4 @@
+import { createGeneratorWorkerClient, GeneratorWorkerError } from './generatorWorkerClient.js'
 // API generate clicker — offload ke Web Worker agar UI tidak freeze.
 import { generateClickerCore } from './clickerCore.js'
 import { unpackGeometry } from './geometryPack.js'
@@ -12,70 +13,23 @@ import {
   partsToMultiSolidStlBuffer
 } from './keychainExport.js'
 
-let worker = null
-let workerReady = null
-let manifoldWorker = null
-let manifoldInit = null
-let manifoldFailed = false
+const workerClient = createGeneratorWorkerClient(
+  () => new Worker(new URL('../workers/clicker.worker.js', import.meta.url), { type: 'module' })
+)
 
-function getWorker() {
-  if (typeof Worker === 'undefined') return null
-  if (!worker) {
-    worker = new Worker(new URL('../workers/clicker.worker.js', import.meta.url), { type: 'module' })
-    workerReady = new Promise((resolve, reject) => {
-      worker.onerror = (e) => reject(e.error || new Error('Worker error'))
-      resolve()
-    })
+const manifoldClient = createGeneratorWorkerClient(
+  () => new Worker(new URL('../workers/clicker.manifold.worker.js', import.meta.url), { type: 'module' }),
+  {
+    async initialize(worker, signal) {
+      const [socket, stem] = await Promise.all(['mx-socket', 'mx-stem'].map(async (name) => {
+        const response = await fetch(`/assets/clicker/mx/${name}.3mf`, { signal })
+        if (!response.ok) throw new Error(`${name}.3mf tidak ditemukan`)
+        return response.arrayBuffer()
+      }))
+      if (!signal.aborted) worker.postMessage({ type: 'init', socket, stem }, [socket, stem])
+    }
   }
-  return worker
-}
-
-async function getManifoldWorker() {
-  if (manifoldFailed || typeof Worker === 'undefined') return null
-  if (!manifoldWorker) {
-    manifoldWorker = new Worker(new URL('../workers/clicker.manifold.worker.js', import.meta.url), {
-      type: 'module'
-    })
-    manifoldInit = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Manifold worker timeout')), 30000)
-      const onMsg = (event) => {
-        const msg = event.data
-        if (msg?.type === 'ready') return
-        if (msg?.type === 'initDone') {
-          clearTimeout(timeout)
-          manifoldWorker.removeEventListener('message', onMsg)
-          resolve()
-        }
-        if (msg?.type === 'error') {
-          clearTimeout(timeout)
-          manifoldWorker.removeEventListener('message', onMsg)
-          reject(new Error(msg.message))
-        }
-      }
-      manifoldWorker.addEventListener('message', onMsg)
-      manifoldWorker.onerror = (e) => {
-        clearTimeout(timeout)
-        reject(e.error || new Error('Manifold worker error'))
-      }
-      Promise.all([
-        fetch('/assets/clicker/mx/mx-socket.3mf').then((r) => {
-          if (!r.ok) throw new Error('mx-socket.3mf tidak ditemukan')
-          return r.arrayBuffer()
-        }),
-        fetch('/assets/clicker/mx/mx-stem.3mf').then((r) => {
-          if (!r.ok) throw new Error('mx-stem.3mf tidak ditemukan')
-          return r.arrayBuffer()
-        })
-      ])
-        .then(([socket, stem]) => {
-          manifoldWorker.postMessage({ type: 'init', socket, stem }, [socket, stem])
-        })
-        .catch(reject)
-    })
-  }
-  await manifoldInit
-  return manifoldWorker
-}
+)
 
 function mapPreviewPart(p, geos) {
   const geometry = p.geometry ? unpackGeometry(p.geometry) : null
@@ -277,58 +231,17 @@ function buildLiveResult(raw) {
   }
 }
 
-function generateViaManifoldWorker(opts) {
-  return getManifoldWorker().then((w) => {
-    if (!w) throw new Error('Manifold tidak tersedia')
-    const id = Math.random().toString(36).slice(2)
-    let prepared
-    try {
-      prepared = prepareWorkerOpts(opts)
-    } catch (e) {
-      return Promise.reject(e)
-    }
-    return new Promise((resolve, reject) => {
-      const handler = (event) => {
-        if (event.data?.id !== id) return
-        w.removeEventListener('message', handler)
-        if (event.data.error) reject(new Error(event.data.error))
-        else resolve(buildLiveResult(event.data.result))
-      }
-      w.addEventListener('message', handler)
-      const transfer = []
-      if (prepared.meshBuffer instanceof ArrayBuffer) transfer.push(prepared.meshBuffer)
-      if (prepared.meshLidBuffer instanceof ArrayBuffer) transfer.push(prepared.meshLidBuffer)
-      if (prepared.meshBaseBuffer instanceof ArrayBuffer) transfer.push(prepared.meshBaseBuffer)
-      // Jangan transfer buffer yang sama dua kali
-      const unique = [...new Set(transfer)]
-      w.postMessage({ id, opts: prepared }, unique)
-    })
-  })
+async function generateViaManifoldWorker(prepared) {
+  const transfer = ['meshBuffer', 'meshLidBuffer', 'meshBaseBuffer']
+    .map((key) => prepared[key]).filter((buffer) => buffer instanceof ArrayBuffer)
+  const raw = await manifoldClient.run(prepared, transfer)
+  return buildLiveResult(raw)
 }
 
-function generateViaWorker(opts) {
-  const w = getWorker()
-  const id = Math.random().toString(36).slice(2)
-  return workerReady.then(
-    () =>
-      new Promise((resolve, reject) => {
-        let prepared
-        try {
-          prepared = prepareWorkerOpts(opts)
-        } catch (e) {
-          reject(e)
-          return
-        }
-        const handler = (event) => {
-          if (event.data?.id !== id) return
-          w.removeEventListener('message', handler)
-          if (event.data.error) reject(new Error(event.data.error))
-          else resolve(buildLiveResult(event.data.result))
-        }
-        w.addEventListener('message', handler)
-        w.postMessage({ id, opts: prepared })
-      })
-  )
+async function generateViaWorker(opts) {
+  const prepared = await prepareWorkerOpts(opts)
+  const raw = await workerClient.run(prepared)
+  return buildLiveResult(raw)
 }
 
 export async function generateClicker(userOpts = {}) {
@@ -342,18 +255,20 @@ export async function generateClicker(userOpts = {}) {
     userOpts.shapeMode === 'mesh'
     || (userOpts.shapeMode === 'rect' && userOpts.flexiEnabled === true)
     || snapFitNeedsManifold
-  if (typeof window !== 'undefined' && typeof Worker !== 'undefined' && !manifoldFailed) {
+  if (typeof window !== 'undefined' && typeof Worker !== 'undefined') {
+    const prepared = prepareWorkerOpts(userOpts)
     try {
-      return await generateViaManifoldWorker(userOpts)
+      return await generateViaManifoldWorker(prepared)
     } catch (e) {
-      if (requiresManifold) throw e
+      if (requiresManifold || !(e instanceof GeneratorWorkerError)) throw e
       console.warn('[clicker] Manifold fallback ke clipper:', e?.message || e)
-      manifoldFailed = true
     }
   }
   if (requiresManifold) {
     throw new Error(
-      snapFitNeedsManifold && !(userOpts.shapeMode === 'rect' && userOpts.flexiEnabled === true)
+      userOpts.shapeMode === 'mesh'
+        ? 'Mode mesh membutuhkan Manifold worker'
+        : snapFitNeedsManifold && !(userOpts.shapeMode === 'rect' && userOpts.flexiEnabled === true)
         ? 'Clip kunci snap-fit antar huruf membutuhkan Manifold worker'
         : 'Mode flexi membutuhkan Manifold worker agar engsel print-in-place ikut dibuat'
     )

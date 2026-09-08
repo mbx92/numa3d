@@ -1,3 +1,4 @@
+import { createGeneratorWorkerClient } from './generatorWorkerClient.js'
 // API generate keychain — offload ke Web Worker agar UI tidak freeze.
 import { getKeychainTheme } from './keychainThemes.js'
 import { generateKeychainCore } from './keychainCore.js'
@@ -30,20 +31,9 @@ export const ATTACHMENT_TYPES = [
   { id: 'hook', label: 'Hook kait', description: 'Kait C terbuka — langsung diklip ke ring/bar' }
 ]
 
-let worker = null
-let workerReady = null
-
-function getWorker() {
-  if (typeof Worker === 'undefined') return null
-  if (!worker) {
-    worker = new Worker(new URL('../workers/keychain.worker.js', import.meta.url), { type: 'module' })
-    workerReady = new Promise((resolve, reject) => {
-      worker.onerror = (e) => reject(e.error || new Error('Worker error'))
-      resolve()
-    })
-  }
-  return worker
-}
+const workerClient = createGeneratorWorkerClient(
+  () => new Worker(new URL('../workers/keychain.worker.js', import.meta.url), { type: 'module' })
+)
 
 function mapPreviewPart(p, geos) {
   const geometry = unpackGeometry(p.geometry)
@@ -190,29 +180,10 @@ function buildLiveResult(raw) {
   }
 }
 
-function generateViaWorker(opts) {
-  const w = getWorker()
-  const id = Math.random().toString(36).slice(2)
-  return workerReady.then(
-    () =>
-      new Promise((resolve, reject) => {
-        let prepared
-        try {
-          prepared = prepareWorkerOpts(opts)
-        } catch (e) {
-          reject(e)
-          return
-        }
-        const handler = (event) => {
-          if (event.data?.id !== id) return
-          w.removeEventListener('message', handler)
-          if (event.data.error) reject(new Error(event.data.error))
-          else resolve(buildLiveResult(event.data.result))
-        }
-        w.addEventListener('message', handler)
-        w.postMessage({ id, opts: prepared })
-      })
-  )
+async function generateViaWorker(opts) {
+  const prepared = await prepareWorkerOpts(opts)
+  const raw = await workerClient.run(prepared)
+  return buildLiveResult(raw)
 }
 
 export async function generateKeychain(userOpts = {}) {

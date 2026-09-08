@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test tests/*.test.js",
     "dev": "nuxt dev --host",
     "dev:clean": "node -e \"try{require('fs').rmSync('.nuxt',{recursive:true,force:true})}catch(e){}\" && nuxt dev --host",
     "build": "nuxt build",

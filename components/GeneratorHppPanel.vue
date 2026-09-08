@@ -40,7 +40,7 @@ const needsMaterial = computed(() => assignedCount.value < 1)
 const exportParts = computed(() => collectGeneratorExportParts(props.result))
 
 const estimate = computed(() =>
-  estimateMaterialLines(exportParts.value, {
+  props.result ? estimateMaterialLines(exportParts.value, {
     colorFields: props.colorFields,
     materialIds: props.materialIds,
     colors: props.colors,
@@ -49,7 +49,7 @@ const estimate = computed(() =>
     infillPercent: infillPercent.value,
     wastePercent: wastePercent.value,
     switchMaterialId: props.switchMaterialId
-  })
+  }) : { lines: [], skipped: [] }
 )
 
 const selectedProduct = computed(() =>
@@ -80,19 +80,24 @@ const suggested = computed(() =>
 )
 
 async function applyRecipe() {
-  if (!isAdmin.value || !productId.value || !estimate.value.lines.length) return
+  if (saving.value || !props.result || !isAdmin.value || !productId.value || !estimate.value.lines.length) return
   saving.value = true
   try {
-    const product = await $fetch(`/api/products/${productId.value}`)
+    const targetProductId = productId.value
+    const model = props.result
+    const estimateLines = estimate.value.lines.map((line) => ({ ...line }))
+    const selectedMachineId = machineId.value || null
+    const product = await $fetch(`/api/products/${targetProductId}`)
+    if (!props.result || props.result !== model) throw new Error('Desain berubah. Generate ulang sebelum mengisi recipe.')
     const body = mergeGeneratorRecipe({
       existingRecipes: product.recipes || [],
       existingPackaging: product.packaging || [],
-      estimateLines: estimate.value.lines,
+      estimateLines,
       materials: materials.value || [],
-      machineId: machineId.value || null
+      machineId: selectedMachineId
     })
     if (!body.recipes.length) throw new Error('Tidak ada baris recipe untuk disimpan')
-    await $fetch(`/api/products/${productId.value}/recipe`, { method: 'PUT', body })
+    await $fetch(`/api/products/${targetProductId}/recipe`, { method: 'PUT', body })
     toast.success(`Recipe ${product.name} diisi dari generator.`)
   } catch (e) {
     toast.error(e.data?.statusMessage || e.message || 'Gagal mengisi recipe')
@@ -109,7 +114,10 @@ async function applyRecipe() {
       Estimasi gram dari volume mesh × infill, bukan hasil Orca. Waktu cetak tetap di tab Recipe produk.
     </p>
 
-    <p v-if="needsMaterial" class="text-[11px] text-amber-700">
+    <p v-if="!result" class="text-[11px] text-amber-700">
+      Generate ulang setelah mengubah desain untuk memperbarui estimasi HPP.
+    </p>
+    <p v-else-if="needsMaterial" class="text-[11px] text-amber-700">
       Pilih material di panel Warna (mode Material). Mode 1 warna tidak mengisi recipe.
     </p>
 
