@@ -5,6 +5,7 @@ import {
   ArrowDownTrayIcon,
   CursorArrowRaysIcon,
   LightBulbIcon,
+  CodeBracketIcon,
   CubeTransparentIcon
 } from '@heroicons/vue/24/outline'
 
@@ -14,6 +15,14 @@ definePageMeta({
 })
 
 const tools = [
+  {
+    to: '/tools/code-studio',
+    title: 'Code Studio',
+    description: 'Kode parametrik menjadi solid 3D: bentuk dasar, operasi potong, preview, dan ekspor STL/3MF/GLB.',
+    icon: markRaw(CodeBracketIcon),
+    tags: ['Code → 3D', 'Parametrik', 'Manifold'],
+    beta: true
+  },
   {
     to: '/tools/keychain',
     title: 'Keychain Generator',
