@@ -9,13 +9,9 @@ export function useToolMaterials() {
 
   const list = computed(() => materials.value || [])
 
-  const withColor = computed(() =>
-    list.value.filter((m) => parseMaterialColor(m.color, null))
-  )
-
   function filterByType(type) {
-    if (!type) return withColor.value
-    return withColor.value.filter((m) => m.type === type)
+    if (!type) return list.value
+    return list.value.filter((m) => m.type === type)
   }
 
   function materialById(id) {
@@ -34,7 +30,6 @@ export function useToolMaterials() {
 
   return {
     materials: list,
-    materialsWithColor: withColor,
     pending,
     refresh,
     filterByType,

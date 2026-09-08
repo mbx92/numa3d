@@ -98,7 +98,7 @@ function monthLabel(key) {
     </div>
 
     <!-- Tab -->
-    <div class="flex gap-1 overflow-x-auto border-b border-ink-200">
+    <div class="tab-bar">
       <button
         v-for="t in tabs"
         :key="t.key"

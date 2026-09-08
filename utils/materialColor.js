@@ -1,4 +1,6 @@
 export const DEFAULT_MATERIAL_COLOR = '#9ca3af'
+/** Preview satu warna di generator — grey, tanpa palet. */
+export const TOOL_MONO_COLOR = '#9ca3af'
 
 /** Normalisasi input hex (#RGB atau #RRGGBB) ke lowercase #rrggbb. */
 export function parseMaterialColor(value, fallback = DEFAULT_MATERIAL_COLOR) {

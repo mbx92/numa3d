@@ -190,7 +190,7 @@ function submit() {
 
         <!-- Step 2: Warna (4) -->
         <template v-else-if="step === 1">
-          <p class="text-xs text-ink-500">Maksimal 4 warna — cukup untuk cetak multi-material.</p>
+          <p class="text-xs text-ink-500">Material dari stok, atau 1 warna abu-abu dulu.</p>
           <p v-if="accentLabel" class="text-[11px] text-ink-500">
             Huruf aksen: <strong>{{ accentLabel }}</strong>
           </p>

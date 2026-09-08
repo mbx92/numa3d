@@ -1,12 +1,12 @@
 <script setup>
-import { DEFAULT_MATERIAL_COLOR, parseMaterialColor } from '~/utils/materialColor.js'
+import { DEFAULT_MATERIAL_COLOR, TOOL_MONO_COLOR, parseMaterialColor } from '~/utils/materialColor.js'
 import MaterialColorPicker from '~/components/MaterialColorPicker.vue'
 
 const props = defineProps({
   /** @type {{ key: string, label: string, short?: string, hint?: string, materialType?: string|null, isAccent?: boolean }[]} */
   fields: { type: Array, required: true },
   colors: { type: Object, required: true },
-  mode: { type: String, default: 'hex' },
+  mode: { type: String, default: 'material' },
   materialIds: { type: Object, default: () => ({}) },
   /** compact = toolbar, list = wizard */
   variant: { type: String, default: 'compact' },
@@ -15,14 +15,24 @@ const props = defineProps({
 
 const emit = defineEmits(['update:colors', 'update:mode', 'update:materialIds', 'change'])
 
-const { materialsWithColor, hexFromMaterial } = useToolMaterials()
+const { materials, hexFromMaterial } = useToolMaterials()
 
 const modes = [
-  { id: 'hex', label: 'Hex' },
-  { id: 'material', label: 'Material' }
+  { id: 'mono', label: '1 warna' },
+  { id: 'material', label: 'Material' },
+  { id: 'hex', label: 'Hex' }
 ]
 
+function applyMono() {
+  const nextColors = { ...props.colors }
+  for (const key of Object.keys(nextColors)) nextColors[key] = TOOL_MONO_COLOR
+  for (const field of props.fields) nextColors[field.key] = TOOL_MONO_COLOR
+  emit('update:colors', nextColors)
+  emit('update:materialIds', {})
+}
+
 function setMode(next) {
+  if (next === 'mono') applyMono()
   emit('update:mode', next)
   emit('change')
 }
@@ -72,13 +82,29 @@ const pickerSize = computed(() => (props.variant === 'list' ? 'md' : 'sm'))
       </div>
 
       <p
-        v-if="mode === 'material' && !materialsWithColor.length"
+        v-if="mode === 'material' && !materials.length"
         class="text-[10px] text-amber-700 w-full basis-full"
       >
-        Belum ada material dengan warna — atur di halaman Material.
+        Belum ada material di database — tambah di halaman Material.
       </p>
 
       <div
+        v-if="mode === 'mono'"
+        class="flex items-center gap-2"
+        :class="variant === 'list' ? 'w-full rounded-lg border border-ink-100 p-3' : ''"
+      >
+        <span
+          class="shrink-0 rounded-md border border-ink-200 shadow-inner ring-1 ring-black/5"
+          :class="variant === 'list' ? 'h-10 w-10' : 'h-7 w-7'"
+          :style="{ backgroundColor: TOOL_MONO_COLOR }"
+        />
+        <span class="text-[11px] text-ink-500 leading-snug">
+          Semua bagian abu-abu. Pilih Material untuk warna dari stok.
+        </span>
+      </div>
+
+      <div
+        v-else
         class="flex flex-wrap items-center gap-2"
         :class="variant === 'list' ? 'w-full flex-col items-stretch gap-3' : ''"
       >
@@ -150,7 +176,7 @@ const pickerSize = computed(() => (props.variant === 'list' ? 'md' : 'sm'))
           :key="field.key"
           class="rounded-md border border-ink-200 bg-ink-100"
           :class="variant === 'list' ? 'h-10 w-10' : 'h-7 w-7'"
-          :style="{ backgroundColor: colors[field.key] || '#e5e7eb' }"
+          :style="{ backgroundColor: colors[field.key] || TOOL_MONO_COLOR }"
         />
       </div>
     </template>

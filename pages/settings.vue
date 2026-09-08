@@ -134,7 +134,7 @@ watch(
     <h1 class="text-xl font-bold">Pengaturan</h1>
     <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan.</p>
 
-    <div class="flex gap-1 overflow-x-auto border-b border-ink-200 -mb-px">
+    <div class="tab-bar -mb-px">
       <button
         v-for="t in tabs"
         :key="t.id"

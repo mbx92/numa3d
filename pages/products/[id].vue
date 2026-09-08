@@ -69,15 +69,24 @@ const packRows = ref(product.value?.packaging?.map((p) => ({ ...p })) || [])
 const savingRecipe = ref(false)
 const savedMsg = ref('')
 
+function processFromRecipes(rows) {
+  const src =
+    (rows || []).find((r) => r.printTimeMinutes || r.machineId || r.laborMinutes) || rows?.[0] || {}
+  return {
+    machineId: src.machineId ?? null,
+    printTimeMinutes: src.printTimeMinutes || 0,
+    failureRatePercent: src.failureRatePercent ?? 5,
+    laborMinutes: src.laborMinutes || 0,
+    laborRatePerHour: src.laborRatePerHour || 0
+  }
+}
+
+const processForm = ref(processFromRecipes(product.value?.recipes))
+
 function addRecipeRow() {
   recipeRows.value.push({
     materialId: materials.value?.[0]?.id || null,
-    quantityUsed: 0,
-    printTimeMinutes: 0,
-    machineId: machines.value?.[0]?.id || null,
-    failureRatePercent: 5,
-    laborMinutes: 0,
-    laborRatePerHour: 0
+    quantityUsed: 0
   })
 }
 function addPackRow() {
@@ -86,15 +95,28 @@ function addPackRow() {
 async function saveRecipe() {
   savingRecipe.value = true
   savedMsg.value = ''
+  const p = processForm.value
+  const recipes = recipeRows.value
+    .filter((r) => r.materialId)
+    .map((r, i) => ({
+      materialId: r.materialId,
+      quantityUsed: r.quantityUsed,
+      printTimeMinutes: i === 0 ? Math.round(Number(p.printTimeMinutes) || 0) : 0,
+      machineId: i === 0 && p.machineId ? p.machineId : null,
+      failureRatePercent: Number(p.failureRatePercent) || 0,
+      laborMinutes: i === 0 ? Math.round(Number(p.laborMinutes) || 0) : 0,
+      laborRatePerHour: i === 0 ? Math.round(Number(p.laborRatePerHour) || 0) : 0
+    }))
   await $fetch(`/api/products/${id}/recipe`, {
     method: 'PUT',
-    body: { recipes: recipeRows.value, packaging: packRows.value }
+    body: { recipes, packaging: packRows.value }
   })
   await refresh()
   recipeRows.value = product.value?.recipes?.map((r) => ({ ...r })) || []
   packRows.value = product.value?.packaging?.map((p) => ({ ...p })) || []
+  processForm.value = processFromRecipes(product.value?.recipes)
   savingRecipe.value = false
-  savedMsg.value = 'Recipe tersimpan, HPP diperbarui.'
+  savedMsg.value = 'Recipe & proses tersimpan, HPP diperbarui.'
   setTimeout(() => (savedMsg.value = ''), 3000)
 }
 
@@ -391,7 +413,7 @@ const tab = computed({
       </span>
     </div>
 
-    <div class="flex gap-1 overflow-x-auto border-b border-ink-200 -mb-px">
+    <div class="tab-bar -mb-px">
       <button
         v-for="t in tabs"
         :key="t.id"
@@ -732,92 +754,130 @@ const tab = computed({
     </div>
 
     <div v-else-if="tab === 'recipe'" class="space-y-3">
-    <div class="panel overflow-hidden">
+      <div class="panel overflow-hidden">
         <div class="panel-header !flex-wrap gap-2">
-          <span class="panel-title">Recipe — Material & Proses</span>
-          <button v-if="isAdmin" class="btn-secondary shrink-0" @click="addRecipeRow"><PlusIcon class="w-3.5 h-3.5" />Baris</button>
+          <span class="panel-title">Recipe — Bahan</span>
+          <button v-if="isAdmin" class="btn-secondary shrink-0" @click="addRecipeRow">
+            <PlusIcon class="w-3.5 h-3.5" />Bahan
+          </button>
         </div>
         <div class="p-3 sm:p-4 space-y-3">
           <p class="text-xs text-ink-500">
-            Filament/resin terpotong saat dicetak (jadi+gagal). Komponen (switch, magnet) hanya terpotong untuk unit jadi.
+            Hanya material: filament, resin, atau komponen (switch, magnet). Pekerjaan cetak ada di panel Proses.
           </p>
-          <div v-for="(r, i) in recipeRows" :key="i" class="border border-ink-200 rounded-panel p-3 space-y-3">
-            <div class="flex items-start gap-3">
-              <div class="flex gap-2 shrink-0">
-                <div class="w-16 h-16 rounded-panel border border-ink-200 overflow-hidden shrink-0">
-                  <div
-                    class="w-full h-full"
-                    :style="{ backgroundColor: materialSwatchColor(materialOf(r.materialId)) || '#e5e7eb' }"
-                    :title="materialOf(r.materialId)?.color || 'Tanpa warna'"
-                  />
-                </div>
-                <div class="w-16 h-16 rounded-panel border border-ink-200 bg-ink-50 overflow-hidden flex items-center justify-center">
-                  <img
-                    v-if="machineOf(r.machineId)?.imageKey"
-                    :src="`/api/machines/${r.machineId}/image`"
-                    alt=""
-                    class="w-full h-full object-cover"
-                  />
-                  <PhotoIcon v-else class="w-6 h-6 text-ink-300" />
-                </div>
-              </div>
-              <div class="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div class="min-w-0">
-                  <label class="label">Material</label>
-                  <select v-model="r.materialId" class="input w-full" :disabled="!isAdmin">
-                    <option v-for="m in materials" :key="m.id" :value="m.id">
-                      {{ m.name }} · {{ materialTypeLabel(m.type) }} ({{ formatIDR(m.pricePerUnit) }}/{{ m.unit }})
-                    </option>
-                  </select>
-                </div>
-                <div class="min-w-0">
-                  <label class="label">Mesin</label>
-                  <select v-model="r.machineId" class="input w-full" :disabled="!isAdmin">
-                    <option :value="null">— tanpa mesin —</option>
-                    <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.name }}</option>
-                  </select>
-                </div>
-              </div>
-              <button
-                v-if="isAdmin"
-                class="text-red-500 hover:text-red-700 text-lg leading-none px-1 mt-6 shrink-0"
-                @click="recipeRows.splice(i, 1)"
-              >
-                &times;
-              </button>
+          <div v-for="(r, i) in recipeRows" :key="i" class="flex items-start gap-3 border border-ink-200 rounded-panel p-3">
+            <div class="w-16 h-16 rounded-panel border border-ink-200 overflow-hidden shrink-0">
+              <div
+                class="w-full h-full"
+                :style="{ backgroundColor: materialSwatchColor(materialOf(r.materialId)) || '#e5e7eb' }"
+                :title="materialOf(r.materialId)?.color || 'Tanpa warna'"
+              />
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
-              <div>
-                <label class="label">Qty</label>
-                <input v-model.number="r.quantityUsed" type="number" min="0" step="0.1" class="input-num w-full" :disabled="!isAdmin" />
+            <div class="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div class="min-w-0">
+                <label class="label">Material</label>
+                <select v-model="r.materialId" class="input w-full" :disabled="!isAdmin">
+                  <option v-for="m in materials" :key="m.id" :value="m.id">
+                    {{ m.name }} · {{ materialTypeLabel(m.type) }} ({{ formatIDR(m.pricePerUnit) }}/{{ m.unit }})
+                  </option>
+                </select>
               </div>
               <div>
-                <label class="label">Upah/jam</label>
-                <IdrInput v-model="r.laborRatePerHour" :disabled="!isAdmin" input-class="w-full" />
-              </div>
-              <div>
-                <label class="label">Print (menit)</label>
-                <input v-model.number="r.printTimeMinutes" type="number" min="0" class="input-num w-full" :disabled="!isAdmin" />
-              </div>
-              <div>
-                <label class="label">Gagal (%)</label>
-                <input v-model.number="r.failureRatePercent" type="number" min="0" max="100" step="0.5" class="input-num w-full" :disabled="!isAdmin" />
-              </div>
-              <div>
-                <label class="label">Kerja (menit)</label>
-                <input v-model.number="r.laborMinutes" type="number" min="0" class="input-num w-full" :disabled="!isAdmin" />
+                <label class="label">Qty / unit</label>
+                <input
+                  v-model.number="r.quantityUsed"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  class="input-num w-full"
+                  :disabled="!isAdmin"
+                />
               </div>
             </div>
+            <button
+              v-if="isAdmin"
+              class="text-red-500 hover:text-red-700 text-lg leading-none px-1 mt-6 shrink-0"
+              @click="recipeRows.splice(i, 1)"
+            >
+              &times;
+            </button>
           </div>
           <p v-if="!recipeRows.length" class="text-center text-ink-500 py-4 text-sm">
-            Belum ada baris recipe. Klik "+ Baris". Filament/resin untuk cetak; komponen (switch, magnet) juga di sini, bukan di packaging.
+            Belum ada bahan. Klik "+ Bahan". Komponen (switch, magnet) juga di sini, bukan di packaging.
           </p>
         </div>
       </div>
 
       <div class="panel overflow-hidden">
+        <div class="panel-header">
+          <span class="panel-title">Proses — Pekerjaan</span>
+        </div>
+        <div class="p-3 sm:p-4 space-y-3">
+          <p class="text-xs text-ink-500">
+            Waktu cetak, mesin, dan tenaga kerja per unit jadi. Bukan baris bahan.
+          </p>
+          <div class="flex items-start gap-3">
+            <div class="w-16 h-16 rounded-panel border border-ink-200 bg-ink-50 overflow-hidden flex items-center justify-center shrink-0">
+              <img
+                v-if="machineOf(processForm.machineId)?.imageKey"
+                :src="`/api/machines/${processForm.machineId}/image`"
+                alt=""
+                class="w-full h-full object-cover"
+              />
+              <PhotoIcon v-else class="w-6 h-6 text-ink-300" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <label class="label">Mesin</label>
+              <select v-model="processForm.machineId" class="input w-full" :disabled="!isAdmin">
+                <option :value="null">— tanpa mesin —</option>
+                <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div>
+              <label class="label">Print (menit)</label>
+              <input
+                v-model.number="processForm.printTimeMinutes"
+                type="number"
+                min="0"
+                class="input-num w-full"
+                :disabled="!isAdmin"
+              />
+            </div>
+            <div>
+              <label class="label">Gagal (%)</label>
+              <input
+                v-model.number="processForm.failureRatePercent"
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                class="input-num w-full"
+                :disabled="!isAdmin"
+              />
+            </div>
+            <div>
+              <label class="label">Kerja (menit)</label>
+              <input
+                v-model.number="processForm.laborMinutes"
+                type="number"
+                min="0"
+                class="input-num w-full"
+                :disabled="!isAdmin"
+              />
+            </div>
+            <div>
+              <label class="label">Upah/jam</label>
+              <IdrInput v-model="processForm.laborRatePerHour" :disabled="!isAdmin" input-class="w-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel overflow-hidden">
         <div class="panel-header !flex-wrap gap-2">
-          <span class="panel-title">Recipe — Packaging</span>
+          <span class="panel-title">Packaging</span>
           <button v-if="isAdmin" class="btn-secondary shrink-0" @click="addPackRow"><PlusIcon class="w-3.5 h-3.5" />Packaging</button>
         </div>
         <div class="p-3 sm:p-4 space-y-2">
@@ -849,7 +909,7 @@ const tab = computed({
 
     <div v-if="isAdmin" class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
       <button class="btn-primary w-full sm:w-auto" :disabled="savingRecipe" @click="saveRecipe">
-        <CheckIcon class="w-4 h-4" />{{ savingRecipe ? 'Menyimpan…' : 'Simpan Recipe & Hitung HPP' }}
+        <CheckIcon class="w-4 h-4" />{{ savingRecipe ? 'Menyimpan…' : 'Simpan Recipe & Proses' }}
       </button>
       <span v-if="savedMsg" class="text-sm text-green-600">{{ savedMsg }}</span>
     </div>

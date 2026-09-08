@@ -73,6 +73,8 @@ Kalau produk punya **harga jual tersimpan** (`list_price` > 0), katalog dan tomb
 
 Margin bersih penjualan = `(harga jual × (1 − fee marketplace%) − HPP) × qty`. Penjualan baru menyimpan snapshot `hpp_per_unit` saat transaksi, jadi laporan tidak berubah kalau harga material/mesin nanti diubah.
 
+Panel Export di generator (clicker, mesh-clicker, keychain, lightbox) bisa mengisi recipe produk dari volume mesh × infill (bukan hasil slicer). Waktu cetak tetap diisi manual di tab Recipe. Tes: `node --test tests/hpp.test.js`.
+
 ## Export plate 3MF untuk OrcaSlicer
 
 Di panel Export generator keychain, clicker, mesh clicker, atau lightbox, pilih **3MF → Plate 260 × 260 · Semua bagian**. Buka file sebagai **proyek** di OrcaSlicer agar susunan plate dan bagian warna dipertahankan. File mengacu pada preset **Anycubic Kobra X 0.4 nozzle**, dengan volume cetak 260 × 260 × 260 mm. Pilih profil proses dan filament yang biasa digunakan; file tidak menyertakan suhu atau G-code mesin.

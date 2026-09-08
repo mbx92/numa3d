@@ -499,6 +499,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result)
         </template>
 
         <template v-else-if="activeToolPanel === 'colors'">
+          <p class="text-xs text-ink-500">Material dari stok, 1 warna abu-abu, atau hex.</p>
           <ToolColorBar
             v-model:mode="colorMode"
             v-model:colors="form.colors"
@@ -565,6 +566,13 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result)
                 {{ saving ? 'Menyimpan…' : 'Galeri' }}
               </button>
             </div>
+            <GeneratorHppPanel
+              :result="result"
+              :color-fields="COLOR_FIELDS"
+              :material-ids="colorMaterialIds"
+              :colors="form.colors"
+              :color-mode="colorMode"
+            />
           </template>
           <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
         </template>

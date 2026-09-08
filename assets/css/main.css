@@ -6,6 +6,40 @@
   body {
     @apply bg-ink-100 text-ink-900 antialiased;
   }
+
+  /*
+   * Scrollbar: tipis, rounded, warna ink — bukan gaya native OS.
+   * Firefox: scrollbar-width / scrollbar-color.
+   * Chrome / Safari / Edge: ::-webkit-scrollbar.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #aab2bc transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #aab2bc;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #7a8592;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 @media print {
@@ -176,5 +210,21 @@
   }
   .badge {
     @apply inline-block px-2 py-0.5 rounded text-xs font-semibold;
+  }
+
+  /*
+   * Tab bar: overflow-x hanya untuk swipe di layar sempit.
+   * Jangan tampilkan scrollbar — border-b-2 + -mb-px sering bikin
+   * overflow 1px sehingga track horizontal kelihatan di bawah tab.
+   */
+  .tab-bar {
+    @apply flex gap-1 border-b border-ink-200 overflow-x-auto overflow-y-hidden overscroll-x-contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .tab-bar::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 }

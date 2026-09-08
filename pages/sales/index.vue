@@ -31,8 +31,8 @@ const paymentMethodLabel = {
   other: 'Lainnya'
 }
 const marketplaceChannels = new Set(['tokopedia', 'shopee', 'tiktok_shop'])
-function defaultPaymentStatus(channel) {
-  return marketplaceChannels.has(channel) ? 'unpaid' : 'paid'
+function defaultPaymentStatus(_channel) {
+  return 'unpaid'
 }
 function defaultPaymentMethod(channel, status) {
   if (status !== 'paid') return ''
@@ -93,8 +93,8 @@ function openAdd() {
     discountKind: 'amount',
     discountPercent: 0,
     paymentNotes: '',
-    paymentStatus: defaultPaymentStatus('direct'),
-    paymentMethod: 'cash',
+    paymentStatus: 'unpaid',
+    paymentMethod: '',
     paidAt: todayStr(),
   }
   errorMsg.value = ''

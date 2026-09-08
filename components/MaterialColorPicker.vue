@@ -123,7 +123,7 @@ onUnmounted(() => {
           </div>
 
           <div v-if="!options.length" class="px-4 py-8 text-center text-sm text-amber-700">
-            Belum ada material dengan warna. Atur di halaman Material.
+            Belum ada material {{ materialTypeLabel(materialType).toLowerCase() }}. Tambah di halaman Material.
           </div>
 
           <div v-else class="max-h-[min(24rem,60vh)] overflow-y-auto p-3">
@@ -142,7 +142,7 @@ onUnmounted(() => {
               >
                 <span
                   class="mb-2 h-12 w-full rounded-md border border-ink-200/80 shadow-inner"
-                  :style="{ backgroundColor: materialSwatchColor(m) || '#e5e7eb' }"
+                  :style="{ backgroundColor: materialSwatchColor(m) || parseMaterialColor(null) }"
                 />
                 <span class="text-xs font-medium text-ink-800 leading-snug line-clamp-2">{{ m.name }}</span>
                 <span class="mt-1 inline-flex">
@@ -150,7 +150,7 @@ onUnmounted(() => {
                     {{ materialTypeLabel(m.type) }}
                   </span>
                 </span>
-                <span class="mt-1 text-[10px] font-mono text-ink-400">{{ m.color }}</span>
+                <span class="mt-1 text-[10px] font-mono text-ink-400">{{ m.color || 'tanpa swatch' }}</span>
                 <span
                   v-if="Number(materialId) === Number(m.id)"
                   class="absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent-500 text-white shadow-sm"

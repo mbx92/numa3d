@@ -233,7 +233,7 @@ function submit() {
         </template>
 
         <template v-else-if="step === 1">
-          <p class="text-xs text-ink-500">2 warna — base + lid terpisah (cocok AMS/multi-material).</p>
+          <p class="text-xs text-ink-500">Material dari stok, atau 1 warna abu-abu dulu.</p>
           <ToolColorBar
             v-model:mode="colorMode"
             v-model:colors="draft.colors"

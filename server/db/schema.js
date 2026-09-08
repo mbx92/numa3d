@@ -270,7 +270,7 @@ export const sales = pgTable(
     notes: text('notes'),
     invoiceNumber: text('invoice_number'),
     customerName: text('customer_name'),
-    paymentStatus: salePaymentStatusEnum('payment_status').notNull().default('paid'),
+    paymentStatus: salePaymentStatusEnum('payment_status').notNull().default('unpaid'),
     paymentMethod: text('payment_method'),
     paidAt: date('paid_at'),
     discountAmount: integer('discount_amount').notNull().default(0),

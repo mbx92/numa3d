@@ -386,7 +386,7 @@ async function downloadPart(part) {
     const partLabel = part === 'face' ? 'front & side' : part === 'body' ? 'back' : part
     toast.success(`Unduh ${partLabel} (${fmtLabel})`)
   } catch (error) {
-    toast.error(error.message || 'Export gagal')
+    toast.error(error?.message || 'Export gagal')
   }
 }
 
@@ -599,7 +599,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
           </template>
 
           <template v-else-if="activeToolPanel === 'colors'">
-            <p class="text-xs text-ink-500">Hex manual atau pilih dari material di database.</p>
+            <p class="text-xs text-ink-500">Material dari stok, 1 warna abu-abu, atau hex.</p>
             <ToolColorBar
               v-model:mode="colorMode"
               v-model:colors="form.colors"
@@ -680,6 +680,13 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                 {{ saving ? 'Menyimpan…' : 'Galeri' }}
               </button>
             </div>
+            <GeneratorHppPanel
+              :result="result"
+              :color-fields="COLOR_FIELDS"
+              :material-ids="colorMaterialIds"
+              :colors="form.colors"
+              :color-mode="colorMode"
+            />
             </template>
           </template>
 

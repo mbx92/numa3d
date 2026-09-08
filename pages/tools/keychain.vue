@@ -50,6 +50,7 @@ const BASE_COLOR_FIELDS = [
   { key: 'baseBottom', label: 'Dasar', short: 'Dasar', materialType: 'filament' },
   { key: 'cavityWall', label: 'Cavity', short: 'Cavity', materialType: 'filament' }
 ]
+const HPP_COLOR_FIELDS = [...TEXT_COLOR_FIELDS, ...BASE_COLOR_FIELDS]
 
 const { mode: colorMode } = useToolColorMode()
 const colorMaterialIds = ref({})
@@ -511,6 +512,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result)
 
           <!-- Colors -->
           <template v-else-if="activeToolPanel === 'colors'">
+            <p class="text-xs text-ink-500">Material dari stok, 1 warna abu-abu, atau hex.</p>
             <div class="space-y-4">
               <div class="space-y-2">
                 <p class="text-xs font-medium text-ink-600">Teks & plate</p>
@@ -565,6 +567,13 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result)
                   {{ saving ? 'Menyimpan…' : 'Galeri' }}
                 </button>
               </div>
+              <GeneratorHppPanel
+                :result="result"
+                :color-fields="HPP_COLOR_FIELDS"
+                :material-ids="colorMaterialIds"
+                :colors="form.colors"
+                :color-mode="colorMode"
+              />
               <p class="text-[10px] text-ink-400 leading-relaxed">3MF OrcaSlicer · Bagian warna tetap tergabung dalam satu objek.</p>
             </template>
             <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
