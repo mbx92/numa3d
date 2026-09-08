@@ -42,6 +42,8 @@ npm run dev          # http://localhost:3000
 
 Script lain: `npm run db:generate` (buat file migrasi baru setelah mengubah `server/db/schema.js`).
 
+Tes tanpa database/MinIO: `npm test`. Catatan audit, perbaikan generator, dan checklist sebelum deploy tersedia di [docs/generator-review.md](docs/generator-review.md).
+
 ## Struktur
 
 - `server/db/schema.js` — semua tabel (users, materials, machines, expenses, products, product_recipes, packaging, product_packaging, sales, app_settings, product_files, audit_logs)

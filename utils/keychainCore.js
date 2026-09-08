@@ -54,7 +54,10 @@ async function loadFont(fontUrl) {
         const font = parse(buffer)
         if (!font?.charToGlyph) throw new Error('parse gagal')
         return font
-      })()
+      })().catch((error) => {
+        fontCache.delete(key)
+        throw error
+      })
     )
   }
   return fontCache.get(key)
