@@ -44,6 +44,8 @@ Script lain: `npm run db:generate` (buat file migrasi baru setelah mengubah `ser
 
 Tes tanpa database/MinIO: `npm test`. Catatan audit, perbaikan generator, dan checklist sebelum deploy tersedia di [docs/generator-review.md](docs/generator-review.md).
 
+**Code Studio (beta):** Tools → Code Studio mengubah kode parametrik terbatas menjadi solid Manifold dengan preview Three.js, ekspor STL/3MF/GLB, galeri, dan HPP. Panduan sintaks, batas keamanan, serta contoh: [docs/code-studio.md](docs/code-studio.md).
+
 ## Struktur
 
 - `server/db/schema.js` — semua tabel (users, materials, machines, expenses, products, product_recipes, packaging, product_packaging, sales, app_settings, product_files, audit_logs)
