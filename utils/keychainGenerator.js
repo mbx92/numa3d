@@ -35,6 +35,19 @@ const workerClient = createGeneratorWorkerClient(
   () => new Worker(new URL('../workers/keychain.worker.js', import.meta.url), { type: 'module' })
 )
 
+let nodeWasmPromise = null
+async function getNodeWasm() {
+  if (!nodeWasmPromise) {
+    nodeWasmPromise = (async () => {
+      const Module = (await import('manifold-3d')).default
+      const wasm = await Module()
+      wasm.setup()
+      return wasm
+    })()
+  }
+  return nodeWasmPromise
+}
+
 function mapPreviewPart(p, geos) {
   const geometry = unpackGeometry(p.geometry)
   geos.push(geometry)
@@ -191,6 +204,6 @@ export async function generateKeychain(userOpts = {}) {
     return generateViaWorker(userOpts)
   }
   const prepared = prepareWorkerOpts(userOpts)
-  const raw = await generateKeychainCore(prepared)
+  const raw = await generateKeychainCore(prepared, await getNodeWasm())
   return buildLiveResult(raw)
 }

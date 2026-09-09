@@ -357,12 +357,21 @@ function createMeshMaterial(part) {
       side: THREE.DoubleSide
     })
   }
-  const mat = new THREE.MeshLambertMaterial({
-    color: part.color || '#f97316',
-    side: THREE.FrontSide,
-    transparent,
-    opacity
-  })
+  const mat = part.roughness != null || part.metalness != null
+    ? new THREE.MeshStandardMaterial({
+      color: part.color || '#f97316',
+      roughness: part.roughness ?? 0.55,
+      metalness: part.metalness ?? 0,
+      side: THREE.FrontSide,
+      transparent,
+      opacity
+    })
+    : new THREE.MeshLambertMaterial({
+      color: part.color || '#f97316',
+      side: THREE.FrontSide,
+      transparent,
+      opacity
+    })
   if (part.glow || part.role === 'ledChip') {
     mat.emissive = new THREE.Color(part.color || '#fff1a8')
     mat.emissiveIntensity = Number(part.glowIntensity) || 0.7
@@ -517,11 +526,15 @@ async function mountParts(serial) {
     const group = props.interactiveAssembly ? ensurePartGroup(partId, parentRoot) : parentRoot
 
     if (part.modelUrl) {
-      const model = await createModelPart(part)
-      if (serial !== mountSerial) return
-      if (props.interactiveAssembly) model.userData.partId = partId
-      group.add(model)
-      added += 1
+      try {
+        const model = await createModelPart(part)
+        if (serial !== mountSerial) return
+        if (props.interactiveAssembly) model.userData.partId = partId
+        group.add(model)
+        added += 1
+      } catch (error) {
+        console.warn('[preview] gagal memuat model', part.modelUrl, error)
+      }
       continue
     }
 

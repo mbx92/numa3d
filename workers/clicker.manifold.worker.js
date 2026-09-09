@@ -100,6 +100,7 @@ function partsToPreviewParts(parts, group, colorHex) {
 function makeSwitchPreviewParts(wasm, placements, params, displayMode) {
   if (displayMode === 'print' || !placements?.length) return []
   const previewModel = params.switchPreviewModel || {}
+  if (previewModel.hide || previewModel.id === 'hidden') return []
   if (previewModel.modelUrl) {
     const fitMm = Math.max(12, Number(params.housingPocketMm || params.preset?.housingOuterMm || 18.5) - 0.4)
     const bodyH = Math.max(8, Number(params.switchDepthMm || params.preset?.bodyDepthMm || 11.5))
@@ -118,7 +119,7 @@ function makeSwitchPreviewParts(wasm, placements, params, displayMode) {
       color: '#3f4652',
       role: 'switch',
       name: 'Switch',
-      opacity: 0.92,
+      opacity: 1,
       previewOnly: true,
       previewModelId: previewModel.id || null
     }))

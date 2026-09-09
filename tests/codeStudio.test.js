@@ -7,7 +7,7 @@ import { unzipSync, strFromU8 } from 'fflate'
 import { compileCodeStudio, CODE_LIMITS } from '../utils/codeStudioLanguage.js'
 import { buildCodeStudio } from '../utils/codeStudioEngine.js'
 import { buildCodeStudioResult } from '../utils/codeStudioGenerator.js'
-import { CODE_STUDIO_EXAMPLES } from '../utils/codeStudioExamples.js'
+import { CODE_STUDIO_CUSTOM, CODE_STUDIO_EXAMPLES } from '../utils/codeStudioExamples.js'
 import { runCodeStudioJob } from '../utils/codeStudioJob.js'
 
 test('language supports the advertised syntax, arithmetic precedence, parameters and comments', () => {
@@ -20,6 +20,7 @@ return subtract(body, hole); // finish`, { width: 80 })
   assert.deepEqual(parsed.root.args[0].args, [80, 14, 8])
   assert.equal(parsed.parameters[0].value, 80)
   assert.equal(compileCodeStudio('return box(20 / 2 / 2, 1, 1)').root.args[0], 5)
+  assert.equal(compileCodeStudio(CODE_STUDIO_CUSTOM.code).root.op, 'box')
 })
 
 test('rejects executable JavaScript, global/property access, prototype keys and forged solids', () => {
@@ -39,10 +40,16 @@ test('bounds source size, nesting, node/repeat complexity and invalid numeric in
   for (const source of [
     'return box(1/0,1,1)', 'return box(-1,1,1)', 'return box(1001,1,1)',
     'return cylinder({radius:2,height:5,segments:10000})', 'return sphere(1e999)',
+    'return torus({major:5,minor:5})', 'return torus({major:8,minor:2,arc:0})', 'return torus({major:8,minor:2,taper:2})',
+    'return torus({major:8,minor:2,ridges:1.5})', 'return torus({major:8,minor:2,flatten:0.1})',
     'return repeat(box(1,1,1),33,[1,0,0])', 'return scale(box(1,1,1),[0,1,1])',
     'return repeat(repeat(box(1,1,1),32,[2,0,0]),32,[0,2,0])',
     'return ' + '('.repeat(60) + 'box(1,1,1)' + ')'.repeat(60),
-    'const a = box(1,1,1); const a = box(2,2,2); return a'
+    'const a = box(1,1,1); const a = box(2,2,2); return a',
+    'return rect2d(10,10)', 'return extrude(box(1,1,1),2)', 'return offset(sphere(2),1)',
+    'return polygon({sides:2,radius:5})', 'return polygon({sides:5,radius:5,inner:0})',
+    'return circle2d({radius:0})', 'return extrude(rect2d(10,10),0)',
+    'return revolve(rect2d(10,10),{arc:0})', 'return translate2d(box(1,1,1),[0,0])'
   ]) assert.throws(() => compileCodeStudio(source), /Baris/, source)
   const example = CODE_STUDIO_EXAMPLES[0].code
   assert.throws(() => compileCodeStudio(example, { width: NaN }), /Angka/)
@@ -82,10 +89,17 @@ test('booleans/transforms match analytic volume and empty/oversized results are 
     ['return intersect(box(10,10,10),box(5,5,5))', 125],
     ['return union(box(10,10,10),translate(box(10,10,10),[10,0,0]))', 2000],
     ['return rotate(scale(box(10,10,10),[2,1,1]),[0,0,90])', 2000],
-    ['return repeat(box(1,1,1),3,[2,0,0])', 3]
+    ['return repeat(box(1,1,1),3,[2,0,0])', 3],
+    ['return extrude(rect2d(10,20),5)', 1000]
   ]
   for (const [code, volume] of cases) assert.ok(Math.abs(buildCodeStudio(wasm, code).volumeMm3 - volume) < 0.0001)
+  const ring = buildCodeStudio(wasm, 'return torus({ major: 10, minor: 2, segments: 96 })')
+  assert.ok(Math.abs(ring.volumeMm3 / (2 * Math.PI ** 2 * 10 * 4) - 1) < 0.03)
+  assert.ok(ring.dimensions.heightMm > 3.5 && ring.dimensions.heightMm < 4.5)
+  const hex = buildCodeStudio(wasm, 'return extrude(polygon({ sides: 6, radius: 10 }), 4)')
+  assert.ok(Math.abs(hex.volumeMm3 / (3 * Math.sqrt(3) / 2 * 100 * 4) - 1) < 0.001)
   assert.throws(() => buildCodeStudio(wasm, 'return subtract(box(1,1,1),box(2,2,2))'), /kosong/)
+  assert.throws(() => buildCodeStudio(wasm, 'return extrude(subtract2d(rect2d(10,10),rect2d(12,12)),5)'), /kosong/)
   assert.throws(() => buildCodeStudio(wasm, 'return scale(box(100,100,100),[20,1,1])'), /batas ukuran/)
   const big = buildCodeStudioResult(buildCodeStudio(wasm, 'return box(300,300,10)'))
   try { assert.throws(() => big.getPlate3mfBlob(), /tidak muat/) } finally { big.dispose() }

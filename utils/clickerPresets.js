@@ -96,6 +96,13 @@ export const SWITCH_PREVIEW_MODELS = [
     name: 'Simple box',
     description: 'Preview ringan berbentuk housing dan stem sederhana.',
     modelUrl: null
+  },
+  {
+    id: 'hidden',
+    name: 'Tanpa switch',
+    description: 'Sembunyikan model switch di preview perakitan. Socket dan stem cetak tidak berubah.',
+    modelUrl: null,
+    hide: true
   }
 ]
 

@@ -1,6 +1,9 @@
 // A small data interpreter, NOT a JavaScript execution sandbox.
-// Source can only produce numbers, literal data and allowlisted solid nodes.
-export const CODE_LIMITS = Object.freeze({ source: 16000, tokens: 4000, depth: 48, nodes: 128, cost: 1024, triangles: 200000 })
+// Source can only produce numbers, literal data and allowlisted solid / 2D profile nodes.
+export const CODE_LIMITS = Object.freeze({
+  source: 16000, tokens: 4000, depth: 48, nodes: 128, cost: 1024, triangles: 200000,
+  fieldCells: 500000, fieldAxis: 192, fieldWork: 24000000, fieldSamples: 4000000
+})
 
 export function compileCodeStudio(source, values = {}) {
   if (typeof source !== 'string' || source.length > CODE_LIMITS.source) throw new Error('Kode maksimal 16.000 karakter')
@@ -22,6 +25,7 @@ export function compileCodeStudio(source, values = {}) {
   let nodeCount = 0
   const variables = new Map()
   const solids = new WeakSet()
+  const sections = new WeakSet()
   const parameters = []
   const peek = () => tokens[index].text
   function error(message, at = tokens[index]?.offset ?? source.length) {
@@ -40,8 +44,18 @@ export function compileCodeStudio(source, values = {}) {
     if (!Array.isArray(value) || value.length !== 3) error('Vektor harus [x, y, z]')
     return value.map((n) => number(n, min, max))
   }
+  function vector2(value, min = -10000, max = 10000) {
+    if (!Array.isArray(value) || value.length !== 2) error('Vektor 2D harus [x, y]')
+    return value.map((n) => number(n, min, max))
+  }
   function solid(value) {
+    if (value && typeof value === 'object' && sections.has(value)) error('Argumen harus bentuk 3D, bukan profil 2D. Gunakan extrude atau revolve')
     if (!value || typeof value !== 'object' || !solids.has(value)) error('Argumen harus bentuk 3D')
+    return value
+  }
+  function profile(value) {
+    if (value && typeof value === 'object' && solids.has(value)) error('Argumen harus profil 2D, bukan bentuk 3D')
+    if (!value || typeof value !== 'object' || !sections.has(value)) error('Argumen harus profil 2D')
     return value
   }
   function node(op, args, cost = 1) {
@@ -50,8 +64,14 @@ export function compileCodeStudio(source, values = {}) {
     solids.add(value)
     return value
   }
+  function sectionNode(op, args, cost = 1) {
+    if (++nodeCount > CODE_LIMITS.nodes || cost > CODE_LIMITS.cost) error('Desain terlalu kompleks; kurangi operasi atau repeat')
+    const value = { op, args, cost }
+    sections.add(value)
+    return value
+  }
   function options(value, allowed) {
-    if (!value || Array.isArray(value) || typeof value !== 'object' || solids.has(value)) error('Opsi harus object literal')
+    if (!value || Array.isArray(value) || typeof value !== 'object' || solids.has(value) || sections.has(value)) error('Opsi harus object literal')
     if (Object.keys(value).some((key) => !allowed.includes(key))) error('Nama opsi tidak didukung')
     return value
   }
@@ -77,6 +97,21 @@ export function compileCodeStudio(source, values = {}) {
       case 'box':
         arity(args, 3)
         return node(name, args.map((n) => number(n, 0.01, 1000)))
+      case 'roundedBox': {
+        arity(args, 4)
+        const dimensions = args.slice(0, 3).map((n) => number(n, 0.01, 1000))
+        const radius = number(args[3], 0, 500)
+        if (radius > Math.min(...dimensions) / 2) error('radius roundedBox maksimal setengah dimensi terkecil')
+        return node(name, [...dimensions, radius], 8)
+      }
+      case 'capsule': {
+        arity(args, 1)
+        const opts = options(args[0], ['radius', 'height'])
+        const radius = number(opts.radius, 0.01, 500)
+        const height = number(opts.height, 0.02, 1000)
+        if (height < 2 * radius) error('height capsule adalah tinggi total, minimal 2 * radius')
+        return node(name, [radius, height], 2)
+      }
       case 'cylinder': {
         arity(args, 1)
         const opts = options(args[0], ['radius', 'height', 'segments'])
@@ -87,10 +122,43 @@ export function compileCodeStudio(source, values = {}) {
       case 'sphere':
         arity(args, 1)
         return node(name, [number(args[0], 0.01, 500)])
-      case 'union': case 'subtract': case 'intersect': {
+      case 'torus': {
+        arity(args, 1)
+        const opts = options(args[0], ['major', 'minor', 'arc', 'segments', 'taper', 'flatten', 'ridges', 'ridgeDepth'])
+        const major = number(opts.major, 0.02, 500)
+        const minor = number(opts.minor, 0.01, 500)
+        if (minor >= major) error('minor torus harus lebih kecil dari major')
+        const segments = number(opts.segments ?? 48, 8, 96)
+        if (!Number.isInteger(segments)) error('segments harus bilangan bulat')
+        const ridges = number(opts.ridges ?? 0, 0, 16)
+        if (!Number.isInteger(ridges)) error('ridges harus bilangan bulat')
+        return node(name, [
+          major, minor, number(opts.arc ?? 360, 1, 360), segments,
+          number(opts.taper ?? 0, 0, 1), number(opts.flatten ?? 1, 0.2, 1),
+          ridges, number(opts.ridgeDepth ?? 0.18, 0, 0.45)
+        ])
+      }
+      case 'hull': case 'union': case 'subtract': case 'intersect': {
         arity(args, 2, 16)
         args.forEach(solid)
         return node(name, args, args.reduce((sum, v) => sum + v.cost, 1))
+      }
+      case 'smoothUnion': {
+        arity(args, 3)
+        solid(args[0]); solid(args[1])
+        const radius = number(args[2], 0.1, 100)
+        const seen = new Set()
+        function fieldInput(value) {
+          if (seen.has(value)) return
+          seen.add(value)
+          if (!['box', 'roundedBox', 'sphere', 'cylinder', 'capsule', 'translate', 'rotate', 'scale', 'smoothUnion', 'union', 'repeat'].includes(value.op)) {
+            error(`smoothUnion belum mendukung ${value.op}; lakukan hull/potong/torus/extrude/revolve di luar smoothUnion`)
+          }
+          if (value.op === 'scale' && !value.args[1].every((v) => v === value.args[1][0])) error('scale di dalam smoothUnion harus seragam [s,s,s]')
+          value.args.filter((v) => solids.has(v)).forEach(fieldInput)
+        }
+        fieldInput(args[0]); fieldInput(args[1])
+        return node(name, [args[0], args[1], radius], args[0].cost + args[1].cost + 16)
       }
       case 'translate': case 'rotate': case 'scale': {
         arity(args, 2)
@@ -104,6 +172,69 @@ export function compileCodeStudio(source, values = {}) {
         const count = number(args[1], 1, 32)
         if (!Number.isInteger(count)) error('Jumlah repeat harus bilangan bulat')
         return node(name, [args[0], count, vector(args[2])], (args[0].cost + 1) * count)
+      }
+      case 'circle2d': {
+        arity(args, 1)
+        const opts = options(args[0], ['radius', 'segments'])
+        const segments = number(opts.segments ?? 48, 8, 96)
+        if (!Number.isInteger(segments)) error('segments harus bilangan bulat')
+        return sectionNode(name, [number(opts.radius, 0.01, 500), segments])
+      }
+      case 'rect2d':
+        arity(args, 2)
+        return sectionNode(name, args.map((n) => number(n, 0.01, 1000)))
+      case 'polygon': {
+        arity(args, 1)
+        const opts = options(args[0], ['sides', 'radius', 'inner'])
+        const sides = number(opts.sides, 3, 24)
+        if (!Number.isInteger(sides)) error('sides harus bilangan bulat')
+        return sectionNode(name, [sides, number(opts.radius, 0.01, 500), number(opts.inner ?? 1, 0.05, 1)])
+      }
+      case 'offset':
+        arity(args, 2)
+        profile(args[0])
+        return sectionNode(name, [args[0], number(args[1], -500, 500)], args[0].cost + 1)
+      case 'translate2d':
+        arity(args, 2)
+        profile(args[0])
+        return sectionNode(name, [args[0], vector2(args[1])], args[0].cost + 1)
+      case 'rotate2d':
+        arity(args, 2)
+        profile(args[0])
+        return sectionNode(name, [args[0], number(args[1])], args[0].cost + 1)
+      case 'scale2d': {
+        arity(args, 2)
+        profile(args[0])
+        const factor = typeof args[1] === 'number' ? number(args[1], 0.01, 100) : null
+        const v = factor == null ? vector2(args[1], 0.01, 100) : [factor, factor]
+        return sectionNode(name, [args[0], v], args[0].cost + 1)
+      }
+      case 'union2d': case 'subtract2d': case 'intersect2d': {
+        arity(args, 2, 16)
+        args.forEach(profile)
+        return sectionNode(name, args, args.reduce((sum, v) => sum + v.cost, 1))
+      }
+      case 'extrude': {
+        arity(args, 2)
+        profile(args[0])
+        if (typeof args[1] === 'number') {
+          return node(name, [args[0], number(args[1], 0.01, 1000), 0, 0], args[0].cost + 2)
+        }
+        const opts = options(args[1], ['height', 'twist', 'divisions'])
+        const height = number(opts.height, 0.01, 1000)
+        const twist = number(opts.twist ?? 0, -360, 360)
+        const divisions = number(opts.divisions ?? 0, 0, 64)
+        if (!Number.isInteger(divisions)) error('divisions harus bilangan bulat')
+        if (Math.abs(twist) > 0 && divisions < 4) error('twist extrude memerlukan divisions minimal 4')
+        return node(name, [args[0], height, divisions, twist], args[0].cost + 2)
+      }
+      case 'revolve': {
+        arity(args, 1, 2)
+        profile(args[0])
+        const opts = options(args[1] ?? {}, ['arc', 'segments'])
+        const segments = number(opts.segments ?? 48, 8, 96)
+        if (!Number.isInteger(segments)) error('segments harus bilangan bulat')
+        return node(name, [args[0], segments, number(opts.arc ?? 360, 1, 360)], args[0].cost + 4)
       }
       default: error(`Fungsi ${name} tidak tersedia`)
     }

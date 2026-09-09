@@ -125,6 +125,7 @@ test('shape-mode flexi clicker shows print-in-place interlocking base hinges in 
   assert.ok(switchPreview, 'assembly preview includes switch model')
   assert.equal(switchPreview.modelUrl, '/assets/clicker/switch-preview/cherry_mx_single.glb')
   assert.equal(switchPreview.previewOnly, true)
+  assert.ok(Number.isFinite(switchPreview.modelMinZ), 'switch preview keeps floor clamp')
 
   const baseStl = rawSolid(wasm, parseSTL(result.baseStlBuffer), track)
   assert.equal(baseStl.status(), 'NoError')
@@ -177,4 +178,18 @@ test('shape-mode flexi clicker shows print-in-place interlocking base hinges in 
   )
   const materialInTunnel = track(strapA.intersect(tunnelProbe)).volume()
   assert.ok(materialInTunnel < 0.05, 'strap tunnel cuts from side to side through the vertical center of the base')
+
+  const hidden = await worker.build({
+    shapeMode: 'rect',
+    baseShape: 'square',
+    text: 'AB',
+    fontUrl: '/fonts/BarlowCondensed-BlackItalic.woff',
+    switchPreviewModelId: 'hidden'
+  })
+  assert.ok(hidden.result, hidden.error)
+  assert.equal(
+    hidden.result.assemblyPreviewParts.some((part) => part.role === 'switch'),
+    false,
+    'hidden preview mode omits switch models'
+  )
 })

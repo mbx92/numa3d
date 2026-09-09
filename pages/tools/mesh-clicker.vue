@@ -22,7 +22,7 @@ import { resolveGeneratorPartExport } from '~/utils/generatorPartExport.js'
 import ToolColorBar from '~/components/ToolColorBar.vue'
 import ToolPanelShell from '~/components/ToolPanelShell.vue'
 import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
-import { buildPartLegend } from '~/utils/previewPartLabels.js'
+import { buildPartLegend, visiblePreviewParts } from '~/utils/previewPartLabels.js'
 
 definePageMeta({
   layout: 'tool',
@@ -97,6 +97,7 @@ const selectedPartId = ref('')
 const explodeFactor = ref(0)
 const autoExplode = ref(false)
 const showPreviewGrid = ref(true)
+const showSwitchPreview = ref(true)
 const assemblyResetToken = ref(0)
 const simulatingClick = ref(false)
 const basePreviewParts = ref([])
@@ -125,10 +126,18 @@ watch(
   }
 )
 
+const switchVisible = computed(
+  () => showSwitchPreview.value && form.switchPreviewModelId !== 'hidden'
+)
+
 const activePreviewParts = computed(() => {
-  if (activePreview.value === 'base') return basePreviewParts.value
-  if (activePreview.value === 'lid') return lidPreviewParts.value
-  return assemblyPreviewParts.value
+  const parts = activePreview.value === 'base'
+    ? basePreviewParts.value
+    : activePreview.value === 'lid'
+      ? lidPreviewParts.value
+      : assemblyPreviewParts.value
+  if (activePreview.value !== 'assembly') return parts
+  return visiblePreviewParts(parts, { showSwitch: switchVisible.value })
 })
 
 const previewTabs = computed(() => [
@@ -137,8 +146,19 @@ const previewTabs = computed(() => [
   { id: 'lid', label: 'Lid', color: form.colors.lid }
 ])
 
-const assemblyPartLegend = computed(() => buildPartLegend(assemblyPreviewParts.value))
+const assemblyPartLegend = computed(() =>
+  buildPartLegend(visiblePreviewParts(assemblyPreviewParts.value, { showSwitch: switchVisible.value }))
+)
 const isAssemblyView = computed(() => activePreview.value === 'assembly')
+
+watch(() => form.switchPreviewModelId, (id) => {
+  showSwitchPreview.value = id !== 'hidden'
+})
+
+function onShowSwitchPreview(value) {
+  showSwitchPreview.value = value
+  if (value && form.switchPreviewModelId === 'hidden') form.switchPreviewModelId = 'cherry_mx_glb'
+}
 
 function resetAssemblyPreview() {
   explodeFactor.value = 0
@@ -253,6 +273,7 @@ async function generateModel() {
       modelNodeNames: p.modelNodeNames,
       modelFitMm: p.modelFitMm,
       modelTopZ: p.modelTopZ,
+      modelMinZ: p.modelMinZ,
       modelAxis: p.modelAxis,
       position: p.position,
       rotationZ: p.rotationZ,
@@ -649,11 +670,14 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                 v-model:explode-factor="explodeFactor"
                 v-model:auto-explode="autoExplode"
                 v-model:show-grid="showPreviewGrid"
+                :show-switch="switchVisible"
+                :show-switch-control="isAssemblyView"
                 :view-tabs="previewTabs"
                 :part-legend="assemblyPartLegend"
                 :show-assembly-controls="isAssemblyView"
                 :filename="result ? activePreviewFilename : ''"
                 :disabled="!result"
+                @update:show-switch="onShowSwitchPreview"
                 @reset-positions="resetAssemblyPreview"
               >
                 <template #footer>

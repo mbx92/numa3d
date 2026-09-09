@@ -24,6 +24,7 @@ export function packGeometry(geo) {
 export function unpackGeometry(data) {
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3))
+  if (data.indices?.length) geo.setIndex(new THREE.BufferAttribute(data.indices, 1))
   if (data.normals) geo.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3))
   else geo.computeVertexNormals()
   return geo

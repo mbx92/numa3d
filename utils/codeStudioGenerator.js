@@ -3,18 +3,27 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { unpackGeometry } from './geometryPack.js'
 import { partsToGlbBuffer, printGroupsTo3mfBuffer } from './keychainExport.js'
 import { runCodeStudioJob } from './codeStudioJob.js'
+import { compileCodeStudio } from './codeStudioLanguage.js'
 
 export function buildCodeStudioResult(raw, { label = 'Code Studio', color = '#f97316' } = {}) {
   label = String(label).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 64) || 'Code Studio'
   const slug = String(label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 48) || 'code_studio'
   const geometry = unpackGeometry(raw.geometry)
-  const parts = [{ geometry, color: /^#[0-9a-f]{6}$/i.test(color) ? color : '#f97316', role: 'base', name: 'Model' }]
+  const parts = [{
+    geometry,
+    color: /^#[0-9a-f]{6}$/i.test(color) ? color : '#f97316',
+    role: 'base',
+    name: 'Model',
+    roughness: 0.58,
+    metalness: 0.04
+  }]
   const cache = new Map()
   let disposed = false
   const usable = () => { if (disposed) throw new Error('Model sudah dibuang; Generate ulang') }
   return {
     slug, dimensions: raw.dimensions, volumeMm3: raw.volumeMm3,
     triangles: raw.triangles, parameters: raw.parameters, nodeCount: raw.nodeCount,
+    health: raw.health,
     baseFilename: `${slug}.stl`, basePreviewParts: parts, baseExportParts: parts,
     getBaseBlob() {
       usable()
@@ -54,11 +63,33 @@ export function buildCodeStudioResult(raw, { label = 'Code Studio', color = '#f9
   }
 }
 
-export async function generateCodeStudio(opts, { signal } = {}) {
+async function runGeometry(payload, { signal } = {}) {
   if (typeof Worker === 'undefined') throw new Error('Code Studio memerlukan browser dengan Web Worker')
-  const raw = await runCodeStudioJob(
+  return runCodeStudioJob(
     () => new Worker(new URL('../workers/codeStudio.worker.js', import.meta.url), { type: 'module' }),
-    { source: opts.source, values: { ...opts.values } }, { signal }
+    payload, { signal }
   )
-  return buildCodeStudioResult(raw, opts)
 }
+
+/** One successful geometry snapshot per editor; colors/names do not rebuild WASM. */
+export function createCodeStudioGenerator(run = runGeometry) {
+  let cached = null, revision = 0
+  async function generate(opts, { signal } = {}) {
+    if (signal?.aborted) throw new DOMException('Generate dibatalkan', 'AbortError')
+    const { parameters } = compileCodeStudio(opts.source, opts.values)
+    const key = JSON.stringify([opts.source, parameters.map((p) => [p.name, p.value])])
+    let raw = cached?.key === key ? cached.raw : null
+    if (!raw) {
+      const current = ++revision
+      raw = await run({ source: opts.source, values: { ...opts.values } }, { signal })
+      if (signal?.aborted) throw new DOMException('Generate dibatalkan', 'AbortError')
+      if (current === revision) cached = { key, raw }
+    }
+    // Results own their buffers; a disposed or edited preview cannot alter cache.
+    return buildCodeStudioResult(structuredClone(raw), opts)
+  }
+  generate.clearCache = () => { revision++; cached = null }
+  return generate
+}
+
+export const generateCodeStudio = createCodeStudioGenerator()

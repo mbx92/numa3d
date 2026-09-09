@@ -9,7 +9,10 @@ self.onmessage = async ({ data }) => {
     const wasm = await Module({ locateFile: () => wasmUrl })
     wasm.setup()
     const result = buildCodeStudio(wasm, data.source, data.values)
-    self.postMessage({ result }, [result.geometry.positions.buffer])
+    const transfer = [result.geometry.positions.buffer]
+    if (result.geometry.indices?.buffer) transfer.push(result.geometry.indices.buffer)
+    if (result.geometry.normals?.buffer) transfer.push(result.geometry.normals.buffer)
+    self.postMessage({ result }, transfer)
   } catch (error) {
     self.postMessage({ error: error?.message || 'Generate Code Studio gagal' })
   }

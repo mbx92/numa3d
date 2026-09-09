@@ -1,8 +1,9 @@
 <script setup>
-import { CodeBracketIcon, PlayIcon, StopIcon, ArrowDownTrayIcon, CloudArrowUpIcon } from '@heroicons/vue/24/outline'
-import { CODE_STUDIO_EXAMPLES } from '~/utils/codeStudioExamples.js'
+import { CodeBracketIcon, PlayIcon, StopIcon, ArrowDownTrayIcon, CloudArrowUpIcon, ClipboardDocumentIcon } from '@heroicons/vue/24/outline'
+import { CODE_STUDIO_CUSTOM, CODE_STUDIO_EXAMPLES } from '~/utils/codeStudioExamples.js'
 import { compileCodeStudio } from '~/utils/codeStudioLanguage.js'
-import { generateCodeStudio } from '~/utils/codeStudioGenerator.js'
+import { createCodeStudioGenerator } from '~/utils/codeStudioGenerator.js'
+import { buildCodeStudioAiPrompt } from '~/utils/codeStudioAi.js'
 import { resolveGeneratorPartExport } from '~/utils/generatorPartExport.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
 
@@ -21,6 +22,7 @@ const colorMode = ref('hex')
 const materialIds = ref({})
 const colorFields = [{ key: 'base', label: 'Model', short: 'Model', materialType: 'filament' }]
 const toast = useToast()
+const generateCodeStudio = createCodeStudioGenerator()
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const syntax = computed(() => {
   try { return { parameters: compileCodeStudio(form.source).parameters, error: '' } }
@@ -67,13 +69,21 @@ function cancel() {
   generating.value = false
 }
 function loadExample() {
-  const example = CODE_STUDIO_EXAMPLES.find((entry) => entry.id === exampleId.value)
+  const example = exampleId.value
+    ? CODE_STUDIO_EXAMPLES.find((entry) => entry.id === exampleId.value)
+    : CODE_STUDIO_CUSTOM
   if (!example) return
   cancel()
   form.label = example.name
   form.source = example.code
   form.values = {}
+  form.colors.base = example.color || '#f97316'
+  materialIds.value = {}
+  colorMode.value = 'hex'
   runGenerate()
+}
+function onEditorInput() {
+  if (exampleId.value) exampleId.value = ''
 }
 function updateParameter(parameter, event) {
   const value = event.target.value === '' ? NaN : Number(event.target.value)
@@ -115,6 +125,12 @@ function downloadCode() {
   const data = { version: 1, label: form.label, source: form.source, values: form.values, color: form.colors.base }
   downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'code-studio.numa3d.json')
 }
+async function copyAiPrompt() {
+  try {
+    await navigator.clipboard.writeText(buildCodeStudioAiPrompt())
+    toast.success('Prompt DSL dan contoh disalin')
+  } catch { toast.error('Clipboard tidak tersedia; periksa izin browser') }
+}
 async function openCode(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
@@ -138,6 +154,7 @@ async function openCode(event) {
 onMounted(runGenerate)
 onBeforeUnmount(() => {
   cancel()
+  generateCodeStudio.clearCache()
   result.value?.dispose()
   result.value = null
 })
@@ -162,15 +179,16 @@ onBeforeUnmount(() => {
         <div class="p-3 border-b border-ink-200 space-y-3">
           <div class="grid sm:grid-cols-2 gap-3">
             <label class="text-sm">Nama model<input v-model="form.label" maxlength="64" class="input mt-1" /></label>
-            <label class="text-sm">Contoh (mengganti kode)
+            <label class="text-sm">Mulai dari (mengganti kode)
               <select v-model="exampleId" class="input mt-1" @change="loadExample">
-                <option value="" disabled>Kode sendiri</option>
+                <option value="">Kode sendiri</option>
                 <option v-for="example in CODE_STUDIO_EXAMPLES" :key="example.id" :value="example.id">{{ example.name }}</option>
               </select>
             </label>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <button class="btn-secondary text-sm" type="button" @click="downloadCode">Simpan kode</button>
+            <button class="btn-secondary text-sm" type="button" title="Salin prompt AI" @click="copyAiPrompt"><ClipboardDocumentIcon class="w-4 h-4" /> Prompt AI</button>
             <label class="btn-secondary text-sm cursor-pointer relative">Buka kode
               <input type="file" accept=".json" aria-label="Buka file kode Code Studio" class="absolute inset-0 opacity-0 cursor-pointer w-full" @change="openCode" />
             </label>
@@ -178,13 +196,20 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <label for="studio-code" class="sr-only">Kode model</label>
-        <textarea id="studio-code" v-model="form.source" class="studio-code" spellcheck="false" autocapitalize="off" autocomplete="off" :maxlength="16000" aria-describedby="code-boundary" @keydown="onEditorKey" />
+        <textarea id="studio-code" v-model="form.source" class="studio-code" spellcheck="false" autocapitalize="off" autocomplete="off" :maxlength="16000" aria-describedby="code-boundary" @keydown="onEditorKey" @input="onEditorInput" />
         <p v-if="syntax.error" class="p-3 text-sm text-red-700 bg-red-50" role="alert">{{ syntax.error }}</p>
         <p id="code-boundary" class="p-3 text-sm text-ink-500 border-t border-ink-200">Hanya fungsi pemodelan di bawah yang tersedia. Tidak mendukung import, loop, akses properti, DOM, jaringan, atau JavaScript bebas.</p>
         <details class="p-3 border-t border-ink-200 text-sm">
           <summary class="cursor-pointer font-medium">Referensi fungsi</summary>
           <div class="mt-3 space-y-2 text-ink-600 leading-relaxed">
             <p><code>box(w, d, h)</code> · <code>cylinder({ radius: 3, height: 10 })</code> · <code>sphere(radius)</code></p>
+            <p><code>roundedBox(w, d, h, radius)</code> · <code>capsule({ radius: 5, height: 20 })</code></p>
+            <p><code>hull(a, b, ...)</code> · <code>smoothUnion(a, b, radius)</code></p>
+            <p><code>torus({ major: 30, minor: 8, arc: 220, taper: 0.6, flatten: 0.5, ridges: 6 })</code></p>
+            <p><code>circle2d({ radius: 10 })</code> · <code>rect2d(w, d)</code> · <code>polygon({ sides: 6, radius: 20 })</code></p>
+            <p><code>offset(p, delta)</code> · <code>union2d</code> / <code>subtract2d</code> / <code>intersect2d</code></p>
+            <p><code>translate2d(p, [x,y])</code> · <code>rotate2d(p, deg)</code> · <code>scale2d(p, s)</code></p>
+            <p><code>extrude(p, h)</code> · <code>revolve(p, { arc: 360, segments: 48 })</code> mengubah profil 2D menjadi solid. Tidak bisa <code>return</code> profil.</p>
             <p><code>union(a, b)</code> · <code>subtract(a, b)</code> · <code>intersect(a, b)</code></p>
             <p><code>translate(a, [x,y,z])</code> · <code>rotate(a, [x,y,z])</code> dalam derajat · <code>scale(a, [x,y,z])</code></p>
             <p><code>repeat(a, count, [dx,dy,dz])</code> membuat 1–32 salinan, lalu menggabungkannya.</p>
@@ -197,7 +222,10 @@ onBeforeUnmount(() => {
       <div class="space-y-3 min-w-0">
         <section class="panel overflow-hidden" aria-label="Preview model">
           <div class="flex flex-wrap gap-2 justify-between p-3 border-b border-ink-200 text-sm">
-            <span class="font-medium">Preview 3D</span>
+            <span class="inline-flex items-baseline gap-2 min-w-0">
+              <span class="font-medium">Preview 3D</span>
+              <span class="text-xs text-ink-500 hidden sm:inline">Solid cetak, bukan foto</span>
+            </span>
             <label class="inline-flex items-center gap-2"><input v-model="showGrid" type="checkbox" /> Grid</label>
           </div>
           <div class="studio-preview" :aria-busy="generating">
@@ -211,6 +239,11 @@ onBeforeUnmount(() => {
             <span>{{ result.dimensions.widthMm.toFixed(1) }} × {{ result.dimensions.depthMm.toFixed(1) }} × {{ result.dimensions.heightMm.toFixed(1) }} mm</span>
             <span>{{ (result.volumeMm3 / 1000).toFixed(2) }} cm³</span>
             <span>{{ result.triangles.toLocaleString('id-ID') }} segitiga</span>
+          </div>
+          <div v-if="result?.health" class="p-3 text-xs border-t border-ink-200 space-y-1" role="status">
+            <p class="font-medium" :class="result.health.status === 'closed' ? 'text-emerald-700' : 'text-amber-800'">{{ result.health.status === 'closed' ? 'Mesh tertutup' : 'Mesh tertutup · peringatan' }} · {{ result.health.components }} bagian</p>
+            <p v-for="warning in result.health.warnings" :key="warning" class="text-amber-800">{{ warning }}</p>
+            <p class="text-ink-500">Ketebalan dinding, self-intersection, support, dan toleransi printer belum diverifikasi.</p>
           </div>
         </section>
         <p v-if="error" class="panel p-3 text-sm text-red-700 bg-red-50" role="alert">{{ error }}</p>

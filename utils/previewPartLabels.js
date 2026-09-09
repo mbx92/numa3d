@@ -41,3 +41,8 @@ export function buildPartLegend(parts = []) {
   }
   return [...seen.values()]
 }
+
+export function visiblePreviewParts(parts = [], { showSwitch = true } = {}) {
+  if (showSwitch) return parts
+  return parts.filter((part) => part?.role !== 'switch')
+}

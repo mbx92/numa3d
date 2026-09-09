@@ -41,6 +41,7 @@ function mapPreviewPart(p, geos) {
     modelNodeNames: p.modelNodeNames || null,
     modelFitMm: p.modelFitMm,
     modelTopZ: p.modelTopZ,
+    modelMinZ: p.modelMinZ,
     modelAxis: p.modelAxis || null,
     position: p.position || null,
     rotationZ: p.rotationZ,
