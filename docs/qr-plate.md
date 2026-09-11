@@ -4,11 +4,12 @@ Buka **Tools → QR Plate Generator** (`/tools/qr-plate`). Model mengikuti bentu
 
 ## Penggunaan
 
-1. Isi tautan lengkap HTTP/S, teks/payload QR, atau pengaturan Wi-Fi.
-2. Pilih preset dudukan meja, pelat datar, gantungan, atau dinding. Pilih permukaan timbul atau inlay rata.
-3. Untuk meja, pilih **Slot miring**, **Tiang lurus**, atau **Tiang berlekuk**. Atur ukuran alas, tinggi tiang/kemiringan, dan kelonggaran slot total. Nilai lebar `0` menghitung ukuran otomatis.
-4. Pilih ikon Wi-Fi, website, pembayaran, telepon, lokasi, sosial/suka, tautan, atau tanpa ikon. Tambahkan tulisan dan pilih warna bingkai/alas, panel, QR, serta ikon/tulisan.
-5. Generate, periksa tampilan **Terpasang** dan **Posisi cetak**, lalu uji tujuan QR lewat **Uji pindai QR** sebelum mencetak.
+1. Pilih **Satu QR** (tautan, teks, atau Wi-Fi) atau **Wi-Fi + WhatsApp**.
+2. Untuk dua QR: isi SSID/sandi Wi-Fi, lalu unggah JPEG kartu QR dari WhatsApp. Generator membaca payload di perangkat dan mencetak ulang QR yang rapi (tanpa logo di tengah).
+3. Pilih preset dudukan meja, pelat datar, gantungan, atau dinding. Pilih permukaan timbul atau inlay rata.
+4. Untuk meja, pilih **Slot miring**, **Tiang lurus**, atau **Tiang berlekuk**. Atur ukuran alas, tinggi tiang/kemiringan, dan kelonggaran slot total. Nilai lebar `0` menghitung ukuran otomatis.
+5. Untuk satu QR, pilih ikon Wi-Fi, WhatsApp, website, pembayaran, telepon, lokasi, sosial/suka, tautan, atau tanpa ikon. Mode dua QR memasang ikon Wi-Fi dan WhatsApp otomatis. Tambahkan tulisan dan pilih warna bingkai/alas, panel, QR, serta ikon/tulisan.
+6. Generate, periksa tampilan **Terpasang** dan **Posisi cetak**, lalu uji tujuan QR lewat **Uji pindai QR** sebelum mencetak.
 
 Pelat memiliki bagian kosong 12 mm di bawah dekorasi untuk masuk ke slot. Pelat dicetak datar, alas dicetak terpisah, lalu dirakit. Kelonggaran bawaan 0,35 mm adalah selisih total lebar slot terhadap ketebalan pelat, bukan per sisi; perlu disesuaikan dengan printer dan bahan. Geometri dan kecocokan digital diperiksa, tetapi belum dilakukan uji cetak fisik, kekuatan, atau kestabilan untuk setiap kombinasi dimensi.
 
@@ -24,9 +25,9 @@ Konten QR dan kata sandi Wi-Fi diproses lokal. Font diambil dari pustaka font ap
 
 ## Batas dan verifikasi
 
-Semua keluaran memakai satu matriks QR. Model 3D memberi potongan sudut 0,01 mm pada baris modul untuk menghindari sambungan diagonal yang dapat dianggap non-manifold oleh slicer. Quiet zone empat modul tidak ditempati bingkai, ikon, tulisan, atau lubang. Modul di bawah 0,6 mm ditolak, di bawah 0,8 mm diberi catatan. Pemilihan warna mensyaratkan panel lebih terang dan rasio kontras minimal 4,5 sebagai batas konservatif aplikasi; ini bukan jaminan pemindaian hasil cetak. Inlay menyisakan lantai minimal 0,8 mm.
+Semua keluaran memakai matriks QR yang sama dengan preview. Mode dua QR memakai dua matriks (Wi-Fi dan WhatsApp). Model 3D memberi potongan sudut 0,01 mm pada baris modul untuk menghindari sambungan diagonal yang dapat dianggap non-manifold oleh slicer. Quiet zone empat modul tidak ditempati bingkai, ikon, tulisan, atau lubang. Modul di bawah 0,6 mm ditolak, di bawah 0,8 mm diberi catatan. Pemilihan warna mensyaratkan panel lebih terang dan rasio kontras minimal 4,5 sebagai batas konservatif aplikasi; ini bukan jaminan pemindaian hasil cetak. Inlay menyisakan lantai minimal 0,8 mm.
 
-`tests/qrPlate.test.js` memeriksa payload, validasi, decoding raster dari segitiga permukaan QR sebenarnya, semua ikon, pelat tersambung, warna tidak tumpang tindih, tiga alas beserta variasi ketebalan/kelonggaran, kecocokan slot dalam posisi terpasang, posisi cetak, dan isi ekspor 3MF/STL/SCAD. Font dan WASM asli digunakan.
+`tests/qrPlate.test.js` memeriksa payload, validasi, decoding raster dari segitiga permukaan QR sebenarnya, semua ikon, pelat tersambung, warna tidak tumpang tindih, tiga alas beserta variasi ketebalan/kelonggaran, kecocokan slot dalam posisi terpasang, posisi cetak, isi ekspor 3MF/STL/SCAD, serta pelat Wi-Fi + WhatsApp. Font dan WASM asli digunakan. `tests/qrFromImage.test.js` memeriksa pembacaan payload dari gambar QR, termasuk kartu berlatar hijau.
 
 Referensi teknis: [node-qrcode](https://github.com/soldair/node-qrcode), [quiet zone QR dari Denso Wave](https://www.qrcode.com/en/howto/code.html), [format Wi-Fi ZXing](https://github.com/zxing/zxing/wiki/Barcode-Contents), [dokumentasi OpenSCAD](https://openscad.org/documentation.html). Halaman MakerWorld yang diberikan tidak dapat diakses tanpa pembatasan HTTP 403; foto pengguna menjadi acuan visual, dan kode implementasi dibuat sendiri.
 

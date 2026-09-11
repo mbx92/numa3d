@@ -1,10 +1,24 @@
 /** Standalone source; the QR matrix and glyph contours are shared with the mesh. */
 export function qrPlateScad(design) {
-  const { opts, runs, size, caption } = design
+  const { opts, runs, size, caption, codes } = design
   const fmt = (value) => JSON.stringify(value, (_, item) => typeof item === 'number' ? Number(item.toFixed(8)) : item)
   let offset = 0
   const paths = caption.rings.map((ring) => ring.map(() => offset++))
   const icon = design.icon || { solid: [], holes: [], extra: [], bounds: { minX: 0, maxX: 1, minY: 0, maxY: 1 } }
+  const qrCodes = codes.map((code, i) => [code.size, i, code.runs])
+  const columnIcons = codes.map((code) => {
+    if (!code.icon) return []
+    const b = code.icon.bounds
+    return [code.icon.solid, code.icon.holes, code.icon.extra, [b.minX, b.maxX, b.minY, b.maxY]]
+  })
+  const columnCaptions = codes.map((code) => {
+    const rings = code.captionRings?.rings || []
+    if (!rings.length) return []
+    let n = 0
+    const capPaths = rings.map((ring) => ring.map(() => n++))
+    return [rings.flat(), capPaths, code.captionRings.aspect]
+  })
+  const hasColumnText = codes.some((code) => code.captionRings?.rings?.length)
   return `// Numa3D QR Plate. Standalone OpenSCAD, dimensions in millimetres.
 // QR content, icon and caption outlines are embedded. Change them in Numa3D.
 // Print the plate flat and the stand separately, then insert the plate into the slot.
@@ -34,6 +48,12 @@ part = "all"; // [all,frame,panel,qr,icon,stand]
 $fn = 64;
 qr_modules = ${size};
 qr_runs = ${fmt(runs)};
+qr_columns = ${codes.length};
+qr_gap = ${opts.qrGapMm};
+qr_codes = ${fmt(qrCodes)};
+column_icons = ${fmt(columnIcons)};
+column_captions = ${fmt(columnCaptions)};
+has_column_text = ${hasColumnText ? 'true' : 'false'};
 caption_points = ${fmt(caption.rings.flat())};
 caption_paths = ${fmt(paths)};
 caption_aspect = ${fmt(caption.aspect)};
@@ -48,13 +68,14 @@ icon_color = ${fmt(opts.colors.icon)};
 module_size = qr_size / (qr_modules + 8);
 has_stand = stand_style != "none" && mounting == "none";
 insertion_band = has_stand ? 12 : 0;
-icon_band = len(icon_solids) > 0 ? icon_size + 8 : 0;
-text_band = len(caption_points) > 0 ? caption_height + 5 : 0;
+icon_band = (len(icon_solids) > 0 || qr_columns > 1) ? icon_size + 8 : 0;
+text_band = (len(caption_points) > 0 || has_column_text) ? caption_height + 5 : 0;
 caption_band = text_band + icon_band + insertion_band;
 mount_band = mounting == "none" ? 0 : hole_diameter + 6;
-width = qr_size + 2 * margin;
+width = qr_size * qr_columns + (qr_columns > 1 ? qr_gap * (qr_columns - 1) : 0) + 2 * margin;
 depth = qr_size + 2 * margin + caption_band + mount_band;
 qr_y = (caption_band - mount_band) / 2;
+function col_x(i) = -width/2 + margin + qr_size/2 + i * (qr_size + qr_gap);
 icon_y = -depth/2 + margin + insertion_band + text_band + icon_band/2;
 caption_y = -depth/2 + margin + insertion_band + text_band/2;
 radius = min(corner_radius, margin, width/2, depth/2);
@@ -88,12 +109,18 @@ module plate_profile() {
       translate([x,depth/2-mount_band/2]) circle(d=hole_diameter);
   }
 }
+module qr_run_poly(runs, ms) {
+  c = 0.01/ms;
+  union() for (run = runs) translate([run[0]+4,-run[1]-5]) let(w=run[2])
+    polygon([[c,0],[w-c,0],[w,c],[w,1-c],[w-c,1],[c,1],[0,1-c],[0,c]]);
+}
 module qr_artwork() {
   // Work on the integer grid; 0.01 mm corner relief avoids diagonal edge contacts.
-  c = 0.01/module_size;
-  translate([-qr_size/2,qr_y+qr_size/2]) scale([module_size,module_size]) union()
-    for (run = qr_runs) translate([run[0]+4,-run[1]-5]) let(w=run[2])
-      polygon([[c,0],[w-c,0],[w,c],[w,1-c],[w-c,1],[c,1],[0,1-c],[0,c]]);
+  for (code = qr_codes) {
+    size = code[0]; i = code[1]; runs = code[2];
+    ms = qr_size / (size + 8);
+    translate([col_x(i)-qr_size/2, qr_y+qr_size/2]) scale([ms,ms]) qr_run_poly(runs, ms);
+  }
 }
 module icon_profile() {
   union() {
@@ -104,8 +131,32 @@ module icon_profile() {
     for (ring = icon_extras) polygon(ring);
   }
 }
+module column_icon(i) {
+  icon = column_icons[i];
+  if (len(icon) > 0) {
+    solids = icon[0]; holes = icon[1]; extras = icon[2]; bounds = icon[3];
+    s = min(icon_size, qr_size) / max(bounds[1]-bounds[0], bounds[3]-bounds[2]);
+    translate([col_x(i), icon_y]) scale([s,s])
+      translate([-(bounds[0]+bounds[1])/2, -(bounds[2]+bounds[3])/2]) {
+        difference() {
+          union() for (ring = solids) polygon(ring);
+          union() for (ring = holes) polygon(ring);
+        }
+        for (ring = extras) polygon(ring);
+      }
+  }
+}
+module column_caption(i) {
+  cap = column_captions[i];
+  if (len(cap) > 0) {
+    pts = cap[0]; paths = cap[1]; aspect = cap[2];
+    s = min(caption_height, qr_size/aspect);
+    translate([col_x(i), caption_y]) scale([s,s]) polygon(points=pts, paths=paths);
+  }
+}
 module decoration_artwork() {
-  union() {
+  if (qr_columns > 1) union() for (i = [0:qr_columns-1]) { column_caption(i); column_icon(i); }
+  else union() {
     if (len(caption_points) > 0) translate([0,caption_y]) scale([caption_scale,caption_scale])
       polygon(points=caption_points, paths=caption_paths);
     if (len(icon_solids) > 0) translate([0,icon_y]) scale([icon_scale,icon_scale])
@@ -117,7 +168,8 @@ module qr(overlap=0) {
 }
 module decoration(overlap=0) { translate([0,0,detail_z-overlap]) linear_extrude(height=detail_height+overlap) decoration_artwork(); }
 module panel_blank(overlap=0) {
-  translate([0,qr_y,base_thickness-panel_depth-overlap]) linear_extrude(height=panel_depth+overlap) square([qr_size,qr_size], center=true);
+  for (i = [0:qr_columns-1])
+    translate([col_x(i),qr_y,base_thickness-panel_depth-overlap]) linear_extrude(height=panel_depth+overlap) square([qr_size,qr_size], center=true);
 }
 module panel(overlap=0) { difference() { panel_blank(overlap); if (surface == "inlay") qr(); } }
 module frame() {

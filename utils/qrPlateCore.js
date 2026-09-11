@@ -25,16 +25,17 @@ function packSolid(solid, track) {
     mergeFromVert: new Uint32Array(mesh.mergeFromVert), mergeToVert: new Uint32Array(mesh.mergeToVert) }
 }
 
-export function qrCaptionRings(design, fontBuffer) {
-  if (!design.opts.caption) return { rings: [], aspect: 0 }
+export function textCaptionRings(text, fontBuffer) {
+  const caption = String(text ?? '').trim()
+  if (!caption) return { rings: [], aspect: 0 }
   if (!(fontBuffer instanceof ArrayBuffer)) throw new Error('Font untuk tulisan belum tersedia')
   const font = parse(fontBuffer)
-  for (const char of design.opts.caption) {
+  for (const char of caption) {
     if (char.trim() && !font.charToGlyph(char).index) throw new Error(`Font tidak mendukung karakter “${char}” — pilih font lain`)
   }
   const path = new Path()
   let cursor = 0, previous = null
-  for (const char of design.opts.caption) {
+  for (const char of caption) {
     const glyph = font.charToGlyph(char)
     if (previous) cursor += font.getKerningValue(previous, glyph) * 100 / font.unitsPerEm
     path.extend(glyph.getPath(cursor, 0, 100))
@@ -51,10 +52,51 @@ export function qrCaptionRings(design, fontBuffer) {
   }
 }
 
+export function qrCaptionRings(design, fontBuffer) {
+  return textCaptionRings(design.opts.caption, fontBuffer)
+}
+
+function positiveRings(rings) {
+  return rings.map((ring) => {
+    const area = ring.reduce((sum, [x, y], i) => { const [nx, ny] = ring[(i + 1) % ring.length]; return sum + x * ny - nx * y }, 0)
+    return area < 0 ? [...ring].reverse() : ring
+  })
+}
+
+function qrModuleRings(code, qrSizeMm) {
+  const { runs, moduleMm, centerX, centerY } = code
+  return runs.map(([col, row, length]) => {
+    const x = centerX - qrSizeMm / 2 + (col + 4) * moduleMm
+    const y = centerY + qrSizeMm / 2 - (row + 5) * moduleMm
+    // A 0.01 mm corner relief separates diagonal-only contacts. Without it,
+    // two raised QR cells share a vertical edge and legacy slicers report
+    // a non-manifold surface, even when they are attached to the same base.
+    const w = length * moduleMm, h = moduleMm, c = 0.01
+    return [[x+c,y], [x+w-c,y], [x+w,y+c], [x+w,y+h-c],
+      [x+w-c,y+h], [x+c,y+h], [x,y+h-c], [x,y+c]]
+  })
+}
+
+function placeIcon(iconId, sizeMm, originX, originY) {
+  const icon = qrIconContours(iconId)
+  if (!icon.solid.length) return { meta: null, map: null }
+  const solids = icon.solid.flat()
+  const minX = Math.min(...solids.map((p) => p[0])), maxX = Math.max(...solids.map((p) => p[0]))
+  const minY = Math.min(...solids.map((p) => p[1])), maxY = Math.max(...solids.map((p) => p[1]))
+  const scale = Math.min(sizeMm, sizeMm) / Math.max(maxX - minX, maxY - minY)
+  const map = (rings) => positiveRings(rings).map((ring) => ring.map(([x, y]) => [
+    (x - (minX + maxX) / 2) * scale + originX,
+    (y - (minY + maxY) / 2) * scale + originY
+  ]))
+  return {
+    meta: { solid: positiveRings(icon.solid), holes: positiveRings(icon.holes), extra: positiveRings(icon.extra || []), bounds: { minX, maxX, minY, maxY } },
+    map, icon
+  }
+}
+
 export function buildQrPlate(wasm, input, fontBuffer = null) {
   const design = createQrPlateDesign(input)
-  const caption = qrCaptionRings(design, fontBuffer)
-  const { opts, widthMm, depthMm, qrCenterY, moduleMm, runs, holes, cornerRadiusMm: radius } = design
+  const { opts, widthMm, depthMm, holes, cornerRadiusMm: radius, codes } = design
   const { Manifold, CrossSection } = wasm
   const owned = new Set()
   const track = (value) => { owned.add(value); return value }
@@ -65,49 +107,43 @@ export function buildQrPlate(wasm, input, fontBuffer = null) {
       const disk = track(track(CrossSection.circle(opts.holeDiameterMm / 2, 64)).translate(point))
       plate = track(plate.subtract(disk))
     }
-    const qrRings = runs.map(([col, row, length]) => {
-      const x = -opts.qrSizeMm / 2 + (col + 4) * moduleMm
-      const y = qrCenterY + opts.qrSizeMm / 2 - (row + 5) * moduleMm
-      // A 0.01 mm corner relief separates diagonal-only contacts. Without it,
-      // two raised QR cells share a vertical edge and legacy slicers report
-      // a non-manifold surface, even when they are attached to the same base.
-      const w = length * moduleMm, h = moduleMm, c = 0.01
-      return [[x+c,y], [x+w-c,y], [x+w,y+c], [x+w,y+h-c],
-        [x+w-c,y+h], [x+c,y+h], [x,y+h-c], [x,y+c]]
-    })
+    const qrRings = codes.flatMap((code) => qrModuleRings(code, opts.qrSizeMm))
     const detail = track(new CrossSection(qrRings, 'NonZero'))
     let decoration = null
-    const captionScale = caption.rings.length ? Math.min(opts.captionHeightMm, opts.qrSizeMm / caption.aspect) : 0
-    if (captionScale && captionScale < 2) throw new Error('Tulisan terlalu kecil — pendekkan tulisan atau perbesar QR')
-    const captionCenterY = design.captionCenterY
-    if (caption.rings.length) {
-      const section = track(new CrossSection(caption.rings.map((ring) => ring.map(([x, y]) => [x * captionScale, y * captionScale + captionCenterY])), 'NonZero'))
-      decoration = section
+    for (const code of codes) {
+      const caption = textCaptionRings(code.caption, fontBuffer)
+      code.captionRings = caption
+      const captionScale = caption.rings.length ? Math.min(opts.captionHeightMm, opts.qrSizeMm / caption.aspect) : 0
+      if (captionScale && captionScale < 2) throw new Error('Tulisan terlalu kecil — pendekkan tulisan atau perbesar QR')
+      if (caption.rings.length) {
+        const section = track(new CrossSection(caption.rings.map((ring) => ring.map(([x, y]) => [
+          x * captionScale + code.centerX,
+          y * captionScale + code.captionCenterY
+        ])), 'NonZero'))
+        decoration = decoration ? track(decoration.add(section)) : section
+      }
+      const placed = placeIcon(code.iconId, Math.min(opts.iconSizeMm, opts.qrSizeMm), code.centerX, code.iconCenterY)
+      if (placed.meta) {
+        let section = track(new CrossSection(placed.map(placed.icon.solid), 'NonZero'))
+        if (placed.icon.holes.length) section = track(section.subtract(track(new CrossSection(placed.map(placed.icon.holes), 'NonZero'))))
+        if (placed.icon.extra?.length) section = track(section.add(track(new CrossSection(placed.map(placed.icon.extra), 'NonZero'))))
+        decoration = decoration ? track(decoration.add(section)) : section
+        code.icon = placed.meta
+      }
     }
-    const icon = qrIconContours(opts.iconId)
-    if (icon.solid.length) {
-      const positive = (rings) => rings.map((ring) => {
-        const area = ring.reduce((sum, [x, y], i) => { const [nx, ny] = ring[(i + 1) % ring.length]; return sum + x * ny - nx * y }, 0)
-        return area < 0 ? [...ring].reverse() : ring
-      })
-      const solids = icon.solid.flat()
-      const minX = Math.min(...solids.map((p) => p[0])), maxX = Math.max(...solids.map((p) => p[0]))
-      const minY = Math.min(...solids.map((p) => p[1])), maxY = Math.max(...solids.map((p) => p[1]))
-      const scale = Math.min(opts.iconSizeMm, opts.qrSizeMm) / Math.max(maxX - minX, maxY - minY)
-      const map = (rings) => positive(rings).map((ring) => ring.map(([x, y]) => [(x - (minX + maxX)/2) * scale, (y - (minY + maxY)/2) * scale + design.iconCenterY]))
-      let section = track(new CrossSection(map(icon.solid), 'NonZero'))
-      if (icon.holes.length) section = track(section.subtract(track(new CrossSection(map(icon.holes), 'NonZero'))))
-      if (icon.extra?.length) section = track(section.add(track(new CrossSection(map(icon.extra), 'NonZero'))))
-      decoration = decoration ? track(decoration.add(section)) : section
-      design.icon = { solid: positive(icon.solid), holes: positive(icon.holes), extra: positive(icon.extra || []), bounds: { minX, maxX, minY, maxY } }
-    }
+    const firstCaption = codes.length === 1 ? (codes[0]?.captionRings || { rings: [], aspect: 0 }) : { rings: [], aspect: 0 }
+    if (codes.length === 1 && codes[0]?.icon) design.icon = codes[0].icon
     const detailZ = opts.surfaceMode === 'inlay' ? opts.baseThicknessMm - opts.detailHeightMm : opts.baseThicknessMm
     const detailSolid = track(track(Manifold.extrude(detail, opts.detailHeightMm)).translate([0, 0, detailZ]))
     const decorationSolid = decoration ? track(track(Manifold.extrude(decoration, opts.detailHeightMm)).translate([0, 0, detailZ])) : null
     // A white QR panel is embedded in the coloured frame; the border and lower
     // icon band remain dark, as on the reference desk plaques.
     const panelDepth = Math.min(opts.baseThicknessMm - 0.8, Math.max(1, opts.detailHeightMm + 0.2))
-    const panel = track(track(CrossSection.square([opts.qrSizeMm, opts.qrSizeMm], true)).translate([0, qrCenterY]))
+    let panel = null
+    for (const code of codes) {
+      const square = track(track(CrossSection.square([opts.qrSizeMm, opts.qrSizeMm], true)).translate([code.centerX, code.centerY]))
+      panel = panel ? track(panel.add(square)) : square
+    }
     let panelSolid = track(track(Manifold.extrude(panel, panelDepth)).translate([0, 0, opts.baseThicknessMm - panelDepth]))
     let baseSolid = track(track(Manifold.extrude(plate, opts.baseThicknessMm)).subtract(panelSolid))
     if (opts.surfaceMode === 'inlay') {
@@ -127,7 +163,7 @@ export function buildQrPlate(wasm, input, fontBuffer = null) {
     }
     const bbox = merged.boundingBox()
     return {
-      design: { ...design, caption },
+      design: { ...design, caption: firstCaption },
       parts: [
         { name: 'Bingkai pelat', role: 'frame', group: 'plate', color: opts.colors.frame, geometry: packSolid(baseSolid, track) },
         { name: 'Panel QR terang', role: 'base', group: 'plate', color: opts.colors.base, geometry: packSolid(panelSolid, track) },

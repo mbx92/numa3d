@@ -1,8 +1,9 @@
 <script setup>
-import { QrCodeIcon, PlayIcon, StopIcon, ArrowDownTrayIcon, CloudArrowUpIcon } from '@heroicons/vue/24/outline'
+import { QrCodeIcon, PlayIcon, StopIcon, ArrowDownTrayIcon, CloudArrowUpIcon, PhotoIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { QR_PLATE_DEFAULTS, createQrPlateDesign, qrPlateSvg } from '~/utils/qrPlateDesign.js'
 import { generateQrPlate } from '~/utils/qrPlateGenerator.js'
 import { QR_PLATE_ICONS, qrIconSvg } from '~/utils/qrPlateIcons.js'
+import { decodeWhatsappQrFile } from '~/utils/qrFromImage.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
 
 definePageMeta({ layout: 'tool', toolTitle: 'QR Plate', toolFullBleed: true })
@@ -16,7 +17,10 @@ const error = ref('')
 const view = ref('3d')
 const layoutMode = ref('assembly')
 const previewParts = computed(() => layoutMode.value === 'print' ? result.value?.printPreviewParts : result.value?.assemblyPreviewParts)
-const icons = QR_PLATE_ICONS.map((icon) => ({ ...icon, src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrIconSvg(icon.id))}` }))
+const icons = QR_PLATE_ICONS.map((icon) => ({
+  ...icon,
+  src: icon.src || `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrIconSvg(icon.id))}`
+}))
 const standStyles = [
   { id: 'none', label: 'Tanpa alas' }, { id: 'slot', label: 'Slot miring' },
   { id: 'post', label: 'Tiang lurus' }, { id: 'twist', label: 'Tiang berlekuk' }
@@ -24,6 +28,14 @@ const standStyles = [
 const showGrid = ref(true)
 const showPassword = ref(false)
 const format = ref('3mf')
+const whatsappPreview = ref('')
+const whatsappFileName = ref('')
+const whatsappReading = ref(false)
+const dual = computed(() => form.plateLayout === 'wifi-whatsapp')
+const layouts = [
+  { id: 'single', label: 'Satu QR' },
+  { id: 'wifi-whatsapp', label: 'Wi-Fi + WhatsApp' }
+]
 const toast = useToast()
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const colorMode = ref('hex')
@@ -34,14 +46,15 @@ const colorFields = [
   { key: 'detail', label: 'Pola QR gelap', short: 'QR', materialType: 'filament' },
   { key: 'icon', label: 'Ikon & tulisan', short: 'Ikon', materialType: 'filament' }
 ]
-const dimensions = [
-  { key: 'qrSizeMm', label: 'Area QR + ruang kosong', min: 25, max: 180, step: 1 },
+const dimensions = computed(() => [
+  { key: 'qrSizeMm', label: dual.value ? 'Ukuran tiap QR + ruang kosong' : 'Area QR + ruang kosong', min: 25, max: 180, step: 1 },
+  ...(dual.value ? [{ key: 'qrGapMm', label: 'Jarak antar QR', min: 4, max: 20, step: 1 }] : []),
   { key: 'marginMm', label: 'Margin luar pelat', min: 2, max: 12, step: 0.5 },
   { key: 'baseThicknessMm', label: 'Ketebalan dasar', min: 1.2, max: 8, step: 0.2 },
   { key: 'detailHeightMm', label: 'Ketebalan detail QR', min: 0.2, max: 2, step: 0.2 },
   { key: 'cornerRadiusMm', label: 'Radius sudut maksimum', min: 0, max: 12, step: 0.5 },
   { key: 'captionHeightMm', label: 'Tinggi tulisan maksimum', min: 3, max: 14, step: 0.5 }
-]
+])
 const draft = computed(() => {
   try { return { design: createQrPlateDesign(form), error: '' } }
   catch (e) { return { design: null, error: e.message } }
@@ -84,8 +97,39 @@ function cancel() {
 function usePreset(mounting) {
   form.mounting = mounting === 'desk' ? 'none' : mounting
   form.standStyle = mounting === 'desk' ? 'slot' : 'none'
-  form.qrSizeMm = mounting === 'keyring' ? 36 : 64
+  const compact = dual.value || mounting === 'keyring'
+  form.qrSizeMm = compact ? (dual.value ? 52 : 36) : 64
   form.captionHeightMm = mounting === 'keyring' ? 4 : 6
+}
+function setLayout(id) {
+  form.plateLayout = id
+  if (id === 'wifi-whatsapp') {
+    form.contentType = 'wifi'
+    if (form.qrSizeMm > 72) form.qrSizeMm = 52
+    if (!form.wifiCaption) form.wifiCaption = 'Wi-Fi'
+    if (!form.whatsappCaption) form.whatsappCaption = 'WhatsApp'
+  }
+}
+async function onWhatsappFile(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  whatsappReading.value = true
+  try {
+    const decoded = await decodeWhatsappQrFile(file)
+    form.whatsappPayload = decoded.payload
+    whatsappPreview.value = decoded.previewUrl
+    whatsappFileName.value = file.name
+    if (!decoded.whatsapp) toast.info('QR terbaca, tetapi bukan tautan WhatsApp. Periksa file sebelum mencetak.')
+    else toast.success('QR WhatsApp terbaca')
+  } catch (e) {
+    toast.error(e.message || 'Gagal membaca QR WhatsApp')
+  } finally { whatsappReading.value = false }
+}
+function clearWhatsappQr() {
+  form.whatsappPayload = ''
+  whatsappPreview.value = ''
+  whatsappFileName.value = ''
 }
 async function freshResult() {
   if (!(await ensureFreshResult())) throw new Error(error.value || 'Pengaturan berubah saat model dibuat — klik Generate lagi')
@@ -136,7 +180,7 @@ onBeforeUnmount(() => {
         <div class="p-2.5 rounded-xl bg-accent-100 text-accent-700"><QrCodeIcon class="w-6 h-6" /></div>
         <div class="flex-1 min-w-0">
           <h2 class="text-lg font-semibold">QR Plate Generator</h2>
-          <p class="text-sm text-ink-500">Pelat QR berbingkai dengan ikon dan alas dudukan meja.</p>
+          <p class="text-sm text-ink-500">Pelat QR berbingkai — satu QR, atau Wi-Fi plus WhatsApp dari foto JPEG.</p>
         </div>
         <button v-if="generating" type="button" class="btn-secondary" @click="cancel"><StopIcon class="w-4 h-4" /> Batal</button>
         <button type="button" class="btn-primary" :disabled="generating || exporting || saving || !!draft.error" @click="runGenerate">
@@ -147,20 +191,46 @@ onBeforeUnmount(() => {
       <div class="grid lg:grid-cols-[minmax(18rem,.85fr)_minmax(0,1.4fr)] gap-4 items-start">
         <div class="space-y-3 min-w-0">
           <section class="panel p-4 space-y-3" aria-label="Konten QR">
-            <div class="flex items-center justify-between"><h3 class="font-semibold">1. Konten QR</h3><span class="badge bg-emerald-50 text-emerald-700">Dibuat di perangkat</span></div>
-            <label class="block text-sm">Jenis konten
-              <select v-model="form.contentType" class="input mt-1"><option value="url">Tautan website</option><option value="text">Teks bebas / payload QR</option><option value="wifi">Jaringan Wi-Fi</option></select>
-            </label>
-            <template v-if="form.contentType === 'wifi'">
+            <div class="flex items-center justify-between gap-2"><h3 class="font-semibold">1. Konten QR</h3><span class="badge bg-emerald-50 text-emerald-700">Dibuat di perangkat</span></div>
+            <div class="grid grid-cols-2 gap-2" role="group" aria-label="Jenis pelat">
+              <button v-for="item in layouts" :key="item.id" type="button" class="rounded-lg border px-3 py-2 text-sm font-medium" :class="form.plateLayout === item.id ? 'border-accent-500 bg-accent-50 ring-1 ring-accent-400' : 'border-ink-200 hover:bg-ink-50'" :aria-pressed="form.plateLayout === item.id" @click="setLayout(item.id)">{{ item.label }}</button>
+            </div>
+            <template v-if="dual">
+              <p class="text-xs text-ink-500">Kiri: QR Wi-Fi dari nama jaringan. Kanan: unggah JPEG kartu QR dari WhatsApp; pelat mencetak ulang QR yang terbaca, tanpa logo di tengah.</p>
               <label class="block text-sm">Nama jaringan (SSID)<input v-model="form.wifiSsid" class="input mt-1" autocomplete="off" maxlength="64" /></label>
               <label class="block text-sm">Keamanan<select v-model="form.wifiSecurity" class="input mt-1"><option value="WPA">WPA / WPA2</option><option value="WEP">WEP</option><option value="nopass">Tanpa kata sandi</option></select></label>
               <label v-if="form.wifiSecurity !== 'nopass'" class="block text-sm">Kata sandi<input v-model="form.wifiPassword" :type="showPassword ? 'text' : 'password'" class="input mt-1" autocomplete="off" maxlength="128" /></label>
               <div class="flex flex-wrap gap-3 text-xs"><label><input v-model="showPassword" type="checkbox" /> Tampilkan sandi</label><label><input v-model="form.wifiHidden" type="checkbox" /> Jaringan tersembunyi</label></div>
-              <p class="text-xs text-ink-500">QR berisi akses Wi-Fi ini. Siapa pun yang memindainya dapat membaca data tersebut.</p>
+              <div class="space-y-2">
+                <span class="block text-sm">QR WhatsApp (JPEG)</span>
+                <label class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-ink-300 bg-ink-50 px-3 py-4 text-center cursor-pointer hover:bg-ink-100">
+                  <PhotoIcon class="w-7 h-7 text-ink-400" />
+                  <span class="text-sm">{{ whatsappReading ? 'Membaca QR…' : 'Unggah JPEG dari WhatsApp' }}</span>
+                  <span class="text-xs text-ink-500">JPG, PNG, atau WebP. Kartu hijau WhatsApp atau potongan kotak QR saja sama-sama bisa.</span>
+                  <input type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="sr-only" :disabled="whatsappReading" @change="onWhatsappFile" />
+                </label>
+                <div v-if="whatsappPreview" class="relative rounded-lg border border-ink-200 bg-white p-2">
+                  <img :src="whatsappPreview" alt="Pratinjau kartu QR WhatsApp" class="max-h-40 mx-auto object-contain" />
+                  <button type="button" class="absolute top-1.5 right-1.5 p-1 rounded-md bg-white/90 border border-ink-200 text-ink-500 hover:text-red-600" title="Hapus QR WhatsApp" @click="clearWhatsappQr"><XMarkIcon class="w-4 h-4" /></button>
+                  <p class="mt-2 text-[11px] text-ink-500 break-all">{{ whatsappFileName }} · {{ form.whatsappPayload }}</p>
+                </div>
+              </div>
             </template>
-            <label v-else class="block text-sm">{{ form.contentType === 'url' ? 'Tautan tujuan' : 'Isi QR (dipertahankan persis)' }}
-              <textarea v-model="form.content" rows="3" maxlength="1024" :placeholder="form.contentType === 'url' ? 'https://contoh.com' : 'Masukkan teks atau payload QR'" class="input mt-1 resize-y" spellcheck="false" />
-            </label>
+            <template v-else>
+              <label class="block text-sm">Jenis konten
+                <select v-model="form.contentType" class="input mt-1"><option value="url">Tautan website</option><option value="text">Teks bebas / payload QR</option><option value="wifi">Jaringan Wi-Fi</option></select>
+              </label>
+              <template v-if="form.contentType === 'wifi'">
+                <label class="block text-sm">Nama jaringan (SSID)<input v-model="form.wifiSsid" class="input mt-1" autocomplete="off" maxlength="64" /></label>
+                <label class="block text-sm">Keamanan<select v-model="form.wifiSecurity" class="input mt-1"><option value="WPA">WPA / WPA2</option><option value="WEP">WEP</option><option value="nopass">Tanpa kata sandi</option></select></label>
+                <label v-if="form.wifiSecurity !== 'nopass'" class="block text-sm">Kata sandi<input v-model="form.wifiPassword" :type="showPassword ? 'text' : 'password'" class="input mt-1" autocomplete="off" maxlength="128" /></label>
+                <div class="flex flex-wrap gap-3 text-xs"><label><input v-model="showPassword" type="checkbox" /> Tampilkan sandi</label><label><input v-model="form.wifiHidden" type="checkbox" /> Jaringan tersembunyi</label></div>
+                <p class="text-xs text-ink-500">QR berisi akses Wi-Fi ini. Siapa pun yang memindainya dapat membaca data tersebut.</p>
+              </template>
+              <label v-else class="block text-sm">{{ form.contentType === 'url' ? 'Tautan tujuan' : 'Isi QR (dipertahankan persis)' }}
+                <textarea v-model="form.content" rows="3" maxlength="1024" :placeholder="form.contentType === 'url' ? 'https://contoh.com' : 'Masukkan teks atau payload QR'" class="input mt-1 resize-y" spellcheck="false" />
+              </label>
+            </template>
             <label class="block text-sm">Koreksi error
               <select v-model="form.errorCorrection" class="input mt-1"><option value="L">L · paling ringkas</option><option value="M">M · seimbang</option><option value="Q">Q · lebih tahan kerusakan</option><option value="H">H · koreksi tertinggi</option></select>
             </label>
@@ -204,14 +274,22 @@ onBeforeUnmount(() => {
 
           <section class="panel p-4 space-y-3" aria-label="Ikon tulisan dan warna">
             <h3 class="font-semibold">4. Ikon, tulisan & warna</h3>
-            <div class="grid grid-cols-3 gap-2" role="group" aria-label="Pilihan ikon">
+            <p v-if="dual" class="text-xs text-ink-500">Ikon Wi-Fi dan WhatsApp dipasang otomatis di bawah masing-masing QR.</p>
+            <div v-else class="grid grid-cols-3 gap-2" role="group" aria-label="Pilihan ikon">
               <button v-for="icon in icons" :key="icon.id" type="button" class="rounded-lg border p-2 text-xs flex flex-col items-center gap-1" :class="form.iconId === icon.id ? 'border-accent-500 bg-accent-50 ring-1 ring-accent-400' : 'border-ink-200 hover:bg-ink-50'" :aria-pressed="form.iconId === icon.id" @click="form.iconId = icon.id">
                 <img :src="icon.src" alt="" class="w-7 h-7" />{{ icon.label }}
               </button>
             </div>
-            <label v-if="form.iconId !== 'none'" class="block text-sm">Ukuran ikon (mm)<input v-model.number="form.iconSizeMm" type="number" min="8" max="26" step="1" class="input mt-1" /></label>
-            <label class="block text-sm">Tulisan di bawah QR<input v-model="form.caption" maxlength="60" class="input mt-1" placeholder="Kosongkan jika tidak perlu" /></label>
-            <KeychainFontPicker v-if="form.caption.trim()" v-model="form.fontUrl" :preview-text="form.caption" :show-downloader-link="false" />
+            <label v-if="dual || form.iconId !== 'none'" class="block text-sm">Ukuran ikon (mm)<input v-model.number="form.iconSizeMm" type="number" min="8" max="26" step="1" class="input mt-1" /></label>
+            <template v-if="dual">
+              <label class="block text-sm">Tulisan bawah Wi-Fi<input v-model="form.wifiCaption" maxlength="60" class="input mt-1" placeholder="Wi-Fi" /></label>
+              <label class="block text-sm">Tulisan bawah WhatsApp<input v-model="form.whatsappCaption" maxlength="60" class="input mt-1" placeholder="WhatsApp" /></label>
+              <KeychainFontPicker v-if="form.wifiCaption.trim() || form.whatsappCaption.trim()" v-model="form.fontUrl" :preview-text="form.wifiCaption.trim() || form.whatsappCaption" :show-downloader-link="false" />
+            </template>
+            <template v-else>
+              <label class="block text-sm">Tulisan di bawah QR<input v-model="form.caption" maxlength="60" class="input mt-1" placeholder="Kosongkan jika tidak perlu" /></label>
+              <KeychainFontPicker v-if="form.caption.trim()" v-model="form.fontUrl" :preview-text="form.caption" :show-downloader-link="false" />
+            </template>
             <label class="block text-sm">Sumber warna<select v-model="colorMode" class="input mt-1"><option value="hex">Warna HEX</option><option value="material">Material filament</option></select></label>
             <ToolColorBar v-model:colors="form.colors" v-model:mode="colorMode" v-model:material-ids="materialIds" :fields="colorFields" :show-mode-switch="false" />
           </section>
@@ -234,11 +312,16 @@ onBeforeUnmount(() => {
               </ClientOnly>
             </div>
             <div v-else class="qr-plate-preview flex flex-col items-center justify-center p-6 bg-ink-50 gap-3">
-              <img v-if="qrPreview" :src="qrPreview" alt="QR dari pengaturan saat ini, siap diuji dengan kamera" class="max-w-full w-72 aspect-square object-contain rounded-lg" />
-              <p class="text-xs text-ink-500 text-center">Pindai dengan kamera dan periksa tujuan QR sebelum mencetak.</p>
+              <img v-if="qrPreview" :src="qrPreview" alt="QR dari pengaturan saat ini, siap diuji dengan kamera" class="max-w-full object-contain rounded-lg" :class="dual ? 'w-full max-h-56' : 'w-72 aspect-square'" />
+              <p class="text-xs text-ink-500 text-center">{{ dual ? 'Pindai kedua QR: kiri Wi-Fi, kanan WhatsApp.' : 'Pindai dengan kamera dan periksa tujuan QR sebelum mencetak.' }}</p>
             </div>
             <div v-if="draft.design" class="p-3 border-t border-ink-200 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600">
-              <span>QR {{ draft.design.size }} × {{ draft.design.size }} modul</span><span>{{ draft.design.moduleMm.toFixed(2) }} mm / modul</span><span>Pelat {{ draft.design.widthMm.toFixed(1) }} × {{ draft.design.depthMm.toFixed(1) }} mm</span>
+              <template v-if="draft.design.codes.length > 1">
+                <span v-for="code in draft.design.codes" :key="code.id">{{ code.id === 'wifi' ? 'Wi-Fi' : 'WhatsApp' }} {{ code.size }}×{{ code.size }} · {{ code.moduleMm.toFixed(2) }} mm</span>
+              </template>
+              <span v-else>QR {{ draft.design.size }} × {{ draft.design.size }} modul</span>
+              <span v-if="draft.design.codes.length === 1">{{ draft.design.moduleMm.toFixed(2) }} mm / modul</span>
+              <span>Pelat {{ draft.design.widthMm.toFixed(1) }} × {{ draft.design.depthMm.toFixed(1) }} mm</span>
               <span v-if="draft.design.stand">Alas {{ draft.design.stand.widthMm.toFixed(1) }} × {{ draft.design.stand.depthMm }} × {{ draft.design.stand.thicknessMm }} mm</span>
             </div>
           </section>

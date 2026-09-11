@@ -46,7 +46,7 @@ Tes tanpa database/MinIO: `npm test`. Catatan audit, perbaikan generator, dan ch
 
 **Code Studio (beta):** Tools → Code Studio mengubah kode parametrik terbatas menjadi solid Manifold dengan preview Three.js, ekspor STL/3MF/GLB, galeri, dan HPP. Panduan sintaks, batas keamanan, serta contoh: [docs/code-studio.md](docs/code-studio.md).
 
-**QR Plate:** Tools → QR Plate Generator membuat pelat QR berbingkai, pilihan ikon/tulisan, dan alas slot miring, tiang lurus, atau berlekuk. Ekspor 3MF, STL multipart, GLB terpasang, SVG, dan OpenSCAD mandiri. Panduan: [docs/qr-plate.md](docs/qr-plate.md).
+**QR Plate:** Tools → QR Plate Generator membuat pelat QR berbingkai (satu QR, atau Wi-Fi plus WhatsApp dari JPEG), pilihan ikon/tulisan, dan alas slot miring, tiang lurus, atau berlekuk. Ekspor 3MF, STL multipart, GLB terpasang, SVG, dan OpenSCAD mandiri. Panduan: [docs/qr-plate.md](docs/qr-plate.md).
 
 ## Struktur
 

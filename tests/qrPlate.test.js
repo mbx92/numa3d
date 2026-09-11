@@ -31,13 +31,13 @@ function connected(s) {
 }
 // Rasterize actual horizontal mesh faces, not the input matrix. This catches
 // upside-down QR modules, missing triangles and errors in the exported coordinates.
-function scanMesh(raw) {
+function scanMesh(raw, code = raw.design.codes[0]) {
   const { design } = raw
   const { positions: p, indices } = raw.parts.find((part) => part.role === 'detail').geometry
-  const n = (design.size + 8) * 8
+  const n = (code.size + 8) * 8
   const rgba = new Uint8ClampedArray(n * n * 4).fill(255)
   const top = design.opts.baseThicknessMm + (design.opts.surfaceMode === 'raised' ? design.opts.detailHeightMm : 0)
-  const project = (index) => [(p[index*3] / design.opts.qrSizeMm + 0.5) * n, (0.5 - (p[index*3+1] - design.qrCenterY) / design.opts.qrSizeMm) * n]
+  const project = (index) => [((p[index*3] - code.centerX) / design.opts.qrSizeMm + 0.5) * n, (0.5 - (p[index*3+1] - code.centerY) / design.opts.qrSizeMm) * n]
   const edge = (a,b,x,y) => (x-a[0])*(b[1]-a[1]) - (y-a[1])*(b[0]-a[0])
   for (let i = 0; i < indices.length; i += 3) {
     const ids = Array.from(indices.slice(i,i+3))
@@ -70,12 +70,40 @@ test('invalid, unreadable and unsupported designs are rejected before mesh work'
     { colors: { base: '#ffffff', detail: '#eeeeee' } }, { colors: { base: '#000000' } },
     { surfaceMode: 'inlay', baseThicknessMm: 1.2, detailHeightMm: 1 },
     { standClearanceMm: -1 }, { standWidthMm: 10 }, { standStyle: 'bad' }, { iconId: 'bad' },
-    { caption: 'two\nlines' }, { qrSizeMm: NaN }
+    { caption: 'two\nlines' }, { qrSizeMm: NaN },
+    { plateLayout: 'wifi-whatsapp', wifiSsid: 'Cafe', wifiPassword: 'secret' },
+    { plateLayout: 'desk' }
   ]) assert.throws(() => createQrPlateDesign(options), undefined, JSON.stringify(options))
   assert.equal(createQrPlateDesign({ mounting: 'wall' }).stand, null)
   const svg = qrPlateSvg(createQrPlateDesign())
   assert.match(svg, /shape-rendering="crispEdges"/)
   assert.ok(!svg.includes('example.com'))
+})
+
+test('Wi-Fi + WhatsApp plate keeps two scannable faces from SSID and uploaded payload', async () => {
+  const whatsappPayload = 'https://wa.me/6281234567890'
+  const input = {
+    plateLayout: 'wifi-whatsapp', wifiSsid: 'Numa;Cafe', wifiPassword: 'b:c\\d', wifiHidden: true,
+    whatsappPayload, wifiCaption: '', whatsappCaption: '', standStyle: 'none', qrSizeMm: 52
+  }
+  const design = createQrPlateDesign(input)
+  assert.equal(design.codes.length, 2)
+  assert.equal(design.codes[0].id, 'wifi')
+  assert.equal(design.codes[1].payload, whatsappPayload)
+  assert.ok(design.codes[0].centerX < 0 && design.codes[1].centerX > 0)
+  for (const surfaceMode of ['raised', 'inlay']) {
+    const raw = buildQrPlate(wasm, { ...input, surfaceMode })
+    assert.equal(scanMesh(raw, raw.design.codes[0]), raw.design.codes[0].payload)
+    assert.equal(scanMesh(raw, raw.design.codes[1]), whatsappPayload)
+    const merged = solid(raw.geometry)
+    try { connected(merged) } finally { merged.delete() }
+  }
+  const withStand = buildQrPlateResult(buildQrPlate(wasm, { ...input, standStyle: 'slot', wifiCaption: 'Wi-Fi', whatsappCaption: 'WhatsApp' }, font))
+  try {
+    const text = await withStand.getScadBlob().text()
+    assert.match(text, /qr_columns = 2/)
+    assert.match(text, /column_icons = \[\[/)
+  } finally { withStand.dispose() }
 })
 
 for (const surfaceMode of ['raised','inlay']) test(`${surfaceMode}: exported QR faces decode for URL, Unicode and Wi-Fi`, () => {

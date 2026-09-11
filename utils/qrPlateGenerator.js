@@ -84,11 +84,12 @@ export function buildQrPlateResult(raw) {
 }
 
 export async function generateQrPlate(input, { signal } = {}) {
-  const { opts } = createQrPlateDesign(input)
+  const design = createQrPlateDesign(input)
+  const { opts } = design
   if (signal?.aborted) throw new DOMException('Generate dibatalkan', 'AbortError')
   if (typeof Worker === 'undefined') throw new Error('Generator QR memerlukan browser dengan Web Worker')
   let fontBuffer = null
-  if (opts.caption) {
+  if (design.codes.some((code) => code.caption)) {
     // Only font assets are fetched. QR content (including Wi-Fi) stays local.
     const fontUrl = new URL(opts.fontUrl, location.origin)
     if (fontUrl.origin !== location.origin || !fontUrl.pathname.startsWith('/fonts/')) throw new Error('Pilih font dari pustaka Numa3D')

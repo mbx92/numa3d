@@ -21,7 +21,7 @@ const tools = [
   {
     to: '/tools/qr-plate',
     title: 'QR Plate Generator',
-    description: 'Pelat QR berbingkai dengan pilihan ikon, tulisan, dan tiga model alas meja. Ekspor 3MF, STL, GLB, dan OpenSCAD.',
+    description: 'Pelat QR berbingkai: satu QR, atau Wi-Fi plus WhatsApp dari foto JPEG. Ekspor 3MF, STL, GLB, dan OpenSCAD.',
     icon: markRaw(QrCodeIcon),
     tags: ['QR', '3MF', 'STL', 'SCAD']
   },
