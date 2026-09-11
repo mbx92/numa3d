@@ -2,6 +2,8 @@ import * as THREE from 'three'
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import { getAttachmentReach } from './shapeClipper.js'
+import { svgFillShapes, svgStrokeShapes } from './svgPathGeometry.js'
+import { expandSvgReferences } from './svgReferences.js'
 
 const MAX_SVG_BYTES = 1024 * 1024
 
@@ -33,7 +35,7 @@ export function readSvgFile(file) {
   }
   return file.text().then((text) => {
     const { svg, stripped, beforeBytes, afterBytes } = stripSvgRasterImages(text)
-    if (!String(svg).trim()) {
+    if (!String(svg).trim() || !parseSvgToShapes(svg).length) {
       throw new Error('SVG tidak punya path vektor — gambar tertanam tidak didukung')
     }
     // Simpan metadata ringan di string via property? Return plain string for callers.
@@ -89,9 +91,9 @@ export function translateSvgShapes(shapes, dx, dy) {
 }
 
 /** SVG (Y ke bawah) → footprint 3D (Y ke atas), mirror vertikal di sekitar bbox. */
-export function flipShapesY(shapes) {
+export function flipShapesY(shapes, referenceBounds = null) {
   if (!shapes?.length) return shapes
-  const bounds = computeBoundsFromShapes(shapes)
+  const bounds = referenceBounds || computeBoundsFromShapes(shapes)
   const flipBase = bounds.minY + bounds.maxY
   return shapes.map((shape) =>
     mapShapePoints(shape, (x, y) => ({
@@ -127,30 +129,55 @@ export function parseSvgToShapeLayers(svgString) {
     throw new Error('Parsing SVG hanya tersedia di browser — coba refresh halaman')
   }
 
+  const xml = new DOMParser().parseFromString(raw, 'image/svg+xml')
+  if (xml.querySelector('parsererror') || xml.documentElement?.localName !== 'svg') {
+    throw new Error('File SVG tidak valid — ekspor ulang sebagai SVG dari aplikasi desain')
+  }
+  const normalized = expandSvgReferences(xml)
+  if ([...xml.querySelectorAll('text')].some((node) => !node.closest('defs, symbol') && node.textContent.trim())) {
+    throw new Error('Ubah teks di SVG menjadi path/outline di aplikasi desain sebelum diunggah')
+  }
   const loader = new SVGLoader()
-  const { paths } = loader.parse(raw)
+  const { paths } = loader.parse(normalized)
   const grouped = new Map()
 
-  for (const path of paths) {
-    const fill = path.userData?.style?.fill
-    const stroke = path.userData?.style?.stroke
-    if ((!fill || fill === 'none') && (!stroke || stroke === 'none')) continue
-    const color = normalizeSvgColor(fill && fill !== 'none' ? fill : stroke)
-    const pathShapes = path.toShapes(true)
-    const shapes = []
-    for (const shape of pathShapes) {
-      if (shape.getPoints(4).length >= 3) shapes.push(shape)
-    }
-    if (!shapes.length) continue
+  const add = (paint, shapes) => {
+    if (!shapes.length) return
+    const color = normalizeSvgColor(paint)
     const current = grouped.get(color) || []
     current.push(...shapes)
     grouped.set(color, current)
   }
 
+  for (const path of paths) {
+    const style = path.userData?.style || {}
+    let hidden = style.visibility === 'hidden' || style.visibility === 'collapse' || style.opacity === 0
+    for (let node = path.userData?.node; node; node = node.parentElement) {
+      if (['defs', 'clipPath', 'mask', 'symbol', 'pattern'].includes(node.localName)
+        || node.getAttribute('display') === 'none' || node.style?.display === 'none'
+        || node.getAttribute('opacity') === '0' || node.style?.opacity === '0') hidden = true
+    }
+    if (hidden) continue
+    for (let node = path.userData?.node; node; node = node.parentElement) {
+      for (const feature of ['clip-path', 'mask', 'stroke-dasharray']) {
+        const value = node.style?.getPropertyValue(feature) || node.getAttribute(feature)
+        if (value && value !== 'none') {
+          throw new Error(`SVG memakai ${feature} — terapkan/flatten efek dan ubah stroke menjadi path di aplikasi desain terlebih dahulu`)
+        }
+      }
+    }
+    const painted = (value) => value && value !== 'none' && value !== 'transparent'
+    if (painted(style.fill) && style.fillOpacity !== 0) add(style.fill, svgFillShapes(path))
+    if (painted(style.stroke) && style.strokeOpacity !== 0 && style.strokeWidth > 0) add(style.stroke, svgStrokeShapes(path))
+  }
+
+  // All colours share one SVG coordinate frame; flipping each colour around
+  // its own bbox moves separate parts of a logo relative to one another.
+  const bounds = computeBoundsFromShapes([...grouped.values()].flat())
   return [...grouped.entries()].map(([color, shapes], index) => ({
     index,
     color,
-    shapes: flipShapesY(shapes),
+    shapes: flipShapesY(shapes, bounds),
     isBackground: false
   }))
 }
@@ -219,18 +246,19 @@ function boundsCenter(bounds) {
 /** Skala & posisikan logo dari shapes 2D — aman di worker. */
 export function buildLogoGroupFromShapes(shapes, opts, textBounds = null) {
   if (!shapes?.length) {
-    throw new Error('SVG tidak punya area fill — gunakan logo solid (bukan hanya garis)')
+    throw new Error('SVG tidak punya bidang atau garis yang terlihat')
   }
 
   let working = shapes
   const bounds = computeBoundsFromShapes(working)
   const { cx, cy } = boundsCenter(bounds)
   const sizeMm = Number(opts.svgSizeMm) || 14
-  const maxDim = Math.max(bounds.width, bounds.height, 0.001)
+  const maxDim = Math.max(bounds.width, bounds.height)
+  if (!Number.isFinite(maxDim) || maxDim <= 0) throw new Error('Ukuran bidang SVG tidak valid')
   working = scaleShapes(working, sizeMm / maxDim, cx, cy)
 
   let scaled = computeBoundsFromShapes(working)
-  const gap = Number(opts.svgGapMm) || 2
+  const gap = Math.max(0, Number(opts.svgGapMm ?? 2))
 
   let dx
   let dy

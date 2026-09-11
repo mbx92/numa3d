@@ -10,6 +10,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+const { toolLinkAttrs } = useStandaloneDisplay()
 
 const { data: installed, pending } = await useFetch('/api/fonts')
 
@@ -90,14 +91,14 @@ onUnmounted(() => {
 
     <p v-if="!options.length && !pending" class="text-[11px] text-ink-400">
       Unduh font dulu lewat
-      <NuxtLink v-if="showDownloaderLink" to="/tools/font-downloader" class="text-accent-600 hover:underline">
+      <NuxtLink v-if="showDownloaderLink" to="/tools/font-downloader" v-bind="toolLinkAttrs" class="text-accent-600 hover:underline">
         Font Downloader
       </NuxtLink>
       <template v-else>Font Downloader</template>.
     </p>
     <p v-else-if="showDownloaderLink" class="text-[11px] text-ink-400">
       Butuh font lain?
-      <NuxtLink to="/tools/font-downloader" class="inline-flex items-center gap-0.5 text-accent-600 hover:underline">
+      <NuxtLink to="/tools/font-downloader" v-bind="toolLinkAttrs" class="inline-flex items-center gap-0.5 text-accent-600 hover:underline">
         <ArrowDownTrayIcon class="w-3.5 h-3.5" />
         Font Downloader
       </NuxtLink>

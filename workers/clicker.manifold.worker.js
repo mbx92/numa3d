@@ -89,41 +89,21 @@ function slugify(text) {
 function partsToPreviewParts(parts, group, colorHex) {
   return parts
     .filter((p) => p.group === group)
-    .map((p) => ({
-      geometry: packGeometry(partToGeometry(p)),
-      color: rgbBytesToHex(p.colorRgb) || colorHex,
-      role: group === 'top' ? 'lid' : 'base',
-      name: p.name || null
-    }))
+    .map((p) => {
+      const isArtwork = p.name === 'top-color-0' || p.name === 'inlay'
+      return {
+        geometry: packGeometry(partToGeometry(p)),
+        color: rgbBytesToHex(p.colorRgb) || colorHex,
+        role: group === 'top' ? (isArtwork ? 'letter' : 'lid') : 'base',
+        name: p.name || null
+      }
+    })
 }
 
 function makeSwitchPreviewParts(wasm, placements, params, displayMode) {
   if (displayMode === 'print' || !placements?.length) return []
   const previewModel = params.switchPreviewModel || {}
   if (previewModel.hide || previewModel.id === 'hidden') return []
-  if (previewModel.modelUrl) {
-    const fitMm = Math.max(12, Number(params.housingPocketMm || params.preset?.housingOuterMm || 18.5) - 0.4)
-    const bodyH = Math.max(8, Number(params.switchDepthMm || params.preset?.bodyDepthMm || 11.5))
-    const topZ = Math.max(2.8, Number(params.stemHeightMm || params.preset?.stemHeightMm || 4.0))
-    // Plate-relative: housing bottom must not go below -bodyH (same as simple-cube fallback).
-    // createModelPart clamps after stem-top alignment so tall GLBs don't poke past the floor.
-    return placements.map((sw, i) => ({
-      modelUrl: previewModel.modelUrl,
-      modelNodeNames: previewModel.modelNodeNames || [],
-      modelFitMm: fitMm,
-      modelTopZ: topZ,
-      modelMinZ: -bodyH,
-      modelAxis: 'gltf-y-up',
-      position: { x: Number(sw?.x) || 0, y: Number(sw?.y) || 0, z: 0 },
-      rotationZ: Number(sw?.rotation) || 0,
-      color: '#3f4652',
-      role: 'switch',
-      name: 'Switch',
-      opacity: 1,
-      previewOnly: true,
-      previewModelId: previewModel.id || null
-    }))
-  }
   const { Manifold } = wasm
   const trash = []
   const track = (value) => {
@@ -264,7 +244,12 @@ async function buildFromOpts(opts) {
   }
   footprintOpts.meshUpAxis = opts.meshUpAxis || 'auto'
   const footprint = await resolveFootprint(footprintOpts)
-  const plateShapes = buildPlateShapes(footprint, footprintOpts)
+  // The Manifold builder creates the plate and applies its margin. Feed it
+  // unpadded artwork for SVG/text, otherwise the margin/shape is applied twice
+  // and artwork is scaled relative to an already enlarged plate.
+  const plateShapes = ['svg', 'text'].includes(footprint.source)
+    ? footprint.shapes
+    : buildPlateShapes(footprint, footprintOpts)
   const outlineSegs = adaptiveRingSegments(plateShapes, 64, 128, 0.45)
   const outlineRings = shapesToRings(plateShapes, outlineSegs)
   const norm = ringNormalizeTransform(outlineRings)
@@ -493,7 +478,8 @@ async function buildFromOpts(opts) {
       keyringLinkGapMm: snapFit?.gapMm ? Number(snapFit.gapMm.toFixed(2)) : null,
       widthMm: Number((baseGeo.boundingBox.max.x - baseGeo.boundingBox.min.x).toFixed(1)),
       depthMm: Number((baseGeo.boundingBox.max.y - baseGeo.boundingBox.min.y).toFixed(1)),
-      heightMm: Number((baseGeo.boundingBox.max.z - baseGeo.boundingBox.min.z).toFixed(1))
+      heightMm: Number((baseGeo.boundingBox.max.z - baseGeo.boundingBox.min.z).toFixed(1)),
+      imageDepthMm: Number((resolved.imageDepthMm ?? 2).toFixed(1))
     },
     basePreviewParts: basePreviewParts.length
       ? basePreviewParts

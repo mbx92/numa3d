@@ -234,7 +234,7 @@ function buildBaseBody(opts, mech) {
 /** Lid — cap plate + stem MX + perimeter skirt. */
 function buildLid(opts, mech) {
   const backing = Math.max(0.8, Number(opts.topThicknessMm) || 1.5)
-  const imageDepth = Math.max(0.2, Number(opts.imageDepthMm) || 0.8)
+  const imageDepth = Math.max(0.4, Number(opts.imageDepthMm) || 2)
   const capH = backing + imageDepth
   const stemH = Number(opts.stemHeightMm) || opts.preset.stemHeightMm || 4
 
@@ -245,10 +245,10 @@ function buildLid(opts, mech) {
   if (capGeo) capGeo.translate(0, 0, stemH)
   if (capGeo) parts.push(capGeo)
 
-  // Artwork layer — sedikit lebih tipis di atas backing (efek relief)
+  // Artwork layer — relief teks/SVG setebal imageDepth di atas backing
   if (mech.shapes?.length && opts.shapeMode !== 'rect') {
-    const artGeo = extrudeShapes(mech.shapes, imageDepth * 0.85)
-    if (artGeo) artGeo.translate(0, 0, stemH + backing + imageDepth * 0.075)
+    const artGeo = extrudeShapes(mech.shapes, imageDepth)
+    if (artGeo) artGeo.translate(0, 0, stemH + backing)
     if (artGeo) parts.push(artGeo)
   }
 

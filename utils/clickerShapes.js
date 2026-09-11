@@ -13,7 +13,7 @@ export function boundsFromShapes(shapes) {
 
 /** Plate = siluet + margin; outline mode offset artwork. */
 export function buildPlateShapes(footprint, opts) {
-  const margin = Number(opts.imageMarginMm) || 1.2
+  const margin = Math.max(0, Number(opts.imageMarginMm ?? 1.2))
   const raw = footprint.plateShapes?.length ? footprint.plateShapes : footprint.shapes || []
   if (!raw.length) return []
 

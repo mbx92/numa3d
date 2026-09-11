@@ -2,7 +2,7 @@
 import { SWITCH_PRESET_LIST, SWITCH_PREVIEW_MODELS, getSwitchPreset, getSwitchPreviewModel } from '~/utils/clickerPresets.js'
 
 const modelValue = defineModel({ type: String, default: 'cherry_mx' })
-const switchPreviewModelId = defineModel('switchPreviewModelId', { type: String, default: 'cherry_mx_glb' })
+const switchPreviewModelId = defineModel('switchPreviewModelId', { type: String, default: 'simple' })
 const stemFitPct = defineModel('stemFitPct', { type: Number, default: 0 })
 const socketFitPct = defineModel('socketFitPct', { type: Number, default: 0 })
 const slipToleranceMm = defineModel('slipToleranceMm', { type: Number, default: 0.4 })
@@ -50,7 +50,6 @@ const activePreviewModel = computed(() => getSwitchPreviewModel(switchPreviewMod
         <option v-for="model in previewModels" :key="model.id" :value="model.id">{{ model.name }}</option>
       </select>
       <p class="text-[10px] text-ink-400">{{ activePreviewModel.description }}</p>
-      <p v-if="activePreviewModel.attribution" class="text-[10px] text-ink-400">{{ activePreviewModel.attribution }}</p>
     </label>
 
     <label class="block space-y-1">

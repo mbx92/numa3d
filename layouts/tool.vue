@@ -11,6 +11,7 @@ const route = useRoute()
 const authUser = useState('authUser')
 
 const toolTitle = computed(() => route.meta.toolTitle || 'Tools')
+const toolBeta = computed(() => !!route.meta.toolBeta)
 const fullBleed = computed(() => !!route.meta.toolFullBleed)
 
 const backLink = computed(() => {
@@ -49,6 +50,12 @@ async function logout() {
 
       <span class="text-ink-300 hidden sm:inline">/</span>
       <h1 class="text-sm font-semibold text-ink-800 truncate min-w-0">{{ toolTitle }}</h1>
+      <span
+        v-if="toolBeta"
+        class="badge text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 ring-1 ring-amber-200/80 shrink-0"
+      >
+        Beta
+      </span>
 
       <div class="ml-auto flex items-center gap-1 sm:gap-2 shrink-0">
         <NuxtLink to="/gallery" class="btn-secondary text-xs py-1.5 px-2 hidden md:inline-flex">

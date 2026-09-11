@@ -59,7 +59,8 @@ function centerShapes(shapes) {
 
 function scaleToMaxSize(shapes, maxSizeMm) {
   const bounds = computeBoundsFromShapes(shapes)
-  const maxDim = Math.max(bounds.width, bounds.height, 0.001)
+  const maxDim = Math.max(bounds.width, bounds.height)
+  if (!Number.isFinite(maxDim) || maxDim <= 0) throw new Error('Ukuran desain tidak valid')
   const scale = maxSizeMm / maxDim
   const cx = (bounds.minX + bounds.maxX) / 2
   const cy = (bounds.minY + bounds.maxY) / 2
@@ -192,13 +193,13 @@ function meshFootprint(opts) {
   const vp = raw.vertProperties
   const np = raw.numProp || 3
   const points = []
-  const stride = Math.max(1, Math.ceil((vp.length / np) / 2500))
-  for (let i = 0, vertex = 0; i < vp.length; i += np, vertex++) {
-    if (vertex % stride !== 0) continue
+  // Every extreme vertex matters: stride sampling can miss a narrow protrusion
+  // and shrink the generated plate underneath an imported mesh.
+  for (let i = 0; i < vp.length; i += np) {
     points.push([(vp[i] - b.centerX) * scale, (vp[i + 1] - b.centerY) * scale])
   }
 
-  let hull = convexHull(points)
+  const hull = convexHull(points)
   if (hull.length < 3) {
     const w = Math.max(20, b.width * scale)
     const d = Math.max(20, b.depth * scale)
@@ -207,12 +208,6 @@ function meshFootprint(opts) {
       source: 'mesh',
       mesh: { bounds: b, scale }
     }
-  }
-
-  const maxHullPoints = 160
-  if (hull.length > maxHullPoints) {
-    const step = Math.ceil(hull.length / maxHullPoints)
-    hull = hull.filter((_, i) => i % step === 0)
   }
 
   const shape = shapeFromRing(hull)
@@ -381,7 +376,7 @@ function offsetBounds(bounds, margin) {
 }
 
 function resolvePlateShapes(artwork, opts) {
-  const margin = Number(opts.imageMarginMm) || 1.2
+  const margin = Math.max(0, Number(opts.imageMarginMm ?? 1.2))
   const baseShape = opts.baseShape || 'outline'
   const artBounds = artwork.bounds
 

@@ -79,9 +79,9 @@ function cloneWorkerOpts(opts) {
 function prepareWorkerOpts(opts) {
   const cloned = cloneWorkerOpts(opts)
   const svgContent = String(cloned.svgContent || '').trim()
-  if (svgContent) {
+  if (svgContent && cloned.shapeMode === 'svg') {
     const shapes = parseSvgToShapes(svgContent)
-    if (!shapes.length) throw new Error('SVG tidak punya area fill — gunakan logo solid')
+    if (!shapes.length) throw new Error('SVG tidak punya bidang atau garis yang terlihat')
     cloned.svgShapes = serializeShapes(shapes)
     delete cloned.svgContent
   }
@@ -254,6 +254,7 @@ export async function generateClicker(userOpts = {}) {
     && glyphCount >= 2
   const requiresManifold =
     userOpts.shapeMode === 'mesh'
+    || userOpts.shapeMode === 'svg'
     || (userOpts.shapeMode === 'rect' && userOpts.flexiEnabled === true)
     || snapFitNeedsManifold
   if (typeof window !== 'undefined' && typeof Worker !== 'undefined') {
@@ -269,6 +270,8 @@ export async function generateClicker(userOpts = {}) {
     throw new Error(
       userOpts.shapeMode === 'mesh'
         ? 'Mode mesh membutuhkan Manifold worker'
+        : userOpts.shapeMode === 'svg'
+        ? 'Mode SVG membutuhkan Manifold worker agar backing dan dudukan switch terbentuk utuh'
         : snapFitNeedsManifold && !(userOpts.shapeMode === 'rect' && userOpts.flexiEnabled === true)
         ? 'Clip kunci snap-fit antar huruf membutuhkan Manifold worker'
         : 'Mode flexi membutuhkan Manifold worker agar engsel print-in-place ikut dibuat'

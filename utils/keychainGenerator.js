@@ -69,7 +69,7 @@ function prepareWorkerOpts(opts) {
   if (svgContent) {
     const shapes = parseSvgToShapes(svgContent)
     if (!shapes.length) {
-      throw new Error('SVG tidak punya area fill — gunakan logo solid (bukan hanya garis)')
+      throw new Error('SVG tidak punya bidang atau garis yang terlihat')
     }
     cloned.svgShapes = serializeShapes(shapes)
     delete cloned.svgContent

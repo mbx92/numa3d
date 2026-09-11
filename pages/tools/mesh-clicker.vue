@@ -27,7 +27,8 @@ import { buildPartLegend, visiblePreviewParts } from '~/utils/previewPartLabels.
 definePageMeta({
   layout: 'tool',
   toolTitle: 'Mesh → Clicker',
-  toolFullBleed: true
+  toolFullBleed: true,
+  toolBeta: true
 })
 
 const SwitchPanelIcon = markRaw(CursorArrowRaysIcon)
@@ -157,7 +158,7 @@ watch(() => form.switchPreviewModelId, (id) => {
 
 function onShowSwitchPreview(value) {
   showSwitchPreview.value = value
-  if (value && form.switchPreviewModelId === 'hidden') form.switchPreviewModelId = 'cherry_mx_glb'
+  if (value && form.switchPreviewModelId === 'hidden') form.switchPreviewModelId = 'simple'
 }
 
 function resetAssemblyPreview() {

@@ -46,6 +46,8 @@ Tes tanpa database/MinIO: `npm test`. Catatan audit, perbaikan generator, dan ch
 
 **Code Studio (beta):** Tools → Code Studio mengubah kode parametrik terbatas menjadi solid Manifold dengan preview Three.js, ekspor STL/3MF/GLB, galeri, dan HPP. Panduan sintaks, batas keamanan, serta contoh: [docs/code-studio.md](docs/code-studio.md).
 
+**QR Plate:** Tools → QR Plate Generator membuat pelat QR berbingkai, pilihan ikon/tulisan, dan alas slot miring, tiang lurus, atau berlekuk. Ekspor 3MF, STL multipart, GLB terpasang, SVG, dan OpenSCAD mandiri. Panduan: [docs/qr-plate.md](docs/qr-plate.md).
+
 ## Struktur
 
 - `server/db/schema.js` — semua tabel (users, materials, machines, expenses, products, product_recipes, packaging, product_packaging, sales, app_settings, product_files, audit_logs)
@@ -53,7 +55,7 @@ Tes tanpa database/MinIO: `npm test`. Catatan audit, perbaikan generator, dan ch
 - `server/utils/hpp.js` — re-export rumus dari `utils/hpp.js`; `server/utils/productHpp.js` — loader HPP per produk
 - `server/utils/rbac.js` — `requireAdmin(event)`, dipanggil di awal tiap endpoint yang khusus admin
 - `server/utils/audit.js` — `logAudit(event, {...})`, dipanggil setelah tiap mutasi berhasil
-- `server/utils/rateLimit.js` — rate limit login in-memory (per-IP dan per-IP+username)
+- `server/utils/rateLimit.js` — rate limit login in-memory (per-IP dan per-IP+username); **mati di `nuxt dev`**, aktif di production
 - `server/api/` — REST endpoints per entitas
 - `pages/` — Dashboard, Material, Mesin, Packaging, Produk & HPP (recipe builder), Pengeluaran, Penjualan, Laporan, Pengaturan, User, Log Aktivitas
 - `scripts/seed.js` — data contoh

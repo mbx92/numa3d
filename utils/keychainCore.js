@@ -20,6 +20,7 @@ import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import { buildLogoGroupFromShapes, deserializeShapes, parseSvgToShapes } from './svgToShapes.js'
 import { packGeometry } from './geometryPack.js'
 import { createKeychainKernel } from './keychainManifold.js'
+import { connectFootprint } from './connectedFootprint.js'
 
 const fontCache = new Map()
 
@@ -230,8 +231,13 @@ function translateGroups(groups, dx, dy) {
 }
 
 /** Insert teks: plate dalam + plate luar (ring) + huruf timbul. */
-function buildInsertGeometry(kernel, groups, shapes, thickness, outerMarginMm, innerBridgeMm, colors) {
-  const { inner, outer, insertFootprint } = buildInsertPlateFootprint(shapes, outerMarginMm, innerBridgeMm)
+function buildInsertGeometry(kernel, groups, shapes, thickness, outerMarginMm, innerBridgeMm, colors, connectBacking = false) {
+  let { inner, outer, insertFootprint } = buildInsertPlateFootprint(shapes, outerMarginMm, innerBridgeMm)
+  if (connectBacking) {
+    inner = connectFootprint(inner, Math.max(2, innerBridgeMm))
+    outer = outerMarginMm > 0 ? offsetShapes(inner, outerMarginMm) : inner
+    insertFootprint = outer
+  }
   const plateH = Math.min(Math.max(thickness * 0.32, 0.45), thickness - 0.15)
   const letterH = Math.max(thickness - plateH, 0.15)
   const outerRingShapes = subtractShapes2D(outer, inner)
@@ -300,7 +306,7 @@ export async function generateKeychainCore(userOpts = {}, wasm) {
   const hasSvg = !!(svgContent || opts.svgShapes?.length)
   if (!text && !hasSvg) throw new Error('Isi teks atau unggah logo SVG')
 
-  const svgReserve = hasSvg ? (Number(opts.svgSizeMm) || 14) + (Number(opts.svgGapMm) || 2) : 0
+  const svgReserve = hasSvg ? (Number(opts.svgSizeMm) || 14) + Math.max(0, Number(opts.svgGapMm ?? 2)) : 0
   let groups = []
 
   if (text) {
@@ -349,6 +355,13 @@ export async function generateKeychainCore(userOpts = {}, wasm) {
       : parseSvgToShapes(svgContent)
     const logoGroup = buildLogoGroupFromShapes(logoShapes, opts, textBounds)
     groups = [logoGroup, ...groups]
+    // Keep the whole logo/text composition within the requested content size,
+    // and anchor attachments relative to the composition rather than the text.
+    const combinedBounds = computeBoundsFromShapes(flattenGroupShapes(groups))
+    const fitScale = Math.min(1, opts.targetWidthMm / combinedBounds.width, opts.targetHeightMm / combinedBounds.height)
+    if (fitScale < 1) groups = scaleGroupsToFit(groups, combinedBounds, combinedBounds.width * fitScale, combinedBounds.height * fitScale)
+    const finalBounds = computeBoundsFromShapes(flattenGroupShapes(groups))
+    groups = translateGroups(groups, getAttachmentReach(opts) + opts.paddingMm - finalBounds.minX, -(finalBounds.minY + finalBounds.maxY) / 2)
   }
 
   if (!groups.length) throw new Error('Tidak ada konten untuk di-generate')
@@ -366,7 +379,7 @@ export async function generateKeychainCore(userOpts = {}, wasm) {
       geometry: textGeo,
       previewParts: textPreviewParts,
       insertFootprint
-    } = buildInsertGeometry(kernel, groups, shapes, fit.textH, outerMarginMm, innerBridgeMm, colors)
+    } = buildInsertGeometry(kernel, groups, shapes, fit.textH, outerMarginMm, innerBridgeMm, colors, hasSvg)
     textGeo.translate(0, 0, fit.floor)
     for (const part of textPreviewParts) part.geometry.translate(0, 0, fit.floor)
 

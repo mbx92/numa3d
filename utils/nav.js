@@ -17,7 +17,7 @@ import {
   Cog6ToothIcon
 } from '@heroicons/vue/24/outline'
 
-/** @type {{ label: string | null, items: { to: string, label: string, icon: import('vue').Component }[] }[]} */
+/** @type {{ label: string | null, items: { to: string, label: string, icon: import('vue').Component, newTab?: boolean }[] }[]} */
 export const navSections = [
   {
     label: null,
@@ -41,7 +41,7 @@ export const navSections = [
   {
     label: 'Operasi',
     items: [
-      { to: '/tools', label: 'Tools', icon: WrenchScrewdriverIcon },
+      { to: '/tools', label: 'Tools', icon: WrenchScrewdriverIcon, newTab: true },
       { to: '/production', label: 'Produksi', icon: PrinterIcon },
       { to: '/custom-orders', label: 'Custom', icon: PuzzlePieceIcon }
     ]

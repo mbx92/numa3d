@@ -1,6 +1,8 @@
 // Rate limit login sederhana in-memory (cukup untuk skala aplikasi single-instance ini).
 // Dua lapis: per-IP (cegah iterasi banyak username dari satu sumber) dan
 // per-IP+username (cegah credential stuffing ke satu akun).
+// Di `nuxt dev` dimatikan supaya gagal login berulang tidak mengunci akun lokal.
+const ENABLED = !import.meta.dev
 const WINDOW_MS = 15 * 60 * 1000
 const IP_MAX_ATTEMPTS = 20
 const IP_USER_MAX_ATTEMPTS = 5
@@ -26,12 +28,14 @@ function bump(key) {
 }
 
 export function checkLoginRateLimit(ip, username) {
+  if (!ENABLED) return { blocked: false }
   const byIp = check(`ip:${ip}`, IP_MAX_ATTEMPTS)
   if (byIp.blocked) return byIp
   return check(`ipuser:${ip}:${username}`, IP_USER_MAX_ATTEMPTS)
 }
 
 export function recordLoginFailure(ip, username) {
+  if (!ENABLED) return
   bump(`ip:${ip}`)
   bump(`ipuser:${ip}:${username}`)
 }
@@ -39,3 +43,4 @@ export function recordLoginFailure(ip, username) {
 export function clearLoginAttempts(ip, username) {
   attempts.delete(`ipuser:${ip}:${username}`)
 }
+

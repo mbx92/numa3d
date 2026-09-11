@@ -123,9 +123,9 @@ test('shape-mode flexi clicker shows print-in-place interlocking base hinges in 
   assert.ok(track(baseA.intersect(baseB)).volume() < 0.01, 'print-in-place hinge parts keep clearance')
   const switchPreview = result.assemblyPreviewParts.find((part) => part.role === 'switch')
   assert.ok(switchPreview, 'assembly preview includes switch model')
-  assert.equal(switchPreview.modelUrl, '/assets/clicker/switch-preview/cherry_mx_single.glb')
+  assert.equal(switchPreview.modelUrl || null, null)
   assert.equal(switchPreview.previewOnly, true)
-  assert.ok(Number.isFinite(switchPreview.modelMinZ), 'switch preview keeps floor clamp')
+  assert.ok(switchPreview.geometry?.positions?.length > 0)
 
   const baseStl = rawSolid(wasm, parseSTL(result.baseStlBuffer), track)
   assert.equal(baseStl.status(), 'NoError')
@@ -192,4 +192,41 @@ test('shape-mode flexi clicker shows print-in-place interlocking base hinges in 
     false,
     'hidden preview mode omits switch models'
   )
+
+  const letter = await worker.build({
+    shapeMode: 'rect',
+    baseShape: 'square',
+    text: 'A',
+    fontUrl: '/fonts/BarlowCondensed-BlackItalic.woff'
+  })
+  assert.ok(letter.result, letter.error)
+  const inlay = (letter.result.lidPreviewParts || []).find((part) => part.name === 'top-color-0')
+  assert.ok(inlay, 'lid keeps a separate text/SVG inlay')
+  assert.ok(partHeightZ(inlay) > 1.95 && partHeightZ(inlay) < 2.3, `default inlay ${partHeightZ(inlay)} mm`)
+  assert.equal(letter.result.dimensions.imageDepthMm, 2)
+  assert.equal(inlay.role, 'letter')
+
+  const thicker = await worker.build({
+    shapeMode: 'rect',
+    baseShape: 'square',
+    text: 'A',
+    fontUrl: '/fonts/BarlowCondensed-BlackItalic.woff',
+    imageDepthMm: 3
+  })
+  assert.ok(thicker.result, thicker.error)
+  const thickInlay = (thicker.result.lidPreviewParts || []).find((part) => part.name === 'top-color-0')
+  assert.ok(thickInlay, 'custom depth still produces an inlay')
+  assert.ok(partHeightZ(thickInlay) > 2.95 && partHeightZ(thickInlay) < 3.3, `custom inlay ${partHeightZ(thickInlay)} mm`)
 })
+
+function partHeightZ(part) {
+  const pos = part.geometry.positions
+  let minZ = Infinity
+  let maxZ = -Infinity
+  for (let i = 2; i < pos.length; i += 3) {
+    if (pos[i] < minZ) minZ = pos[i]
+    if (pos[i] > maxZ) maxZ = pos[i]
+  }
+  return maxZ - minZ
+}
+

@@ -5,6 +5,7 @@ import { readSvgFile } from '~/utils/svgToShapes.js'
 const svgContent = defineModel('svgContent', { type: String, default: '' })
 const svgSizeMm = defineModel('svgSizeMm', { type: Number, default: 14 })
 const svgGapMm = defineModel('svgGapMm', { type: Number, default: 2 })
+const { toolLinkAttrs } = useStandaloneDisplay()
 
 const props = defineProps({
   label: { type: String, default: 'Logo SVG (opsional)' },
@@ -79,15 +80,20 @@ function clearSvg() {
       </button>
     </div>
 
-    <label
-      v-else
-      class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-ink-200 bg-ink-50/50 px-3 py-4 cursor-pointer hover:border-accent-400 hover:bg-accent-50/30 transition-colors"
-    >
-      <PhotoIcon class="w-6 h-6 text-ink-400" />
-      <span class="text-xs text-ink-600">Unggah file .svg</span>
-      <span class="text-[10px] text-ink-400">Maks. 1 MB · path/fill solid (gambar tertanam diabaikan)</span>
-      <input type="file" accept=".svg,image/svg+xml" class="sr-only" @change="onFileChange" />
-    </label>
+    <div v-else class="space-y-1.5">
+      <label
+        class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-ink-200 bg-ink-50/50 px-3 py-4 cursor-pointer hover:border-accent-400 hover:bg-accent-50/30 transition-colors"
+      >
+        <PhotoIcon class="w-6 h-6 text-ink-400" />
+        <span class="text-xs text-ink-600">Unggah file .svg</span>
+        <span class="text-[10px] text-ink-400">Maks. 1 MB · bidang dan garis SVG (gambar tertanam diabaikan)</span>
+        <input type="file" accept=".svg,image/svg+xml" class="sr-only" @change="onFileChange" />
+      </label>
+      <p class="text-[10px] text-ink-400">
+        Punya PNG?
+        <NuxtLink to="/tools/png-to-svg" v-bind="toolLinkAttrs" class="text-accent-600 hover:underline">PNG → SVG</NuxtLink>
+      </p>
+    </div>
 
     <template v-if="svgContent">
       <label class="block space-y-1">

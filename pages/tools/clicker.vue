@@ -112,9 +112,9 @@ const activePreviewParts = computed(() => {
 })
 
 const previewTabs = computed(() => [
-  { id: 'assembly', label: 'Perakitan', colors: [form.colors.base, form.colors.lid] },
+  { id: 'assembly', label: 'Perakitan', colors: [form.colors.base, form.colors.lid, form.colors.text] },
   { id: 'base', label: 'Base', color: form.colors.base },
-  { id: 'lid', label: 'Lid', color: form.colors.lid }
+  { id: 'lid', label: 'Lid', colors: [form.colors.lid, form.colors.text] }
 ])
 
 const assemblyPartLegend = computed(() =>
@@ -128,7 +128,7 @@ watch(() => form.switchPreviewModelId, (id) => {
 
 function onShowSwitchPreview(value) {
   showSwitchPreview.value = value
-  if (value && form.switchPreviewModelId === 'hidden') form.switchPreviewModelId = 'cherry_mx_glb'
+  if (value && form.switchPreviewModelId === 'hidden') form.switchPreviewModelId = 'simple'
 }
 
 function resetAssemblyPreview() {
@@ -204,7 +204,8 @@ async function generateModel() {
       geometry: p.geometry,
       color: p.color,
       line: p.line,
-      role: p.role
+      role: p.role,
+      name: p.name
     }))
     assemblyPreviewParts.value = out.assemblyPreviewParts.map((p) => ({
       geometry: p.geometry,
@@ -392,6 +393,13 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
             <p v-else class="text-[10px] text-ink-400">Base otomatis dari bentuk lid ({{ form.maxSizeMm }} mm max).</p>
             <KeychainCompactField label="Tinggi lid">
               <input v-model.number="form.lidHeightMm" type="number" min="6" max="20" step="0.5" class="input-num w-full text-sm" />
+            </KeychainCompactField>
+            <KeychainCompactField
+              v-if="form.shapeMode !== 'mesh'"
+              label="Ketebalan teks/SVG"
+              hint="Lapisan timbul pada lid"
+            >
+              <input v-model.number="form.imageDepthMm" type="number" min="0.4" max="4" step="0.1" class="input-num w-full text-sm" />
             </KeychainCompactField>
             <div class="grid grid-cols-3 gap-2">
               <KeychainCompactField label="Lebar">

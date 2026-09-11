@@ -49,56 +49,6 @@ export function makeHexagonShape(radius) {
   return ringFromPoints(pts)
 }
 
-export function makeStarShape(radius, points = 5) {
-  const innerR = radius * 0.56
-  const pts = []
-  for (let i = 0; i < points * 2; i++) {
-    const angle = (Math.PI / points) * i - Math.PI / 2
-    const r = i % 2 === 0 ? radius : innerR
-    pts.push([Math.cos(angle) * r, Math.sin(angle) * r])
-  }
-  return ringFromPoints(pts)
-}
-
-export function makeHeartShape(radius) {
-  // Classic parametric heart, centered and scaled so max extent ≈ radius.
-  const steps = 96
-  const raw = []
-  for (let i = 0; i < steps; i++) {
-    const t = (Math.PI * 2 * i) / steps
-    const x = 16 * Math.sin(t) ** 3
-    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)
-    raw.push([x, y])
-  }
-  let minX = Infinity
-  let maxX = -Infinity
-  let minY = Infinity
-  let maxY = -Infinity
-  for (const [x, y] of raw) {
-    minX = Math.min(minX, x)
-    maxX = Math.max(maxX, x)
-    minY = Math.min(minY, y)
-    maxY = Math.max(maxY, y)
-  }
-  const cx = (minX + maxX) / 2
-  const cy = (minY + maxY) / 2
-  const half = Math.max(maxX - minX, maxY - minY) / 2 || 1
-  const scale = radius / half
-  return ringFromPoints(raw.map(([x, y]) => [(x - cx) * scale, (y - cy) * scale]))
-}
-
-export function makeFlowerShape(radius, petals = 6) {
-  const steps = Math.max(72, petals * 24)
-  const pts = []
-  for (let i = 0; i < steps; i++) {
-    const theta = (Math.PI * 2 * i) / steps - Math.PI / 2
-    const wave = 0.5 + 0.5 * Math.cos(petals * theta)
-    const r = radius * (0.58 + 0.42 * Math.pow(wave, 1.2))
-    pts.push([Math.cos(theta) * r, Math.sin(theta) * r])
-  }
-  return ringFromPoints(pts)
-}
-
 export function makeEggShape(radius) {
   const steps = 96
   const width = 0.74
@@ -150,7 +100,7 @@ function shapeContainsRect(shape, halfW, halfH) {
     const y = -halfH + 2 * halfH * t
     samples.push([x, -halfH], [x, halfH], [-halfW, y], [halfW, y])
   }
-  // Interior grid catches concave indents (flower / star) better than edges alone.
+  // Interior grid catches concave indents better than edges alone.
   for (let iy = 0; iy <= 4; iy++) {
     for (let ix = 0; ix <= 4; ix++) {
       samples.push([-halfW + (2 * halfW * ix) / 4, -halfH + (2 * halfH * iy) / 4])
@@ -186,12 +136,6 @@ export function shapeForKind(kind, radius, aspect = 1) {
     }
     case 'hexagon':
       return makeHexagonShape(radius)
-    case 'heart':
-      return makeHeartShape(radius)
-    case 'flower':
-      return makeFlowerShape(radius)
-    case 'star':
-      return makeStarShape(radius)
     case 'egg':
       return makeEggShape(radius)
     case 'circle':

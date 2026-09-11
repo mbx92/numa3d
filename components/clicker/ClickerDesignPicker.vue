@@ -49,6 +49,7 @@ const { data: libraryFiles, refresh: refreshLibrary } = await useFetch('/api/lib
 const meshLibraryFiles = computed(() =>
   (libraryFiles.value || []).filter((file) => isMeshClickerFile(file))
 )
+const { toolLinkAttrs } = useStandaloneDisplay()
 const visibleBaseShapes = computed(() => (
   shapeMode.value === 'rect'
     ? baseShapes.filter((s) => TILE_BASE_SHAPE_IDS.includes(s.id))
@@ -224,7 +225,7 @@ async function selectGalleryMesh(event) {
       <span class="text-xs font-medium text-ink-700">{{ baseShapeLabel }}</span>
       <div
         class="grid gap-1 mt-1.5"
-        :class="shapeMode === 'rect' ? 'grid-cols-5' : 'grid-cols-4'"
+        :class="shapeMode === 'rect' ? 'grid-cols-3' : 'grid-cols-3 sm:grid-cols-6'"
       >
         <button
           v-for="s in visibleBaseShapes"
@@ -269,7 +270,7 @@ async function selectGalleryMesh(event) {
             class="flex items-center gap-2"
           >
             <span class="w-6 text-center text-xs font-bold text-ink-800">{{ ch }}</span>
-            <div class="grid flex-1 grid-cols-5 gap-1">
+            <div class="grid flex-1 grid-cols-3 gap-1">
               <button
                 v-for="s in visibleBaseShapes"
                 :key="s.id"
@@ -402,7 +403,7 @@ async function selectGalleryMesh(event) {
       </p>
       <p class="text-[10px] text-ink-500">
         Mau potong model jadi base + lid (contoh hamburger)? Pakai
-        <NuxtLink to="/tools/mesh-clicker" class="text-accent-600 hover:text-accent-700 font-medium">Mesh → Clicker</NuxtLink>.
+        <NuxtLink to="/tools/mesh-clicker" v-bind="toolLinkAttrs" class="text-accent-600 hover:text-accent-700 font-medium">Mesh → Clicker</NuxtLink>.
       </p>
 
       <label class="block space-y-1">

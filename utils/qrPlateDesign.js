@@ -1,0 +1,142 @@
+import QRCode from 'qrcode/lib/core/qrcode.js'
+import { QR_PLATE_ICONS } from './qrPlateIcons.js'
+
+export const QR_PLATE_DEFAULTS = {
+  label: 'QR Plate', contentType: 'url', content: 'https://example.com',
+  wifiSsid: '', wifiPassword: '', wifiSecurity: 'WPA', wifiHidden: false,
+  errorCorrection: 'M', qrSizeMm: 64, marginMm: 4, cornerRadiusMm: 4,
+  baseThicknessMm: 2.4, detailHeightMm: 0.6, surfaceMode: 'raised',
+  caption: '', captionHeightMm: 6, fontUrl: '/fonts/Roboto-Bold.woff', iconId: 'globe', iconSizeMm: 14,
+  mounting: 'none', holeDiameterMm: 4, standStyle: 'slot', standWidthMm: 0, standDepthMm: 40,
+  standThicknessMm: 5, standHeightMm: 28, standTiltDeg: 15, standClearanceMm: 0.35,
+  colors: { frame: '#172a46', base: '#ffffff', detail: '#172a46', icon: '#ffffff' }
+}
+
+function number(value, fallback, min, max, label) {
+  const n = value == null ? fallback : Number(value)
+  if (value === '' || !Number.isFinite(n) || n < min || n > max) throw new Error(`${label} harus ${min}–${max} mm`)
+  return n
+}
+function choice(value, fallback, choices, label) {
+  const selected = value ?? fallback
+  if (!choices.includes(selected)) throw new Error(`${label} tidak valid`)
+  return selected
+}
+const wifiEscape = (value) => String(value).replace(/[\\;,:\"]/g, '\\$&')
+
+export function qrPayload(opts) {
+  const type = choice(opts.contentType, 'url', ['url', 'text', 'wifi'], 'Jenis QR')
+  if (type === 'wifi') {
+    const ssid = String(opts.wifiSsid ?? '')
+    const password = String(opts.wifiPassword ?? '')
+    if (!ssid.trim()) throw new Error('Isi nama jaringan Wi-Fi')
+    if (new TextEncoder().encode(ssid).length > 32) throw new Error('Nama Wi-Fi maksimal 32 byte')
+    const security = choice(opts.wifiSecurity, 'WPA', ['WPA', 'WEP', 'nopass'], 'Keamanan Wi-Fi')
+    if (security !== 'nopass' && !password) throw new Error('Isi kata sandi Wi-Fi')
+    return `WIFI:T:${security};S:${wifiEscape(ssid)};${security !== 'nopass' ? `P:${wifiEscape(password)};` : ''}H:${opts.wifiHidden === true ? 'true' : 'false'};;`
+  }
+  const content = String(opts.content ?? '')
+  if (!content.trim()) throw new Error('Isi konten QR terlebih dahulu')
+  if (type === 'url') {
+    const trimmed = content.trim()
+    try {
+      const url = new URL(trimmed)
+      if (!['https:', 'http:'].includes(url.protocol)) throw new Error()
+    } catch { throw new Error('Gunakan tautan lengkap dengan https:// atau http://') }
+    return trimmed
+  }
+  return content
+}
+
+function luminance(color) {
+  return [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16) / 255)
+    .map((v) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0)
+}
+
+export function normalizeQrPlateOptions(input = {}) {
+  const d = QR_PLATE_DEFAULTS
+  const opts = { ...d, ...input, colors: { ...d.colors, ...input.colors } }
+  for (const key of ['frame', 'base', 'detail', 'icon']) if (!/^#[\da-f]{6}$/i.test(opts.colors[key])) throw new Error('Warna harus berupa HEX enam digit')
+  const light = luminance(opts.colors.base), dark = luminance(opts.colors.detail)
+  if (light <= dark || (light + 0.05) / (dark + 0.05) < 4.5) throw new Error('Pilih dasar terang dan QR gelap dengan kontras lebih kuat')
+  for (const [key, min, max, label] of [
+    ['qrSizeMm', 25, 180, 'Ukuran QR'], ['marginMm', 2, 12, 'Margin pelat'],
+    ['cornerRadiusMm', 0, 12, 'Radius sudut'], ['baseThicknessMm', 1.2, 8, 'Ketebalan dasar'],
+    ['detailHeightMm', 0.2, 2, 'Ketebalan detail'], ['captionHeightMm', 3, 14, 'Tinggi tulisan'],
+    ['holeDiameterMm', 3, 8, 'Diameter lubang'], ['iconSizeMm', 8, 26, 'Ukuran ikon'],
+    ['standWidthMm', 0, 220, 'Lebar alas'], ['standDepthMm', 28, 90, 'Kedalaman alas'],
+    ['standThicknessMm', 3, 12, 'Ketebalan alas'], ['standHeightMm', 12, 70, 'Tinggi tiang'],
+    ['standClearanceMm', 0.15, 1, 'Kelonggaran slot']
+  ]) opts[key] = number(opts[key], d[key], min, max, label)
+  opts.mounting = choice(opts.mounting, 'none', ['none', 'keyring', 'wall'], 'Pemasangan')
+  opts.standStyle = choice(opts.standStyle, 'slot', ['none', 'slot', 'post', 'twist'], 'Dudukan')
+  if (opts.mounting !== 'none') opts.standStyle = 'none'
+  opts.standTiltDeg = number(opts.standTiltDeg, 15, 0, 20, 'Kemiringan (derajat)')
+  opts.iconId = choice(opts.iconId, 'globe', QR_PLATE_ICONS.map((icon) => icon.id), 'Ikon')
+  opts.surfaceMode = choice(opts.surfaceMode, 'raised', ['raised', 'inlay'], 'Permukaan')
+  opts.errorCorrection = choice(opts.errorCorrection, 'M', ['L', 'M', 'Q', 'H'], 'Koreksi error')
+  if (opts.surfaceMode === 'inlay' && opts.baseThicknessMm - opts.detailHeightMm < 0.8) throw new Error('Inlay harus menyisakan dasar minimal 0,8 mm')
+  opts.caption = String(opts.caption ?? '').trim()
+  if (opts.caption.length > 60 || /[\r\n\u0000-\u001f]/.test(opts.caption)) throw new Error('Tulisan maksimal 60 karakter dalam satu baris')
+  opts.label = String(opts.label || 'QR Plate').replace(/[\u0000-\u001f]/g, ' ').slice(0, 64)
+  return opts
+}
+
+/** QR and every output use this same matrix. Four quiet modules are reserved. */
+export function createQrPlateDesign(input = {}) {
+  const opts = normalizeQrPlateOptions(input)
+  const payload = qrPayload(opts)
+  if (new TextEncoder().encode(payload).length > 1024) throw new Error('Konten QR terlalu panjang (maksimal 1.024 byte)')
+  const code = QRCode.create(payload, { errorCorrectionLevel: opts.errorCorrection })
+  const size = code.modules.size
+  if (size > 97) throw new Error('QR terlalu padat untuk pelat ini — pendekkan konten atau turunkan koreksi error')
+  const moduleMm = opts.qrSizeMm / (size + 8)
+  if (moduleMm < 0.6) throw new Error(`Modul QR terlalu kecil. Perbesar ukuran QR menjadi minimal ${Math.ceil((size + 8) * 0.6)} mm`)
+  const matrix = Array.from({ length: size }, (_, row) => Array.from({ length: size }, (_, col) => Number(code.modules.get(row, col))))
+  // Runs reduce boolean work while preserving the exact square module grid.
+  const runs = []
+  for (let row = 0; row < size; row++) for (let col = 0; col < size;) {
+    if (!matrix[row][col]) { col++; continue }
+    const start = col
+    while (col < size && matrix[row][col]) col++
+    runs.push([start, row, col - start])
+  }
+  const standEnabled = opts.standStyle !== 'none'
+  const insertionBandMm = standEnabled ? 12 : 0
+  const iconBandMm = opts.iconId === 'none' ? 0 : opts.iconSizeMm + 8
+  const captionBandMm = (opts.caption ? opts.captionHeightMm + 5 : 0) + iconBandMm + insertionBandMm
+  const mountBandMm = opts.mounting === 'none' ? 0 : opts.holeDiameterMm + 6
+  const widthMm = opts.qrSizeMm + opts.marginMm * 2
+  const depthMm = opts.qrSizeMm + opts.marginMm * 2 + captionBandMm + mountBandMm
+  const qrCenterY = (captionBandMm - mountBandMm) / 2
+  const iconCenterY = -depthMm / 2 + opts.marginMm + insertionBandMm + (opts.caption ? opts.captionHeightMm + 5 : 0) + iconBandMm / 2
+  const captionCenterY = -depthMm / 2 + opts.marginMm + insertionBandMm + (opts.caption ? (opts.captionHeightMm + 5) / 2 : 0)
+  const standWidthMm = opts.standWidthMm || Math.max(widthMm + 8, 50)
+  if (standEnabled && standWidthMm < Math.min(widthMm * 0.7, 60)) throw new Error('Alas terlalu sempit untuk pelat — perbesar lebar alas')
+  const tiltDeg = opts.standStyle === 'slot' ? opts.standTiltDeg : 0
+  const stand = standEnabled ? {
+    widthMm: standWidthMm, depthMm: opts.standDepthMm, thicknessMm: opts.standThicknessMm,
+    tiltDeg, columnHeightMm: opts.standStyle === 'slot' ? 0 : opts.standHeightMm,
+    cradleWidthMm: Math.min(widthMm * 0.6, 42), cradleDepthMm: opts.baseThicknessMm + opts.standClearanceMm + 8 + 10 * Math.tan(tiltDeg * Math.PI / 180),
+    slotFloorZ: opts.standThicknessMm + (opts.standStyle === 'slot' ? 0 : opts.standHeightMm),
+    cradleHeightMm: 10
+  } : null
+  const holes = opts.mounting === 'none' ? [] : opts.mounting === 'keyring'
+    ? [[0, depthMm / 2 - mountBandMm / 2]]
+    : [[-widthMm / 2 + opts.marginMm + opts.holeDiameterMm / 2, depthMm / 2 - mountBandMm / 2], [widthMm / 2 - opts.marginMm - opts.holeDiameterMm / 2, depthMm / 2 - mountBandMm / 2]]
+  return {
+    opts, payload, matrix, runs, size, version: code.version, moduleMm,
+    widthMm, depthMm, captionBandMm, mountBandMm, qrCenterY, holes, stand,
+    insertionBandMm, iconBandMm, iconCenterY, captionCenterY,
+    // Keep rounded corners outside mounting holes and the reserved QR square.
+    cornerRadiusMm: Math.min(opts.cornerRadiusMm, opts.marginMm, widthMm / 2, depthMm / 2),
+    warnings: moduleMm < 0.8 ? ['Modul QR di bawah 0,8 mm. Periksa resolusi cetak dan hasil pemindaian.'] : []
+  }
+}
+
+export function qrPlateSvg(design) {
+  const { size, runs, opts } = design
+  const path = runs.map(([x, y, width]) => `M${x + 4} ${y + 4}h${width}v1h-${width}z`).join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${opts.qrSizeMm}mm" height="${opts.qrSizeMm}mm" viewBox="0 0 ${size + 8} ${size + 8}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="${opts.colors.base}"/><path d="${path}" fill="${opts.colors.detail}"/></svg>`
+}

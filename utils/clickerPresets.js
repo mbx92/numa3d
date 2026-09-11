@@ -16,14 +16,11 @@ export const BASE_SHAPES = [
   { id: 'square', label: 'Kotak', description: 'Persegi dengan sudut membulat' },
   { id: 'rect', label: 'Persegi panjang', description: 'Proporsi mengikuti desain' },
   { id: 'hexagon', label: 'Heksagon', description: 'Enam sisi' },
-  { id: 'heart', label: 'Hati', description: 'Bentuk hati' },
-  { id: 'flower', label: 'Bunga', description: 'Siluet bunga berpetal' },
-  { id: 'star', label: 'Bintang', description: 'Bintang 5 sudut' },
   { id: 'egg', label: 'Telur', description: 'Oval telur' }
 ]
 
 export const BASE_SHAPE_IDS = BASE_SHAPES.map((shape) => shape.id)
-export const TILE_BASE_SHAPE_IDS = ['circle', 'square', 'rect', 'heart', 'flower']
+export const TILE_BASE_SHAPE_IDS = ['circle', 'square', 'rect']
 
 export const KEYRING_POSITIONS = [
   { id: 'left', label: 'Kiri', angleDeg: 270 },
@@ -84,24 +81,14 @@ export const SWITCH_PRESET_LIST = Object.values(SWITCH_PRESETS)
 
 export const SWITCH_PREVIEW_MODELS = [
   {
-    id: 'cherry_mx_glb',
-    name: 'Cherry MX detail (GLB)',
-    description: 'Model detail satu switch dari file cherry_mx_switches.glb untuk preview perakitan.',
-    modelUrl: '/assets/clicker/switch-preview/cherry_mx_single.glb',
-    modelNodeNames: [],
-    attribution: 'Model: BlackCube, Cherry MX Switches, CC-BY-4.0'
-  },
-  {
     id: 'simple',
     name: 'Simple box',
-    description: 'Preview ringan berbentuk housing dan stem sederhana.',
-    modelUrl: null
+    description: 'Preview ringan berbentuk housing dan stem sederhana.'
   },
   {
     id: 'hidden',
     name: 'Tanpa switch',
     description: 'Sembunyikan model switch di preview perakitan. Socket dan stem cetak tidak berubah.',
-    modelUrl: null,
     hide: true
   }
 ]
@@ -133,7 +120,7 @@ export const CLICKER_DEFAULTS = {
   maxSizeMm: 40,
   displayMode: 'preview',
   switchPresetId: 'cherry_mx',
-  switchPreviewModelId: 'cherry_mx_glb',
+  switchPreviewModelId: 'simple',
   fitToleranceMm: 0.15,
   slipToleranceMm: 0.4,
   stemFitPct: 0,
@@ -143,7 +130,7 @@ export const CLICKER_DEFAULTS = {
   imageMarginMm: 1.2,
   borderWidthMm: 2.6,
   topThicknessMm: 1.5,
-  imageDepthMm: 0.8,
+  imageDepthMm: 2,
   skirtThicknessMm: 1.4,
   outerWidthMm: 35,
   outerDepthMm: 35,
@@ -257,8 +244,13 @@ export function resolveClickerOptions(userOpts = {}) {
     : (userOpts.shapeMode === 'rect' ? 'square' : CLICKER_DEFAULTS.baseShape)
 
   const isText = userOpts.shapeMode === 'text'
-  const imageMarginMm = Number(userOpts.imageMarginMm) || (isText ? 2.5 : CLICKER_DEFAULTS.imageMarginMm)
+  const imageMarginMm = userOpts.imageMarginMm != null && Number.isFinite(Number(userOpts.imageMarginMm))
+    ? Math.max(0, Number(userOpts.imageMarginMm))
+    : (isText ? 2.5 : CLICKER_DEFAULTS.imageMarginMm)
   const borderWidthMm = Number(userOpts.borderWidthMm) || (isText ? 3.5 : CLICKER_DEFAULTS.borderWidthMm)
+  const imageDepthMm = Number.isFinite(Number(userOpts.imageDepthMm))
+    ? Math.max(0.4, Math.min(4, Number(userOpts.imageDepthMm)))
+    : CLICKER_DEFAULTS.imageDepthMm
 
   return {
     ...CLICKER_DEFAULTS,
@@ -322,6 +314,7 @@ export function resolveClickerOptions(userOpts = {}) {
     travelMm,
     capProudMm,
     imageMarginMm,
+    imageDepthMm,
     borderWidthMm,
     outerHeightMm,
     housingPocketMm,

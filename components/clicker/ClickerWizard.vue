@@ -51,6 +51,7 @@ const draft = reactive({
   topRimMm: CLICKER_DEFAULTS.topRimMm,
   wallThicknessMm: CLICKER_DEFAULTS.wallThicknessMm,
   lidHeightMm: CLICKER_DEFAULTS.lidHeightMm,
+  imageDepthMm: CLICKER_DEFAULTS.imageDepthMm,
   colors: { ...CLICKER_DEFAULTS.colors }
 })
 
@@ -167,6 +168,7 @@ function submit() {
     topRimMm: Number(draft.topRimMm),
     wallThicknessMm: Number(draft.wallThicknessMm),
     lidHeightMm: Number(draft.lidHeightMm),
+    imageDepthMm: Number(draft.imageDepthMm),
     colors: { ...draft.colors }
   })
 }
@@ -284,6 +286,11 @@ function submit() {
           <label class="block space-y-1.5">
             <span class="text-xs font-medium text-ink-700">Tinggi lid</span>
             <input v-model.number="draft.lidHeightMm" type="number" min="6" max="20" step="0.5" class="input-num w-full" />
+          </label>
+          <label v-if="draft.shapeMode !== 'mesh'" class="block space-y-1.5">
+            <span class="text-xs font-medium text-ink-700">Ketebalan teks/SVG</span>
+            <input v-model.number="draft.imageDepthMm" type="number" min="0.4" max="4" step="0.1" class="input-num w-full" />
+            <span class="text-[10px] text-ink-400">Lapisan timbul pada lid, default 2 mm</span>
           </label>
           <div class="grid grid-cols-3 gap-3">
             <label class="block space-y-1.5">

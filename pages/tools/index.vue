@@ -2,11 +2,14 @@
 import {
   SparklesIcon,
   ArrowRightIcon,
+  ArrowTopRightOnSquareIcon,
   ArrowDownTrayIcon,
   CursorArrowRaysIcon,
   LightBulbIcon,
   CodeBracketIcon,
-  CubeTransparentIcon
+  CubeTransparentIcon,
+  PhotoIcon,
+  QrCodeIcon
 } from '@heroicons/vue/24/outline'
 
 definePageMeta({
@@ -15,6 +18,13 @@ definePageMeta({
 })
 
 const tools = [
+  {
+    to: '/tools/qr-plate',
+    title: 'QR Plate Generator',
+    description: 'Pelat QR berbingkai dengan pilihan ikon, tulisan, dan tiga model alas meja. Ekspor 3MF, STL, GLB, dan OpenSCAD.',
+    icon: markRaw(QrCodeIcon),
+    tags: ['QR', '3MF', 'STL', 'SCAD']
+  },
   {
     to: '/tools/code-studio',
     title: 'Code Studio',
@@ -58,8 +68,17 @@ const tools = [
     description: 'Cari & unduh font Google Fonts ke server untuk dipakai di generator keychain dan tools lain.',
     icon: markRaw(ArrowDownTrayIcon),
     tags: ['Google Fonts', 'TTF', 'Keychain']
+  },
+  {
+    to: '/tools/png-to-svg',
+    title: 'PNG → SVG',
+    description: 'Ubah logo PNG/JPG jadi path vektor — unduh SVG lalu unggah ke Keychain, Clicker, atau Lightbox.',
+    icon: markRaw(PhotoIcon),
+    tags: ['Vektor', 'SVG', 'Logo']
   }
 ]
+
+const { openToolInNewTab, toolLinkAttrs } = useStandaloneDisplay()
 </script>
 
 <template>
@@ -74,6 +93,7 @@ const tools = [
         v-for="tool in tools"
         :key="tool.to"
         :to="tool.to"
+        v-bind="toolLinkAttrs"
         class="panel p-4 flex flex-col gap-3 transition-colors hover:border-accent-300 hover:bg-accent-50/40 group"
       >
         <div class="flex items-start gap-3">
@@ -107,7 +127,8 @@ const tools = [
           </div>
           <span class="inline-flex items-center gap-1 text-xs font-medium text-accent-600">
             Buka
-            <ArrowRightIcon class="w-3.5 h-3.5" />
+            <ArrowTopRightOnSquareIcon v-if="openToolInNewTab" class="w-3.5 h-3.5" />
+            <ArrowRightIcon v-else class="w-3.5 h-3.5" />
           </span>
         </div>
       </NuxtLink>
