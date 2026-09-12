@@ -10,8 +10,10 @@ import { parseSvgToShapes, serializeShapes } from './svgToShapes.js'
 
 let plateWorker = null
 let plateJob = 0
+let stopPlateJob = null
 
 export function disposeQrPlateWorker() {
+  stopPlateJob?.(new DOMException('Generate dibatalkan', 'AbortError'))
   plateWorker?.terminate()
   plateWorker = null
   plateJob += 1
@@ -20,13 +22,15 @@ export function disposeQrPlateWorker() {
 function getPlateWorker() {
   if (plateWorker) return plateWorker
   plateWorker = new Worker(new URL('../workers/qrPlate.worker.js', import.meta.url), { type: 'module' })
-  plateWorker.addEventListener('error', () => { plateWorker = null })
   return plateWorker
 }
 
 function runQrPlateJob(payload, { signal, timeoutMs = 60000 } = {}) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new DOMException('Generate dibatalkan', 'AbortError'))
+    // Only the newest preview is useful. Aborting a Promise alone leaves its
+    // synchronous WASM calculation running and delays all subsequent edits.
+    stopPlateJob?.(new DOMException('Generate diganti desain terbaru', 'AbortError'))
     const worker = getPlateWorker()
     const id = ++plateJob
     let settled = false
@@ -36,18 +40,32 @@ function runQrPlateJob(payload, { signal, timeoutMs = 60000 } = {}) {
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
       worker.removeEventListener('message', onMessage)
+      worker.removeEventListener('error', onError)
+      worker.removeEventListener('messageerror', onMessageError)
+      if (stopPlateJob === stop) stopPlateJob = null
       if (error) reject(error)
       else resolve(result)
     }
-    const onAbort = () => finish(new DOMException('Generate dibatalkan', 'AbortError'))
+    const stop = (error) => {
+      if (settled) return
+      worker.terminate()
+      if (plateWorker === worker) plateWorker = null
+      finish(error)
+    }
+    const onAbort = () => stop(new DOMException('Generate dibatalkan', 'AbortError'))
+    const onError = (event) => stop(new Error(event.message || 'Worker geometri gagal'))
+    const onMessageError = () => stop(new Error('Hasil geometri tidak dapat dibaca'))
     const onMessage = ({ data }) => {
       if (data?.id !== id) return
       if (data?.error) finish(new Error(data.error))
       else if (data?.result) finish(null, data.result)
       else finish(new Error('Respons worker tidak valid'))
     }
-    const timer = setTimeout(() => finish(new Error('Generate melewati 60 detik. Sederhanakan desain lalu coba lagi.')), timeoutMs)
+    const timer = setTimeout(() => stop(new Error('Generate melewati 60 detik. Sederhanakan desain lalu coba lagi.')), timeoutMs)
+    stopPlateJob = stop
     worker.addEventListener('message', onMessage)
+    worker.addEventListener('error', onError)
+    worker.addEventListener('messageerror', onMessageError)
     signal?.addEventListener('abort', onAbort, { once: true })
     try { worker.postMessage({ id, ...payload }) } catch (error) { finish(error) }
   })
@@ -93,7 +111,7 @@ export function buildQrPlateResult(raw) {
     assemblyPreviewParts: assembly, printPreviewParts: printParts,
     get3mfBlob() {
       usable()
-      if (!cache.has('3mf')) cache.set('3mf', new Blob([printGroupsTo3mfBuffer(groups, slug)], { type: 'model/3mf' }))
+      if (!cache.has('3mf')) cache.set('3mf', new Blob([printGroupsTo3mfBuffer(groups, slug, undefined, { processPreset: 'pla-detail-0.4' })], { type: 'model/3mf' }))
       return cache.get('3mf')
     },
     getStlZipBlob() {

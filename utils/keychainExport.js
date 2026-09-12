@@ -2,6 +2,7 @@
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { layoutPrintGroups, PRINT_PLATE } from './printPlateLayout.js'
+import { slicerProjectSettings } from './slicerProjectSettings.js'
 
 const CRC_TABLE = new Uint32Array(256)
 for (let i = 0; i < 256; i++) {
@@ -275,7 +276,7 @@ export function partsToMultiSolidStlBuffer(parts) {
 
 /** 3MF — objek terpisah + warna material (Bambu Studio / Orca Slicer). */
 export function partsTo3mfBuffer(parts, modelName = 'Numa3D', options = {}) {
-  const { assembly = true, printGroups, plate = PRINT_PLATE } = options
+  const { assembly = true, printGroups, plate = PRINT_PLATE, processPreset = null } = options
   const meshParts = meshExportParts(parts)
   if (!meshParts.length) throw new Error('Tidak ada mesh untuk export 3MF')
 
@@ -371,7 +372,8 @@ ${buildObjects.map((obj, i) => `<model_instance><metadata key="object_id" value=
       filament_settings_id: baseEntries.map(() => ''),
       printable_area: [`0x0`, `${plate.width}x0`, `${plate.width}x${plate.depth}`, `0x${plate.depth}`],
       printable_height: String(plate.height),
-      filament_colour: baseEntries.map((b) => b.displaycolor.slice(0, 7))
+      filament_colour: baseEntries.map((b) => b.displaycolor.slice(0, 7)),
+      ...slicerProjectSettings(processPreset, baseEntries.length)
     })) }
   ] : []
   return createZip([
@@ -397,10 +399,10 @@ ${buildObjects.map((obj, i) => `<model_instance><metadata key="object_id" value=
 }
 
 /** One OrcaSlicer plate; groups are physical parts, volumes are their colors. */
-export function printGroupsTo3mfBuffer(groups, modelName = 'Numa3D', plate = PRINT_PLATE) {
+export function printGroupsTo3mfBuffer(groups, modelName = 'Numa3D', plate = PRINT_PLATE, options = {}) {
   const laidOut = layoutPrintGroups(groups, plate)
   try {
-    return partsTo3mfBuffer(laidOut.flatMap((group) => group.parts), modelName, { printGroups: laidOut, plate })
+    return partsTo3mfBuffer(laidOut.flatMap((group) => group.parts), modelName, { ...options, printGroups: laidOut, plate })
   } finally {
     for (const group of laidOut) for (const part of group.parts) part.geometry.dispose()
   }

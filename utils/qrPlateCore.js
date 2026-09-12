@@ -6,24 +6,15 @@ import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import { qrIconContours } from './qrPlateIcons.js'
 import { buildQrPlateStand } from './qrPlateStand.js'
 import { deserializeShapes } from './svgToShapes.js'
+import { packManifoldMesh } from './packManifoldMesh.js'
 
-function packSolid(solid, track) {
+function packSolid(solid) {
   if (solid.status() !== 'NoError' || solid.volume() <= 0) throw new Error('Geometri pelat tidak valid')
-  const mesh = track(solid.calculateNormals(0, 35)).getMesh()
-  const stride = mesh.numProp
-  const count = mesh.vertProperties.length / stride
-  const positions = new Float32Array(count * 3), normals = new Float32Array(count * 3)
-  for (let i = 0; i < count; i++) {
-    for (let j = 0; j < 3; j++) {
-      positions[i * 3 + j] = mesh.vertProperties[i * stride + j]
-      normals[i * 3 + j] = mesh.vertProperties[i * stride + j + 3]
-    }
-  }
+  const mesh = solid.getMesh()
   if (mesh.triVerts.length > 600000) throw new Error('Model terlalu kompleks — pendekkan konten QR')
   // Preserve the kernel's vertex pairing: diagonal QR cells can meet at an edge.
   // Re-welding solely by coordinates can change the topology at those junctions.
-  return { positions, normals, indices: new Uint32Array(mesh.triVerts),
-    mergeFromVert: new Uint32Array(mesh.mergeFromVert), mergeToVert: new Uint32Array(mesh.mergeToVert) }
+  return packManifoldMesh(mesh)
 }
 
 export function textCaptionRings(text, fontBuffer) {
@@ -101,6 +92,24 @@ function thickenSection(section, track, strokeMm) {
   return track(section.offset(grow, 'Round', 2, 32))
 }
 
+let lastLogoDetail = null
+function checkLogoDetail(section, track, warnings, cacheKey) {
+  // A 0.4 mm round opening estimates how much artwork lies in narrow regions.
+  // This is a geometric screening heuristic, not a simulation of Arachne or
+  // a minimum-wall measurement: sharp corners also contribute to the loss.
+  if (lastLogoDetail?.key !== cacheKey) {
+    const inset = track(section.offset(-0.2, 'Round', 2, 32))
+    const restored = track(inset.offset(0.2, 'Round', 2, 32))
+    // An opening is a subset of the original. Compare areas directly instead
+    // of another expensive boolean operation solely to obtain the difference.
+    const area = section.area()
+    lastLogoDetail = { key: cacheKey, narrow: area - restored.area() > area * 0.05 }
+  }
+  if (lastLogoDetail.narrow) {
+    warnings.push('Logo memiliki detail sempit yang berisiko berubah atau hilang saat slicing nozzle 0,4 mm (estimasi geometri). Perbesar logo atau tambah ketebalan sedikit, lalu periksa jalur cetak di slicer.')
+  }
+}
+
 function placeHeaderLogo(shapesData, sizeMm, originX, originY, maxWidthMm) {
   if (!shapesData?.length) return { rings: [], aspect: 0 }
   const shapes = deserializeShapes(shapesData)
@@ -117,7 +126,9 @@ function placeHeaderLogo(shapesData, sizeMm, originX, originY, maxWidthMm) {
     (x - cx) * scale + originX,
     (y - cy) * scale + originY
   ]))
-  return { rings: positiveRings(rings), aspect: bounds.width / bounds.height }
+  // shapesToRings already gives holes the opposite winding to the exterior.
+  // Reversing every ring to positive would fill all SVG counters/ornaments.
+  return { rings, aspect: bounds.width / bounds.height }
 }
 
 export function buildQrPlate(wasm, input, fontBuffer = null) {
@@ -183,7 +194,14 @@ export function buildQrPlate(wasm, input, fontBuffer = null) {
     )
     design.headerLogoRings = headerLogo
     if (headerLogo.rings.length) {
-      addDecoration(thickenSection(track(new CrossSection(headerLogo.rings, 'NonZero')), track, opts.headerLogoStrokeMm))
+      const section = track(new CrossSection(headerLogo.rings, 'NonZero'))
+      // Resolve overlapping SVG elements once for both mesh and SCAD. The
+      // latter uses even/odd polygon paths, which need non-overlapping contours.
+      headerLogo.rings = section.toPolygons()
+      const artwork = thickenSection(section, track, opts.headerLogoStrokeMm)
+      const detailKey = JSON.stringify([opts.headerLogoShapes, Math.min(opts.headerLogoSizeMm, headerMaxWidth), opts.headerLogoStrokeMm])
+      checkLogoDetail(artwork, track, design.warnings, detailKey)
+      addDecoration(artwork)
     }
     const firstCaption = codes.length === 1 ? (codes[0]?.captionRings || { rings: [], aspect: 0 }) : { rings: [], aspect: 0 }
     if (codes.length === 1 && codes[0]?.icon) design.icon = codes[0].icon
@@ -219,13 +237,13 @@ export function buildQrPlate(wasm, input, fontBuffer = null) {
     return {
       design: { ...design, caption: firstCaption },
       parts: [
-        { name: 'Bingkai pelat', role: 'frame', group: 'plate', color: opts.colors.frame, geometry: packSolid(baseSolid, track) },
-        { name: 'Panel QR terang', role: 'base', group: 'plate', color: opts.colors.base, geometry: packSolid(panelSolid, track) },
-        { name: 'Pola QR', role: 'detail', group: 'plate', color: opts.colors.detail, geometry: packSolid(detailSolid, track) },
-        ...(decorationSolid ? [{ name: 'Ikon dan tulisan', role: 'icon', group: 'plate', color: opts.colors.icon, geometry: packSolid(decorationSolid, track) }] : []),
-        ...(stand ? [{ name: 'Alas dudukan', role: 'stand', group: 'stand', color: opts.colors.frame, geometry: packSolid(stand, track) }] : [])
+        { name: 'Bingkai pelat', role: 'frame', group: 'plate', color: opts.colors.frame, geometry: packSolid(baseSolid) },
+        { name: 'Panel QR terang', role: 'base', group: 'plate', color: opts.colors.base, geometry: packSolid(panelSolid) },
+        { name: 'Pola QR', role: 'detail', group: 'plate', color: opts.colors.detail, geometry: packSolid(detailSolid) },
+        ...(decorationSolid ? [{ name: 'Ikon dan tulisan', role: 'icon', group: 'plate', color: opts.colors.icon, geometry: packSolid(decorationSolid) }] : []),
+        ...(stand ? [{ name: 'Alas dudukan', role: 'stand', group: 'stand', color: opts.colors.frame, geometry: packSolid(stand) }] : [])
       ],
-      geometry: packSolid(merged, track),
+      geometry: packSolid(merged),
       dimensions: { widthMm: bbox.max[0] - bbox.min[0], depthMm: bbox.max[1] - bbox.min[1], heightMm: bbox.max[2] - bbox.min[2] },
       volumeMm3: merged.volume() + (stand?.volume() || 0), triangles: merged.numTri() + (stand?.numTri() || 0), warnings: design.warnings
     }

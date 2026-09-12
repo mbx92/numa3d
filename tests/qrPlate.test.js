@@ -81,7 +81,19 @@ test('invalid, unreadable and unsupported designs are rejected before mesh work'
     { plateLayout: 'wifi-whatsapp', wifiSsid: 'Cafe', wifiPassword: 'secret' },
     { plateLayout: 'desk' }
   ]) assert.throws(() => createQrPlateDesign(options), undefined, JSON.stringify(options))
-  assert.equal(createQrPlateDesign({ mounting: 'wall' }).stand, null)
+  const wall = createQrPlateDesign({ mounting: 'wall' })
+  const keyring = createQrPlateDesign({ mounting: 'keyring' })
+  assert.equal(wall.stand, null)
+  assert.equal(wall.holes.length, 4)
+  assert.equal(keyring.holes.length, 1)
+  assert.ok(wall.depthMm > keyring.depthMm)
+  const [topLeft, topRight, bottomLeft, bottomRight] = wall.holes
+  assert.ok(topLeft[1] > 0 && topRight[1] > 0)
+  assert.ok(bottomLeft[1] < 0 && bottomRight[1] < 0)
+  assert.equal(topLeft[0], bottomLeft[0])
+  assert.equal(topRight[0], bottomRight[0])
+  assert.equal(topLeft[1], topRight[1])
+  assert.equal(bottomLeft[1], bottomRight[1])
   const svg = qrPlateSvg(createQrPlateDesign())
   assert.match(svg, /shape-rendering="crispEdges"/)
   assert.ok(!svg.includes('example.com'))
@@ -151,6 +163,10 @@ test('every icon, caption and mounting mode yields a closed connected plate with
       connected(merged)
       assert.ok(Math.abs(colors.reduce((sum,s) => sum+s.volume(),0) - merged.volume()) < 0.02, 'colors must not overlap')
       assert.equal(scanMesh(raw), raw.design.payload)
+      if (raw.design.opts.mounting === 'wall') {
+        assert.equal(raw.design.holes.length, 4)
+        assert.match(qrPlateScad(raw.design), /for \(y = \[depth\/2-mount_band\/2, -depth\/2\+mount_band\/2\]\)/)
+      }
     } finally { merged.delete(); colors.forEach((s) => s.delete()) }
   }
 })
@@ -215,6 +231,34 @@ test('logo and caption stroke thicken the decoration mesh and SCAD offset', () =
   assert.match(scad, /offset\(r=d\/2/)
 })
 
+test('uploaded logos keep holes, nested islands and overlapping fills in mesh and SCAD at 28 mm', () => {
+  const sources = [
+    { body: '<path fill-rule="evenodd" d="M0 0H40V40H0Z M10 10H30V30H10Z M17 17H23V23H17Z"/>', area: 1236 },
+    { body: '<g transform="translate(40 0) scale(-1 1)"><path fill="none" stroke="black" stroke-width="0.3" d="M1 1H39V39H1Z"/></g>', area: 45.6, span: 38.3 },
+    { body: '<path fill="red" fill-rule="evenodd" d="M0 0H40V40H0Z M10 10H30V30H10Z"/><rect x="20" y="15" width="20" height="10" fill="blue"/>', area: 1300 }
+  ]
+  for (const { body, area, span = 40 } of sources) for (const surfaceMode of ['raised', 'inlay']) {
+    const headerLogoShapes = serializeShapes(parseSvgToShapes(`<svg xmlns="http://www.w3.org/2000/svg">${body}</svg>`))
+    const raw = buildQrPlate(wasm, { headerLogoShapes, headerLogoSizeMm: 28, headerLogoStrokeMm: 0,
+      iconId: 'none', standStyle: 'none', surfaceMode })
+    const artwork = solid(raw.parts.find((part) => part.role === 'icon').geometry)
+    const expectedArea = area * (28 / span) ** 2
+    try { assert.ok(Math.abs(artwork.volume() / raw.design.opts.detailHeightMm - expectedArea) < 0.01, `artwork area ${artwork.volume() / raw.design.opts.detailHeightMm}, expected ${expectedArea}, source ${body}`) }
+    finally { artwork.delete() }
+    assert.equal(raw.warnings.some((warning) => warning.startsWith('Logo memiliki detail sempit')), span === 38.3)
+    const source = qrPlateScad(raw.design)
+    const points = JSON.parse(source.match(/^header_logo_points = (.*);$/m)[1])
+    const paths = JSON.parse(source.match(/^header_logo_paths = (.*);$/m)[1])
+    assert.match(source, /polygon\(points=header_logo_points, paths=header_logo_paths\)/)
+    // OpenSCAD polygon paths use even/odd nesting. Overlapping SVG fills must
+    // already be united, so their overlap does not become a hole in the source.
+    const scadSection = new wasm.CrossSection(paths.map((path) => path.map((i) => points[i])), 'EvenOdd')
+    try { assert.ok(Math.abs(scadSection.area() - expectedArea) < 0.01) }
+    finally { scadSection.delete() }
+    assert.equal(scanMesh(raw), raw.design.payload)
+  }
+})
+
 test('editing caption or QR text changes the exported mesh and SCAD contours', () => {
   const pay = buildQrPlate(wasm, { standStyle: 'none', iconId: 'none', caption: 'PAY', content: 'https://a.example/' }, font)
   const menu = buildQrPlate(wasm, { standStyle: 'none', iconId: 'none', caption: 'MENU', content: 'https://b.example/' }, font)
@@ -237,6 +281,10 @@ test('3MF separates stand from multipart plaque, STL keeps all parts and SCAD in
   try {
     const zip = unzipSync(new Uint8Array(await result.get3mfBlob().arrayBuffer()))
     const xml = strFromU8(zip['3D/3dmodel.model'])
+    const settings = JSON.parse(strFromU8(zip['Metadata/project_settings.config']))
+    assert.equal(settings.wall_generator, 'arachne')
+    assert.equal(settings.layer_height, '0.12')
+    assert.ok(settings.filament_type.every((type) => type === 'PLA'))
     assert.equal((xml.match(/<item /g) || []).length, 2)
     assert.equal((xml.match(/<component /g) || []).length, 5)
     assert.match(xml, /displaycolor="#172A46FF"/i)

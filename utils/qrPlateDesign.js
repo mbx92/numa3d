@@ -8,7 +8,7 @@ export const QR_PLATE_DEFAULTS = {
   errorCorrection: 'M', qrSizeMm: 64, qrGapMm: 6, marginMm: 4, cornerRadiusMm: 4,
   baseThicknessMm: 2.4, detailHeightMm: 0.6, surfaceMode: 'raised',
   caption: '', captionHeightMm: 6, captionStrokeMm: 0, fontUrl: '/fonts/Roboto-Bold.woff', iconId: 'globe', iconSizeMm: 14,
-  businessName: '', businessNameHeightMm: 6, headerLogoSvg: '', headerLogoSizeMm: 14, headerLogoGapMm: 3, headerLogoStrokeMm: 0.5,
+  businessName: '', businessNameHeightMm: 6, headerLogoSvg: '', headerLogoSizeMm: 14, headerLogoGapMm: 3, headerLogoStrokeMm: 0,
   mounting: 'none', holeDiameterMm: 4, standStyle: 'slot', standWidthMm: 0, standDepthMm: 40,
   standThicknessMm: 5, standHeightMm: 28, standTiltDeg: 15, standClearanceMm: 0.35,
   colors: { frame: '#172a46', base: '#ffffff', detail: '#172a46', icon: '#ffffff' }
@@ -139,13 +139,14 @@ function layoutColumns(opts, columns) {
   const headerGapMm = hasHeaderLogo && hasBusinessName ? opts.headerLogoGapMm : 0
   const headerBandMm = logoBandMm + nameBandMm + headerGapMm
   const mountBandMm = opts.mounting === 'none' ? 0 : opts.holeDiameterMm + 6
+  const bottomMountBandMm = opts.mounting === 'wall' ? mountBandMm : 0
   const count = columns.length
   const gapMm = count > 1 ? opts.qrGapMm : 0
   const widthMm = opts.qrSizeMm * count + gapMm * Math.max(0, count - 1) + opts.marginMm * 2
-  const depthMm = opts.qrSizeMm + opts.marginMm * 2 + captionBandMm + headerBandMm + mountBandMm
-  const qrCenterY = (captionBandMm - mountBandMm - headerBandMm) / 2
-  const iconCenterY = -depthMm / 2 + opts.marginMm + insertionBandMm + textBandMm + iconBandMm / 2
-  const captionCenterY = -depthMm / 2 + opts.marginMm + insertionBandMm + (hasCaption ? textBandMm / 2 : 0)
+  const depthMm = opts.qrSizeMm + opts.marginMm * 2 + captionBandMm + headerBandMm + mountBandMm + bottomMountBandMm
+  const qrCenterY = (captionBandMm + bottomMountBandMm - mountBandMm - headerBandMm) / 2
+  const iconCenterY = -depthMm / 2 + bottomMountBandMm + opts.marginMm + insertionBandMm + textBandMm + iconBandMm / 2
+  const captionCenterY = -depthMm / 2 + bottomMountBandMm + opts.marginMm + insertionBandMm + (hasCaption ? textBandMm / 2 : 0)
   const headerTop = depthMm / 2 - mountBandMm
   const headerLogoCenterY = hasHeaderLogo ? headerTop - logoBandMm / 2 : 0
   const businessNameCenterY = hasBusinessName ? headerTop - logoBandMm - headerGapMm - nameBandMm / 2 : 0
@@ -168,9 +169,12 @@ function layoutColumns(opts, columns) {
     slotFloorZ: opts.standThicknessMm + (opts.standStyle === 'slot' ? 0 : opts.standHeightMm),
     cradleHeightMm: 10
   } : null
+  const holeX = widthMm / 2 - opts.marginMm - opts.holeDiameterMm / 2
+  const holeTopY = depthMm / 2 - mountBandMm / 2
+  const holeBottomY = -depthMm / 2 + mountBandMm / 2
   const holes = opts.mounting === 'none' ? [] : opts.mounting === 'keyring'
-    ? [[0, depthMm / 2 - mountBandMm / 2]]
-    : [[-widthMm / 2 + opts.marginMm + opts.holeDiameterMm / 2, depthMm / 2 - mountBandMm / 2], [widthMm / 2 - opts.marginMm - opts.holeDiameterMm / 2, depthMm / 2 - mountBandMm / 2]]
+    ? [[0, holeTopY]]
+    : [[-holeX, holeTopY], [holeX, holeTopY], [-holeX, holeBottomY], [holeX, holeBottomY]]
   const warnings = []
   if (codes.some((code) => code.moduleMm < 0.8)) warnings.push('Modul QR di bawah 0,8 mm. Periksa resolusi cetak dan hasil pemindaian.')
   if (widthMm > 240) warnings.push('Pelat lebih dari 240 mm. Perkecil ukuran QR agar muat di plate cetak.')

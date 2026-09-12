@@ -72,6 +72,10 @@ const qrPreview = computed(() => draft.value.design ? `data:image/svg+xml;charse
 let controller = null, serial = 0
 const state = useGeneratorState(form, result, generateModel)
 const { runGenerate, ensureFreshResult, isFresh } = state
+const previewWarnings = computed(() => [...new Set([
+  ...(draft.value.design?.warnings || []),
+  ...(isFresh.value ? result.value?.warnings || [] : [])
+])])
 
 const previewKey = ref(0)
 
@@ -324,12 +328,14 @@ onBeforeUnmount(() => {
               label="Logo usaha (atas pelat)"
               hint="Di atas QR"
               size-label="Ukuran logo"
+              stroke-label="Tambahan ketebalan garis"
               :size-min="8"
               :size-max="36"
               :show-gap="!!form.businessName.trim()"
               show-stroke
             />
             <p class="text-xs text-ink-500">Logo dan nama usaha muncul di bagian atas pelat, di atas QR. Quiet zone QR tetap kosong.</p>
+            <p v-if="form.headerLogoSvg" class="text-xs text-ink-500">Ketebalan tambahan 0 mempertahankan bentuk SVG. Naikkan sedikit untuk garis tipis; celah dan lubang huruf ikut menyempit.</p>
             <p v-if="dual" class="text-xs text-ink-500">Ikon Wi-Fi dan WhatsApp dipasang otomatis di bawah masing-masing QR.</p>
             <div v-else class="grid grid-cols-3 gap-2" role="group" aria-label="Pilihan ikon">
               <button v-for="icon in icons" :key="icon.id" type="button" class="rounded-lg border p-2 text-xs flex flex-col items-center gap-1" :class="form.iconId === icon.id ? 'border-accent-500 bg-accent-50 ring-1 ring-accent-400' : 'border-ink-200 hover:bg-ink-50'" :aria-pressed="form.iconId === icon.id" @click="form.iconId = icon.id">
@@ -390,7 +396,7 @@ onBeforeUnmount(() => {
           </section>
           <p v-if="draft.error || error" class="panel p-3 bg-red-50 text-red-700 text-sm" role="alert">{{ draft.error || error }}</p>
           <p v-if="result && !isFresh" class="panel p-3 bg-amber-50 text-amber-800 text-sm" role="status">Teks atau pengaturan berubah. Model 3D sedang dibuat ulang agar unduhan ikut berubah.</p>
-          <p v-for="warning in draft.design?.warnings || []" :key="warning" class="panel p-3 bg-amber-50 text-amber-800 text-sm">{{ warning }}</p>
+          <p v-for="warning in previewWarnings" :key="warning" class="panel p-3 bg-amber-50 text-amber-800 text-sm">{{ warning }}</p>
 
           <section class="panel p-4 space-y-3" aria-label="Ekspor pelat QR">
             <h3 class="font-semibold">Ekspor model</h3>
@@ -401,12 +407,13 @@ onBeforeUnmount(() => {
                 <PlayIcon class="w-4 h-4" /> {{ generating ? 'Membentuk pelat…' : 'Generate 3D' }}
               </button>
               <select v-model="format" class="input !w-auto max-w-full" aria-label="Format unduhan">
-                <option value="3mf">3MF · warna & alas terpisah</option><option value="stl">STL · semua bagian dalam ZIP</option><option value="glb">GLB · model terpasang</option><option value="scad">OpenSCAD · source .scad</option><option value="svg">SVG · QR 2D</option>
+                <option value="3mf">3MF · PLA Detail 0,12 mm</option><option value="stl">STL · semua bagian dalam ZIP</option><option value="glb">GLB · model terpasang</option><option value="scad">OpenSCAD · source .scad</option><option value="svg">SVG · QR 2D</option>
               </select>
               <button type="button" class="btn-primary" :disabled="generating || exporting || saving || !!draft.error" @click="download"><ArrowDownTrayIcon class="w-4 h-4" /> {{ exporting ? 'Mengekspor…' : 'Unduh' }}</button>
               <button v-if="isAdmin" type="button" class="btn-secondary" :disabled="generating || exporting || saving || !!draft.error" @click="saveToGallery"><CloudArrowUpIcon class="w-4 h-4" /> {{ saving ? 'Menyimpan…' : 'Simpan 3MF ke Galeri' }}</button>
             </div>
             <p class="text-xs text-ink-500">3MF menyusun pelat datar dan alas sebagai objek cetak terpisah. STL berisi bagian bingkai, panel, QR, ikon/tulisan, dan alas yang digunakan. Impor warna pelat sebagai satu objek multipart.</p>
+            <p v-if="format === '3mf'" class="text-xs text-ink-500">Buka sebagai proyek di OrcaSlicer dengan profil Kobra X nozzle 0,4 mm terpasang. Termasuk proses PLA 0,12 mm, Arachne, nozzle 215 °C pada layer pertama / 205 °C berikutnya, dan textured bed 60 °C. Sesuaikan dengan filamen Anda sebelum slicing.</p>
             <details class="text-xs text-ink-500"><summary class="cursor-pointer text-ink-700">Tentang source OpenSCAD</summary><p class="mt-2 leading-relaxed">File .scad mandiri menyimpan QR, ikon, dan kontur tulisan model ini. Ukuran, permukaan, lubang, serta model alas dapat diubah di OpenSCAD. Untuk mengganti isi QR, ikon, atau tulisan, buat ulang melalui halaman ini.</p></details>
             <GeneratorHppPanel :result="isFresh ? result : null" :color-fields="colorFields" :material-ids="materialIds" :colors="form.colors" :color-mode="colorMode" />
           </section>

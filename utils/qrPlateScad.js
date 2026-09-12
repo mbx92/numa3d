@@ -23,6 +23,8 @@ export function qrPlateScad(design) {
   let businessOffset = 0
   const businessPaths = business.rings.map((ring) => ring.map(() => businessOffset++))
   const headerLogo = design.headerLogoRings || { rings: [] }
+  let logoOffset = 0
+  const logoPaths = headerLogo.rings.map((ring) => ring.map(() => logoOffset++))
   const hasHeader = !!(opts.businessName || opts.headerLogoShapes?.length || opts.headerLogoSvg)
   return `// Numa3D QR Plate. Standalone OpenSCAD, dimensions in millimetres.
 // QR content, icon and caption outlines are embedded. Change them in Numa3D.
@@ -71,6 +73,8 @@ caption_aspect = ${fmt(caption.aspect)};
 business_points = ${fmt(business.rings.flat())};
 business_paths = ${fmt(businessPaths)};
 header_logo_rings = ${fmt(headerLogo.rings)};
+header_logo_points = ${fmt(headerLogo.rings.flat())};
+header_logo_paths = ${fmt(logoPaths)};
 icon_solids = ${fmt(icon.solid)};
 icon_holes = ${fmt(icon.holes)};
 icon_extras = ${fmt(icon.extra)};
@@ -90,12 +94,13 @@ name_band = len(business_points) > 0 ? business_name_height + 5 : 0;
 header_gap = (len(header_logo_rings) > 0 && len(business_points) > 0) ? header_logo_gap : 0;
 header_band = logo_band + name_band + header_gap;
 mount_band = mounting == "none" ? 0 : hole_diameter + 6;
+bottom_mount_band = mounting == "wall" ? mount_band : 0;
 width = qr_size * qr_columns + (qr_columns > 1 ? qr_gap * (qr_columns - 1) : 0) + 2 * margin;
-depth = qr_size + 2 * margin + caption_band + header_band + mount_band;
-qr_y = (caption_band - mount_band - header_band) / 2;
+depth = qr_size + 2 * margin + caption_band + header_band + mount_band + bottom_mount_band;
+qr_y = (caption_band + bottom_mount_band - mount_band - header_band) / 2;
 function col_x(i) = -width/2 + margin + qr_size/2 + i * (qr_size + qr_gap);
-icon_y = -depth/2 + margin + insertion_band + text_band + icon_band/2;
-caption_y = -depth/2 + margin + insertion_band + text_band/2;
+icon_y = -depth/2 + bottom_mount_band + margin + insertion_band + text_band + icon_band/2;
+caption_y = -depth/2 + bottom_mount_band + margin + insertion_band + text_band/2;
 radius = min(corner_radius, margin, width/2, depth/2);
 detail_z = surface == "inlay" ? base_thickness-detail_height : base_thickness;
 panel_depth = min(base_thickness-0.8, max(1, detail_height+0.2));
@@ -124,7 +129,8 @@ module plate_profile() {
     rounded_rect(width,depth,radius);
     if (mounting == "keyring") translate([0,depth/2-mount_band/2]) circle(d=hole_diameter);
     if (mounting == "wall") for (x = [-width/2+margin+hole_diameter/2, width/2-margin-hole_diameter/2])
-      translate([x,depth/2-mount_band/2]) circle(d=hole_diameter);
+      for (y = [depth/2-mount_band/2, -depth/2+mount_band/2])
+        translate([x,y]) circle(d=hole_diameter);
   }
 }
 module qr_run_poly(runs, ms) {
@@ -165,7 +171,7 @@ module column_icon(i) {
   }
 }
 module thicken(d) {
-  if (d > 0) offset(r=d/2, $fn=24) children();
+  if (d > 0) offset(r=d/2, $fn=32) children();
   else children();
 }
 module column_caption(i) {
@@ -179,7 +185,7 @@ module column_caption(i) {
 module header_artwork() {
   if (len(business_points) > 0) polygon(points=business_points, paths=business_paths);
   if (len(header_logo_rings) > 0) thicken(header_logo_stroke)
-    union() for (ring = header_logo_rings) polygon(ring);
+    polygon(points=header_logo_points, paths=header_logo_paths);
 }
 module decoration_artwork() {
   union() {

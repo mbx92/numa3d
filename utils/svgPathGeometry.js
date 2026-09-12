@@ -61,7 +61,9 @@ export function svgStrokeShapes(path) {
   style.strokeWidth /= scale
   const contours = []
   for (const subPath of path.subPaths) {
-    const points = subPath.getPoints(48).map((p) => p.applyMatrix3(inverse))
+    // Closed paths can repeat the very same Vector2 at both ends. Clone it so
+    // transforming the closing point cannot transform the first point twice.
+    const points = subPath.getPoints(48).map((p) => p.clone().applyMatrix3(inverse))
     if (subPath.autoClose && points.length && !points[0].equals(points.at(-1))) points.push(points[0].clone())
     const geo = SVGLoader.pointsToStroke(points, style, 24)
     if (!geo) continue

@@ -80,3 +80,22 @@ test('3MF records separate printable objects, color parts, one plate and matchin
   assert.equal([...strFromU8(legacy['3D/3dmodel.model']).matchAll(/<item /g)].length, 1)
   dispose(groups)
 })
+
+test('optional PLA detail project embeds process and material settings for every color slot', () => {
+  const groups = [{ name: 'Logo', parts: [part(20, 20, 2), part(10, 10, 0.6, 1.3, '#ffffff')] }]
+  const zip = unzipSync(new Uint8Array(printGroupsTo3mfBuffer(groups, 'Logo', undefined, { processPreset: 'pla-detail-0.4' })))
+  const settings = JSON.parse(strFromU8(zip['Metadata/project_settings.config']))
+  assert.equal(settings.wall_generator, 'arachne')
+  assert.equal(settings.layer_height, '0.12')
+  assert.equal(settings.min_feature_size, '25%')
+  assert.equal(settings.min_bead_width, '85%')
+  assert.equal(settings.outer_wall_speed, '40')
+  assert.deepEqual(settings.filament_type, ['PLA', 'PLA'])
+  assert.deepEqual(settings.nozzle_temperature, ['205', '205'])
+  assert.deepEqual(settings.nozzle_temperature_initial_layer, ['215', '215'])
+  assert.deepEqual(settings.textured_plate_temp, ['60', '60'])
+  assert.equal(settings.filament_settings_id.length, settings.filament_colour.length)
+  assert.equal(settings.machine_start_gcode, undefined)
+  assert.throws(() => printGroupsTo3mfBuffer(groups, 'Logo', undefined, { processPreset: 'unknown' }), /tidak dikenal/)
+  dispose(groups)
+})
