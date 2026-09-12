@@ -6,7 +6,8 @@ import {
   ArrowsUpDownIcon,
   CheckIcon,
   XMarkIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  Square2StackIcon
 } from '@heroicons/vue/24/outline'
 
 import { MATERIAL_TYPES, materialTypeLabel, materialTypeBadge, materialLowStock } from '~/utils/materialType.js'
@@ -60,6 +61,20 @@ function openAdd() {
 function openEdit(m) {
   editing.value = m
   form.value = { ...m, color: m.color || DEFAULT_MATERIAL_COLOR }
+  errorMsg.value = ''
+  showForm.value = true
+}
+function openCopy(m) {
+  editing.value = null
+  form.value = {
+    name: `${m.name} (salinan)`,
+    type: m.type || 'filament',
+    unit: m.unit || 'gram',
+    pricePerUnit: m.pricePerUnit ?? 0,
+    stockQuantity: 0,
+    supplier: m.supplier || '',
+    color: m.color || DEFAULT_MATERIAL_COLOR
+  }
   errorMsg.value = ''
   showForm.value = true
 }
@@ -169,6 +184,9 @@ async function saveAdjust() {
                 <template v-if="isAdmin">
                   <button class="btn-secondary" @click="openAdjust(m)"><ArrowsUpDownIcon class="w-3.5 h-3.5" />Stok ±</button>
                   <button class="btn-secondary ml-1" @click="openEdit(m)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+                  <button class="btn-secondary ml-1" title="Salin data ke form tambah" @click="openCopy(m)">
+                    <Square2StackIcon class="w-3.5 h-3.5" />Salin Data
+                  </button>
                   <button class="btn-danger ml-1" @click="remove(m)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
                 </template>
                 <span v-else class="text-ink-300 text-xs">—</span>
@@ -215,6 +233,9 @@ async function saveAdjust() {
           <div v-if="isAdmin" class="flex flex-wrap gap-1 pt-1">
             <button class="btn-secondary" @click="openAdjust(m)"><ArrowsUpDownIcon class="w-3.5 h-3.5" />Stok ±</button>
             <button class="btn-secondary" @click="openEdit(m)"><PencilSquareIcon class="w-3.5 h-3.5" />Edit</button>
+            <button class="btn-secondary" title="Salin data ke form tambah" @click="openCopy(m)">
+              <Square2StackIcon class="w-3.5 h-3.5" />Salin Data
+            </button>
             <button class="btn-danger" @click="remove(m)"><TrashIcon class="w-3.5 h-3.5" />Hapus</button>
           </div>
         </div>
