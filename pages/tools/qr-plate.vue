@@ -53,8 +53,15 @@ const dimensions = computed(() => [
   { key: 'baseThicknessMm', label: 'Ketebalan dasar', min: 1.2, max: 8, step: 0.2 },
   { key: 'detailHeightMm', label: 'Ketebalan detail QR', min: 0.2, max: 2, step: 0.2 },
   { key: 'cornerRadiusMm', label: 'Radius sudut maksimum', min: 0, max: 12, step: 0.5 },
-  { key: 'captionHeightMm', label: 'Tinggi tulisan maksimum', min: 3, max: 14, step: 0.5 }
+  { key: 'captionHeightMm', label: 'Tinggi tulisan bawah', min: 3, max: 14, step: 0.5 },
+  ...(form.businessName.trim() ? [{ key: 'businessNameHeightMm', label: 'Tinggi nama usaha', min: 3, max: 14, step: 0.5 }] : [])
 ])
+const needsFont = computed(() =>
+  !!(form.caption.trim() || form.wifiCaption.trim() || form.whatsappCaption.trim() || form.businessName.trim())
+)
+const fontPreview = computed(() =>
+  form.businessName.trim() || form.caption.trim() || form.wifiCaption.trim() || form.whatsappCaption || 'Abc'
+)
 const draft = computed(() => {
   try { return { design: createQrPlateDesign(form), error: '' } }
   catch (e) { return { design: null, error: e.message } }
@@ -98,7 +105,8 @@ watch(
     form.plateLayout, form.contentType, form.content, form.caption,
     form.wifiCaption, form.whatsappCaption, form.wifiSsid, form.wifiPassword,
     form.wifiSecurity, form.wifiHidden, form.whatsappPayload, form.fontUrl,
-    form.errorCorrection
+    form.errorCorrection, form.businessName, form.headerLogoSvg,
+    form.businessNameHeightMm, form.headerLogoSizeMm, form.headerLogoGapMm
   ],
   () => {
     clearTimeout(textTimer)
@@ -304,7 +312,20 @@ onBeforeUnmount(() => {
           </section>
 
           <section class="panel p-4 space-y-3" aria-label="Ikon tulisan dan warna">
-            <h3 class="font-semibold">4. Ikon, tulisan & warna</h3>
+            <h3 class="font-semibold">4. Header, ikon, tulisan & warna</h3>
+            <label class="block text-sm">Nama usaha (atas pelat)<input v-model="form.businessName" maxlength="60" class="input mt-1" placeholder="Kosongkan jika tidak perlu" /></label>
+            <KeychainSvgUpload
+              v-model:svg-content="form.headerLogoSvg"
+              v-model:svg-size-mm="form.headerLogoSizeMm"
+              v-model:svg-gap-mm="form.headerLogoGapMm"
+              label="Logo usaha (atas pelat)"
+              hint="Di atas QR"
+              size-label="Ukuran logo"
+              :size-min="8"
+              :size-max="36"
+              :show-gap="!!form.businessName.trim()"
+            />
+            <p class="text-xs text-ink-500">Logo dan nama usaha muncul di bagian atas pelat, di atas QR. Quiet zone QR tetap kosong.</p>
             <p v-if="dual" class="text-xs text-ink-500">Ikon Wi-Fi dan WhatsApp dipasang otomatis di bawah masing-masing QR.</p>
             <div v-else class="grid grid-cols-3 gap-2" role="group" aria-label="Pilihan ikon">
               <button v-for="icon in icons" :key="icon.id" type="button" class="rounded-lg border p-2 text-xs flex flex-col items-center gap-1" :class="form.iconId === icon.id ? 'border-accent-500 bg-accent-50 ring-1 ring-accent-400' : 'border-ink-200 hover:bg-ink-50'" :aria-pressed="form.iconId === icon.id" @click="form.iconId = icon.id">
@@ -315,12 +336,11 @@ onBeforeUnmount(() => {
             <template v-if="dual">
               <label class="block text-sm">Tulisan bawah Wi-Fi<input v-model="form.wifiCaption" maxlength="60" class="input mt-1" placeholder="Wi-Fi" /></label>
               <label class="block text-sm">Tulisan bawah WhatsApp<input v-model="form.whatsappCaption" maxlength="60" class="input mt-1" placeholder="WhatsApp" /></label>
-              <KeychainFontPicker v-if="form.wifiCaption.trim() || form.whatsappCaption.trim()" v-model="form.fontUrl" :preview-text="form.wifiCaption.trim() || form.whatsappCaption" :show-downloader-link="false" />
             </template>
             <template v-else>
               <label class="block text-sm">Tulisan di bawah QR<input v-model="form.caption" maxlength="60" class="input mt-1" placeholder="Kosongkan jika tidak perlu" /></label>
-              <KeychainFontPicker v-if="form.caption.trim()" v-model="form.fontUrl" :preview-text="form.caption" :show-downloader-link="false" />
             </template>
+            <KeychainFontPicker v-if="needsFont" v-model="form.fontUrl" :preview-text="fontPreview" :show-downloader-link="false" />
             <label class="block text-sm">Sumber warna<select v-model="colorMode" class="input mt-1"><option value="hex">Warna HEX</option><option value="material">Material filament</option></select></label>
             <ToolColorBar v-model:colors="form.colors" v-model:mode="colorMode" v-model:material-ids="materialIds" :fields="colorFields" :show-mode-switch="false" />
           </section>

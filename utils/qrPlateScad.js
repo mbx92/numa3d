@@ -19,6 +19,11 @@ export function qrPlateScad(design) {
     return [rings.flat(), capPaths, code.captionRings.aspect]
   })
   const hasColumnText = codes.some((code) => code.captionRings?.rings?.length)
+  const business = design.businessNameRings || { rings: [], aspect: 0 }
+  let businessOffset = 0
+  const businessPaths = business.rings.map((ring) => ring.map(() => businessOffset++))
+  const headerLogo = design.headerLogoRings || { rings: [] }
+  const hasHeader = !!(opts.businessName || opts.headerLogoShapes?.length || opts.headerLogoSvg)
   return `// Numa3D QR Plate. Standalone OpenSCAD, dimensions in millimetres.
 // QR content, icon and caption outlines are embedded. Change them in Numa3D.
 // Print the plate flat and the stand separately, then insert the plate into the slot.
@@ -30,6 +35,9 @@ base_thickness = ${opts.baseThicknessMm}; // [1.2:0.2:8]
 detail_height = ${opts.detailHeightMm}; // [0.2:0.2:2]
 surface = ${fmt(opts.surfaceMode)}; // [raised,inlay]
 caption_height = ${opts.captionHeightMm}; // [3:0.5:14]
+business_name_height = ${opts.businessNameHeightMm}; // [3:0.5:14]
+header_logo_size = ${opts.headerLogoSizeMm}; // [8:1:36]
+header_logo_gap = ${opts.headerLogoGapMm}; // [0:0.5:10]
 icon_size = ${opts.iconSizeMm}; // [8:1:26]
 mounting = ${fmt(opts.mounting)}; // [none,keyring,wall]
 hole_diameter = ${opts.holeDiameterMm}; // [3:0.5:8]
@@ -54,9 +62,13 @@ qr_codes = ${fmt(qrCodes)};
 column_icons = ${fmt(columnIcons)};
 column_captions = ${fmt(columnCaptions)};
 has_column_text = ${hasColumnText ? 'true' : 'false'};
+has_header = ${hasHeader ? 'true' : 'false'};
 caption_points = ${fmt(caption.rings.flat())};
 caption_paths = ${fmt(paths)};
 caption_aspect = ${fmt(caption.aspect)};
+business_points = ${fmt(business.rings.flat())};
+business_paths = ${fmt(businessPaths)};
+header_logo_rings = ${fmt(headerLogo.rings)};
 icon_solids = ${fmt(icon.solid)};
 icon_holes = ${fmt(icon.holes)};
 icon_extras = ${fmt(icon.extra)};
@@ -71,10 +83,14 @@ insertion_band = has_stand ? 12 : 0;
 icon_band = (len(icon_solids) > 0 || qr_columns > 1) ? icon_size + 8 : 0;
 text_band = (len(caption_points) > 0 || has_column_text) ? caption_height + 5 : 0;
 caption_band = text_band + icon_band + insertion_band;
+logo_band = len(header_logo_rings) > 0 ? header_logo_size + 4 : 0;
+name_band = len(business_points) > 0 ? business_name_height + 5 : 0;
+header_gap = (len(header_logo_rings) > 0 && len(business_points) > 0) ? header_logo_gap : 0;
+header_band = logo_band + name_band + header_gap;
 mount_band = mounting == "none" ? 0 : hole_diameter + 6;
 width = qr_size * qr_columns + (qr_columns > 1 ? qr_gap * (qr_columns - 1) : 0) + 2 * margin;
-depth = qr_size + 2 * margin + caption_band + mount_band;
-qr_y = (caption_band - mount_band) / 2;
+depth = qr_size + 2 * margin + caption_band + header_band + mount_band;
+qr_y = (caption_band - mount_band - header_band) / 2;
 function col_x(i) = -width/2 + margin + qr_size/2 + i * (qr_size + qr_gap);
 icon_y = -depth/2 + margin + insertion_band + text_band + icon_band/2;
 caption_y = -depth/2 + margin + insertion_band + text_band/2;
@@ -154,13 +170,20 @@ module column_caption(i) {
     translate([col_x(i), caption_y]) scale([s,s]) polygon(points=pts, paths=paths);
   }
 }
+module header_artwork() {
+  if (len(business_points) > 0) polygon(points=business_points, paths=business_paths);
+  if (len(header_logo_rings) > 0) for (ring = header_logo_rings) polygon(ring);
+}
 module decoration_artwork() {
-  if (qr_columns > 1) union() for (i = [0:qr_columns-1]) { column_caption(i); column_icon(i); }
-  else union() {
-    if (len(caption_points) > 0) translate([0,caption_y]) scale([caption_scale,caption_scale])
-      polygon(points=caption_points, paths=caption_paths);
-    if (len(icon_solids) > 0) translate([0,icon_y]) scale([icon_scale,icon_scale])
-      translate([-(icon_bounds[0]+icon_bounds[1])/2, -(icon_bounds[2]+icon_bounds[3])/2]) icon_profile();
+  union() {
+    header_artwork();
+    if (qr_columns > 1) for (i = [0:qr_columns-1]) { column_caption(i); column_icon(i); }
+    else {
+      if (len(caption_points) > 0) translate([0,caption_y]) scale([caption_scale,caption_scale])
+        polygon(points=caption_points, paths=caption_paths);
+      if (len(icon_solids) > 0) translate([0,icon_y]) scale([icon_scale,icon_scale])
+        translate([-(icon_bounds[0]+icon_bounds[1])/2, -(icon_bounds[2]+icon_bounds[3])/2]) icon_profile();
+    }
   }
 }
 module qr(overlap=0) {

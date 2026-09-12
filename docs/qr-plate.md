@@ -8,7 +8,7 @@ Buka **Tools → QR Plate Generator** (`/tools/qr-plate`). Model mengikuti bentu
 2. Untuk dua QR: isi SSID/sandi Wi-Fi, lalu unggah JPEG kartu QR dari WhatsApp. Generator membaca payload di perangkat dan mencetak ulang QR yang rapi (tanpa logo di tengah).
 3. Pilih preset dudukan meja, pelat datar, gantungan, atau dinding. Pilih permukaan timbul atau inlay rata.
 4. Untuk meja, pilih **Slot miring**, **Tiang lurus**, atau **Tiang berlekuk**. Atur ukuran alas, tinggi tiang/kemiringan, dan kelonggaran slot total. Nilai lebar `0` menghitung ukuran otomatis.
-5. Untuk satu QR, pilih ikon Wi-Fi, WhatsApp, website, pembayaran, telepon, lokasi, sosial/suka, tautan, atau tanpa ikon. Mode dua QR memasang ikon Wi-Fi dan WhatsApp otomatis. Tambahkan tulisan dan pilih warna bingkai/alas, panel, QR, serta ikon/tulisan.
+5. Untuk satu QR, pilih ikon Wi-Fi, WhatsApp, website, pembayaran, telepon, lokasi, sosial/suka, tautan, atau tanpa ikon. Mode dua QR memasang ikon Wi-Fi dan WhatsApp otomatis. Opsional: isi **nama usaha** dan unggah **logo SVG** agar muncul di bagian atas pelat (di atas QR). Tambahkan tulisan bawah dan pilih warna bingkai/alas, panel, QR, serta ikon/tulisan.
 6. Generate, periksa tampilan **Terpasang** dan **Posisi cetak**, lalu uji tujuan QR lewat **Uji pindai QR** sebelum mencetak.
 
 Pelat memiliki bagian kosong 12 mm di bawah dekorasi untuk masuk ke slot. Pelat dicetak datar, alas dicetak terpisah, lalu dirakit. Kelonggaran bawaan 0,35 mm adalah selisih total lebar slot terhadap ketebalan pelat, bukan per sisi; perlu disesuaikan dengan printer dan bahan. Geometri dan kecocokan digital diperiksa, tetapi belum dilakukan uji cetak fisik, kekuatan, atau kestabilan untuk setiap kombinasi dimensi.
