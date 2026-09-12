@@ -5,6 +5,7 @@ import { shapesToRings } from './clickerManifold/meshUtils.js'
 import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import { qrIconContours } from './qrPlateIcons.js'
 import { buildQrPlateStand } from './qrPlateStand.js'
+import { deserializeShapes } from './svgToShapes.js'
 
 function packSolid(solid, track) {
   if (solid.status() !== 'NoError' || solid.volume() <= 0) throw new Error('Geometri pelat tidak valid')
@@ -94,6 +95,25 @@ function placeIcon(iconId, sizeMm, originX, originY) {
   }
 }
 
+function placeHeaderLogo(shapesData, sizeMm, originX, originY, maxWidthMm) {
+  if (!shapesData?.length) return { rings: [], aspect: 0 }
+  const shapes = deserializeShapes(shapesData)
+  if (!shapes.length) throw new Error('Logo SVG tidak punya bidang atau garis yang terlihat')
+  const bounds = computeBoundsFromShapes(shapes)
+  const maxDim = Math.max(bounds.width, bounds.height)
+  if (!(maxDim > 0)) throw new Error('Ukuran logo SVG tidak valid')
+  let scale = sizeMm / maxDim
+  const width = bounds.width * scale
+  if (width > maxWidthMm) scale *= maxWidthMm / width
+  const cx = (bounds.minX + bounds.maxX) / 2
+  const cy = (bounds.minY + bounds.maxY) / 2
+  const rings = shapesToRings(shapes, 24).map((ring) => ring.map(([x, y]) => [
+    (x - cx) * scale + originX,
+    (y - cy) * scale + originY
+  ]))
+  return { rings: positiveRings(rings), aspect: bounds.width / bounds.height }
+}
+
 export function buildQrPlate(wasm, input, fontBuffer = null) {
   const design = createQrPlateDesign(input)
   const { opts, widthMm, depthMm, holes, cornerRadiusMm: radius, codes } = design
@@ -110,6 +130,9 @@ export function buildQrPlate(wasm, input, fontBuffer = null) {
     const qrRings = codes.flatMap((code) => qrModuleRings(code, opts.qrSizeMm))
     const detail = track(new CrossSection(qrRings, 'NonZero'))
     let decoration = null
+    const addDecoration = (section) => {
+      decoration = decoration ? track(decoration.add(section)) : section
+    }
     for (const code of codes) {
       const caption = textCaptionRings(code.caption, fontBuffer)
       code.captionRings = caption
@@ -120,16 +143,41 @@ export function buildQrPlate(wasm, input, fontBuffer = null) {
           x * captionScale + code.centerX,
           y * captionScale + code.captionCenterY
         ])), 'NonZero'))
-        decoration = decoration ? track(decoration.add(section)) : section
+        addDecoration(section)
       }
       const placed = placeIcon(code.iconId, Math.min(opts.iconSizeMm, opts.qrSizeMm), code.centerX, code.iconCenterY)
       if (placed.meta) {
         let section = track(new CrossSection(placed.map(placed.icon.solid), 'NonZero'))
         if (placed.icon.holes.length) section = track(section.subtract(track(new CrossSection(placed.map(placed.icon.holes), 'NonZero'))))
         if (placed.icon.extra?.length) section = track(section.add(track(new CrossSection(placed.map(placed.icon.extra), 'NonZero'))))
-        decoration = decoration ? track(decoration.add(section)) : section
+        addDecoration(section)
         code.icon = placed.meta
       }
+    }
+    const headerMaxWidth = Math.max(12, widthMm - opts.marginMm * 2)
+    const businessName = textCaptionRings(opts.businessName, fontBuffer)
+    const businessScale = businessName.rings.length
+      ? Math.min(opts.businessNameHeightMm, headerMaxWidth / businessName.aspect)
+      : 0
+    if (businessScale && businessScale < 2) throw new Error('Nama usaha terlalu kecil — pendekkan teks atau perbesar pelat')
+    const placedBusinessRings = businessName.rings.map((ring) => ring.map(([x, y]) => [
+      x * businessScale,
+      y * businessScale + design.businessNameCenterY
+    ]))
+    design.businessNameRings = { rings: placedBusinessRings, aspect: businessName.aspect, scale: businessScale }
+    if (placedBusinessRings.length) {
+      addDecoration(track(new CrossSection(placedBusinessRings, 'NonZero')))
+    }
+    const headerLogo = placeHeaderLogo(
+      opts.headerLogoShapes,
+      Math.min(opts.headerLogoSizeMm, headerMaxWidth),
+      0,
+      design.headerLogoCenterY,
+      headerMaxWidth
+    )
+    design.headerLogoRings = headerLogo
+    if (headerLogo.rings.length) {
+      addDecoration(track(new CrossSection(headerLogo.rings, 'NonZero')))
     }
     const firstCaption = codes.length === 1 ? (codes[0]?.captionRings || { rings: [], aspect: 0 }) : { rings: [], aspect: 0 }
     if (codes.length === 1 && codes[0]?.icon) design.icon = codes[0].icon

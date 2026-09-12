@@ -5,15 +5,21 @@ import { readFileSync } from 'node:fs'
 import Module from 'manifold-3d'
 import jsQR from 'jsqr'
 import { unzipSync, strFromU8 } from 'fflate'
+import { Window } from 'happy-dom'
 import { createQrPlateDesign, qrPayload, qrPlateSvg } from '../utils/qrPlateDesign.js'
 import { qrPlateScad } from '../utils/qrPlateScad.js'
 import { QR_PLATE_ICONS } from '../utils/qrPlateIcons.js'
+import { parseSvgToShapes, serializeShapes } from '../utils/svgToShapes.js'
 registerHooks({ resolve(specifier, context, next) { return next(specifier === 'opentype.js' ? 'opentype.js/dist/opentype.mjs' : specifier, context) } })
 const { buildQrPlate } = await import('../utils/qrPlateCore.js')
 const { buildQrPlateResult } = await import('../utils/qrPlateGenerator.js')
 const wasm = await Module(); wasm.setup()
 const fontBytes = readFileSync(new URL('../public/fonts/Roboto-Bold.woff', import.meta.url))
 const font = fontBytes.buffer.slice(fontBytes.byteOffset, fontBytes.byteOffset + fontBytes.byteLength)
+const dom = new Window()
+globalThis.DOMParser = dom.DOMParser
+test.after(async () => { delete globalThis.DOMParser; await dom.happyDOM.close() })
+const logoShapes = serializeShapes(parseSvgToShapes('<svg xmlns="http://www.w3.org/2000/svg"><rect width="20" height="20"/></svg>'))
 
 function solid(geometry) {
   const positions = geometry.positions || geometry.attributes.position.array
@@ -158,6 +164,36 @@ test('coordinate welding used by STL importers preserves QR volume at diagonal j
       try { assert.ok(Math.abs(original.volume() - welded.volume()) < 0.001, `${surfaceMode} ${part.role}`) }
       finally { original.delete(); welded.delete() }
     }
+  }
+})
+
+test('business name and logo reserve a header band above the QR and stay scannable', () => {
+  const plain = createQrPlateDesign({ standStyle: 'none', iconId: 'none' })
+  const named = createQrPlateDesign({ standStyle: 'none', iconId: 'none', businessName: 'Numa Cafe' })
+  const branded = createQrPlateDesign({
+    standStyle: 'none', iconId: 'none', businessName: 'Numa Cafe',
+    headerLogoShapes: logoShapes, headerLogoSizeMm: 12
+  })
+  assert.ok(named.headerBandMm > 0)
+  assert.ok(branded.headerBandMm > named.headerBandMm)
+  assert.ok(branded.depthMm > plain.depthMm)
+  assert.ok(branded.businessNameCenterY > branded.codes[0].centerY)
+  assert.ok(branded.headerLogoCenterY > branded.businessNameCenterY)
+  for (const surfaceMode of ['raised', 'inlay']) {
+    const raw = buildQrPlate(wasm, {
+      standStyle: 'none', iconId: 'none', businessName: 'Numa Cafe',
+      headerLogoShapes: logoShapes, headerLogoSizeMm: 12, surfaceMode
+    }, font)
+    assert.equal(scanMesh(raw), raw.design.payload)
+    assert.ok(raw.design.businessNameRings.rings.length > 0)
+    assert.ok(raw.design.headerLogoRings.rings.length > 0)
+    assert.ok(raw.parts.some((part) => part.role === 'icon'))
+    const merged = solid(raw.geometry)
+    try { connected(merged) } finally { merged.delete() }
+    const scad = qrPlateScad(raw.design)
+    assert.match(scad, /business_points = \[\[/)
+    assert.match(scad, /header_logo_rings = \[\[/)
+    assert.match(scad, /header_band = /)
   }
 })
 

@@ -8,6 +8,7 @@ export const QR_PLATE_DEFAULTS = {
   errorCorrection: 'M', qrSizeMm: 64, qrGapMm: 6, marginMm: 4, cornerRadiusMm: 4,
   baseThicknessMm: 2.4, detailHeightMm: 0.6, surfaceMode: 'raised',
   caption: '', captionHeightMm: 6, fontUrl: '/fonts/Roboto-Bold.woff', iconId: 'globe', iconSizeMm: 14,
+  businessName: '', businessNameHeightMm: 6, headerLogoSvg: '', headerLogoSizeMm: 14, headerLogoGapMm: 3,
   mounting: 'none', holeDiameterMm: 4, standStyle: 'slot', standWidthMm: 0, standDepthMm: 40,
   standThicknessMm: 5, standHeightMm: 28, standTiltDeg: 15, standClearanceMm: 0.35,
   colors: { frame: '#172a46', base: '#ffffff', detail: '#172a46', icon: '#ffffff' }
@@ -88,7 +89,9 @@ export function normalizeQrPlateOptions(input = {}) {
     ['marginMm', 2, 12, 'Margin pelat'],
     ['cornerRadiusMm', 0, 12, 'Radius sudut'], ['baseThicknessMm', 1.2, 8, 'Ketebalan dasar'],
     ['detailHeightMm', 0.2, 2, 'Ketebalan detail'], ['captionHeightMm', 3, 14, 'Tinggi tulisan'],
+    ['businessNameHeightMm', 3, 14, 'Tinggi nama usaha'],
     ['holeDiameterMm', 3, 8, 'Diameter lubang'], ['iconSizeMm', 8, 26, 'Ukuran ikon'],
+    ['headerLogoSizeMm', 8, 36, 'Ukuran logo'], ['headerLogoGapMm', 0, 10, 'Jarak logo ke nama'],
     ['standWidthMm', 0, 220, 'Lebar alas'], ['standDepthMm', 28, 90, 'Kedalaman alas'],
     ['standThicknessMm', 3, 12, 'Ketebalan alas'], ['standHeightMm', 12, 70, 'Tinggi tiang'],
     ['standClearanceMm', 0.15, 1, 'Kelonggaran slot']
@@ -103,9 +106,12 @@ export function normalizeQrPlateOptions(input = {}) {
   opts.errorCorrection = choice(opts.errorCorrection, 'M', ['L', 'M', 'Q', 'H'], 'Koreksi error')
   if (opts.surfaceMode === 'inlay' && opts.baseThicknessMm - opts.detailHeightMm < 0.8) throw new Error('Inlay harus menyisakan dasar minimal 0,8 mm')
   opts.caption = lineCaption(opts.caption)
+  opts.businessName = lineCaption(opts.businessName)
   opts.wifiCaption = lineCaption(opts.wifiCaption, d.wifiCaption)
   opts.whatsappCaption = lineCaption(opts.whatsappCaption, d.whatsappCaption)
   opts.whatsappPayload = String(opts.whatsappPayload ?? '')
+  opts.headerLogoSvg = String(opts.headerLogoSvg ?? '')
+  opts.headerLogoShapes = Array.isArray(opts.headerLogoShapes) ? opts.headerLogoShapes : null
   opts.label = String(opts.label || 'QR Plate').replace(/[\u0000-\u001f]/g, ' ').slice(0, 64)
   if (opts.plateLayout === 'wifi-whatsapp') opts.iconId = 'none'
   return opts
@@ -120,19 +126,28 @@ function moduleMmFor(qrSizeMm, size) {
 function layoutColumns(opts, columns) {
   const hasCaption = columns.some((col) => col.caption)
   const hasIcon = columns.some((col) => col.iconId && col.iconId !== 'none')
+  const hasHeaderLogo = !!(opts.headerLogoShapes?.length || String(opts.headerLogoSvg || '').trim())
+  const hasBusinessName = !!opts.businessName
   const standEnabled = opts.standStyle !== 'none'
   const insertionBandMm = standEnabled ? 12 : 0
   const iconBandMm = hasIcon ? opts.iconSizeMm + 8 : 0
   const textBandMm = hasCaption ? opts.captionHeightMm + 5 : 0
   const captionBandMm = textBandMm + iconBandMm + insertionBandMm
+  const logoBandMm = hasHeaderLogo ? opts.headerLogoSizeMm + 4 : 0
+  const nameBandMm = hasBusinessName ? opts.businessNameHeightMm + 5 : 0
+  const headerGapMm = hasHeaderLogo && hasBusinessName ? opts.headerLogoGapMm : 0
+  const headerBandMm = logoBandMm + nameBandMm + headerGapMm
   const mountBandMm = opts.mounting === 'none' ? 0 : opts.holeDiameterMm + 6
   const count = columns.length
   const gapMm = count > 1 ? opts.qrGapMm : 0
   const widthMm = opts.qrSizeMm * count + gapMm * Math.max(0, count - 1) + opts.marginMm * 2
-  const depthMm = opts.qrSizeMm + opts.marginMm * 2 + captionBandMm + mountBandMm
-  const qrCenterY = (captionBandMm - mountBandMm) / 2
+  const depthMm = opts.qrSizeMm + opts.marginMm * 2 + captionBandMm + headerBandMm + mountBandMm
+  const qrCenterY = (captionBandMm - mountBandMm - headerBandMm) / 2
   const iconCenterY = -depthMm / 2 + opts.marginMm + insertionBandMm + textBandMm + iconBandMm / 2
   const captionCenterY = -depthMm / 2 + opts.marginMm + insertionBandMm + (hasCaption ? textBandMm / 2 : 0)
+  const headerTop = depthMm / 2 - mountBandMm
+  const headerLogoCenterY = hasHeaderLogo ? headerTop - logoBandMm / 2 : 0
+  const businessNameCenterY = hasBusinessName ? headerTop - logoBandMm - headerGapMm - nameBandMm / 2 : 0
   const codes = columns.map((col, i) => {
     const moduleMm = moduleMmFor(opts.qrSizeMm, col.size)
     const centerX = -widthMm / 2 + opts.marginMm + opts.qrSizeMm / 2 + i * (opts.qrSizeMm + gapMm)
@@ -161,8 +176,9 @@ function layoutColumns(opts, columns) {
   const first = codes[0]
   return {
     opts, codes, payload: first.payload, matrix: first.matrix, runs: first.runs, size: first.size,
-    version: first.version, moduleMm: first.moduleMm, widthMm, depthMm, captionBandMm, mountBandMm,
+    version: first.version, moduleMm: first.moduleMm, widthMm, depthMm, captionBandMm, headerBandMm, mountBandMm,
     qrCenterY, holes, stand, insertionBandMm, iconBandMm, iconCenterY, captionCenterY,
+    headerLogoCenterY, businessNameCenterY, hasHeaderLogo, hasBusinessName,
     cornerRadiusMm: Math.min(opts.cornerRadiusMm, opts.marginMm, widthMm / 2, depthMm / 2),
     warnings
   }

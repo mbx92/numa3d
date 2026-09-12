@@ -6,6 +6,7 @@ import { partsToGlbBuffer, printGroupsTo3mfBuffer } from './keychainExport.js'
 import { createQrPlateDesign, qrPlateSvg } from './qrPlateDesign.js'
 import { qrPlateScad } from './qrPlateScad.js'
 import { qrPlateAssemblyTransform } from './qrPlateStand.js'
+import { parseSvgToShapes, serializeShapes } from './svgToShapes.js'
 
 let plateWorker = null
 let plateJob = 0
@@ -129,12 +130,20 @@ export function buildQrPlateResult(raw) {
 
 export async function generateQrPlate(input, { signal } = {}) {
   const snapshot = JSON.parse(JSON.stringify(input))
+  const logoSvg = String(snapshot.headerLogoSvg || '').trim()
+  if (logoSvg) {
+    const shapes = parseSvgToShapes(logoSvg)
+    if (!shapes.length) throw new Error('Logo SVG tidak punya bidang atau garis yang terlihat')
+    snapshot.headerLogoShapes = serializeShapes(shapes)
+  }
+  delete snapshot.headerLogoSvg
   const design = createQrPlateDesign(snapshot)
   const { opts } = design
   if (signal?.aborted) throw new DOMException('Generate dibatalkan', 'AbortError')
   if (typeof Worker === 'undefined') throw new Error('Generator QR memerlukan browser dengan Web Worker')
   let fontBuffer = null
-  if (design.codes.some((code) => code.caption)) {
+  const needsFont = design.codes.some((code) => code.caption) || !!opts.businessName
+  if (needsFont) {
     // Only font assets are fetched. QR content (including Wi-Fi) stays local.
     const fontUrl = new URL(opts.fontUrl, location.origin)
     if (fontUrl.origin !== location.origin || !fontUrl.pathname.startsWith('/fonts/')) throw new Error('Pilih font dari pustaka Numa3D')
