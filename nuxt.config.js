@@ -116,7 +116,13 @@ export default defineNuxtConfig({
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
       navigateFallback: '/',
-      navigateFallbackDenylist: [/^\/api\//, /^\/i\//, /^\/manifest\.webmanifest$/],
+      navigateFallbackDenylist: [/^\/api\//, /^\/i\//, /^\/fonts\//, /^\/manifest\.webmanifest$/],
+      runtimeCaching: [
+        {
+          urlPattern: /\/api\/fonts\//,
+          handler: 'NetworkOnly'
+        }
+      ],
       cleanupOutdatedCaches: true,
       clientsClaim: true,
       skipWaiting: true

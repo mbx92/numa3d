@@ -7,8 +7,8 @@ export const QR_PLATE_DEFAULTS = {
   whatsappPayload: '', wifiCaption: 'Wi-Fi', whatsappCaption: 'WhatsApp',
   errorCorrection: 'M', qrSizeMm: 64, qrGapMm: 6, marginMm: 4, cornerRadiusMm: 4,
   baseThicknessMm: 2.4, detailHeightMm: 0.6, surfaceMode: 'raised',
-  caption: '', captionHeightMm: 6, fontUrl: '/fonts/Roboto-Bold.woff', iconId: 'globe', iconSizeMm: 14,
-  businessName: '', businessNameHeightMm: 6, headerLogoSvg: '', headerLogoSizeMm: 14, headerLogoGapMm: 3,
+  caption: '', captionHeightMm: 6, captionStrokeMm: 0, fontUrl: '/fonts/Roboto-Bold.woff', iconId: 'globe', iconSizeMm: 14,
+  businessName: '', businessNameHeightMm: 6, headerLogoSvg: '', headerLogoSizeMm: 14, headerLogoGapMm: 3, headerLogoStrokeMm: 0.5,
   mounting: 'none', holeDiameterMm: 4, standStyle: 'slot', standWidthMm: 0, standDepthMm: 40,
   standThicknessMm: 5, standHeightMm: 28, standTiltDeg: 15, standClearanceMm: 0.35,
   colors: { frame: '#172a46', base: '#ffffff', detail: '#172a46', icon: '#ffffff' }
@@ -92,6 +92,7 @@ export function normalizeQrPlateOptions(input = {}) {
     ['businessNameHeightMm', 3, 14, 'Tinggi nama usaha'],
     ['holeDiameterMm', 3, 8, 'Diameter lubang'], ['iconSizeMm', 8, 26, 'Ukuran ikon'],
     ['headerLogoSizeMm', 8, 36, 'Ukuran logo'], ['headerLogoGapMm', 0, 10, 'Jarak logo ke nama'],
+    ['headerLogoStrokeMm', 0, 2, 'Tebal garis logo'], ['captionStrokeMm', 0, 1.5, 'Tebal tulisan bawah'],
     ['standWidthMm', 0, 220, 'Lebar alas'], ['standDepthMm', 28, 90, 'Kedalaman alas'],
     ['standThicknessMm', 3, 12, 'Ketebalan alas'], ['standHeightMm', 12, 70, 'Tinggi tiang'],
     ['standClearanceMm', 0.15, 1, 'Kelonggaran slot']

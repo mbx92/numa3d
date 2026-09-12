@@ -54,6 +54,7 @@ const dimensions = computed(() => [
   { key: 'detailHeightMm', label: 'Ketebalan detail QR', min: 0.2, max: 2, step: 0.2 },
   { key: 'cornerRadiusMm', label: 'Radius sudut maksimum', min: 0, max: 12, step: 0.5 },
   { key: 'captionHeightMm', label: 'Tinggi tulisan bawah', min: 3, max: 14, step: 0.5 },
+  { key: 'captionStrokeMm', label: 'Tebal tulisan bawah', min: 0, max: 1.5, step: 0.1 },
   ...(form.businessName.trim() ? [{ key: 'businessNameHeightMm', label: 'Tinggi nama usaha', min: 3, max: 14, step: 0.5 }] : [])
 ])
 const needsFont = computed(() =>
@@ -106,7 +107,8 @@ watch(
     form.wifiCaption, form.whatsappCaption, form.wifiSsid, form.wifiPassword,
     form.wifiSecurity, form.wifiHidden, form.whatsappPayload, form.fontUrl,
     form.errorCorrection, form.businessName, form.headerLogoSvg,
-    form.businessNameHeightMm, form.headerLogoSizeMm, form.headerLogoGapMm
+    form.businessNameHeightMm, form.headerLogoSizeMm, form.headerLogoGapMm,
+    form.headerLogoStrokeMm, form.captionStrokeMm
   ],
   () => {
     clearTimeout(textTimer)
@@ -318,12 +320,14 @@ onBeforeUnmount(() => {
               v-model:svg-content="form.headerLogoSvg"
               v-model:svg-size-mm="form.headerLogoSizeMm"
               v-model:svg-gap-mm="form.headerLogoGapMm"
+              v-model:svg-stroke-mm="form.headerLogoStrokeMm"
               label="Logo usaha (atas pelat)"
               hint="Di atas QR"
               size-label="Ukuran logo"
               :size-min="8"
               :size-max="36"
               :show-gap="!!form.businessName.trim()"
+              show-stroke
             />
             <p class="text-xs text-ink-500">Logo dan nama usaha muncul di bagian atas pelat, di atas QR. Quiet zone QR tetap kosong.</p>
             <p v-if="dual" class="text-xs text-ink-500">Ikon Wi-Fi dan WhatsApp dipasang otomatis di bawah masing-masing QR.</p>
@@ -340,6 +344,14 @@ onBeforeUnmount(() => {
             <template v-else>
               <label class="block text-sm">Tulisan di bawah QR<input v-model="form.caption" maxlength="60" class="input mt-1" placeholder="Kosongkan jika tidak perlu" /></label>
             </template>
+            <label v-if="needsFont" class="block space-y-1">
+              <span class="text-sm">Tebal tulisan bawah</span>
+              <div class="flex items-center gap-2">
+                <input v-model.number="form.captionStrokeMm" type="range" min="0" max="1.5" step="0.1" class="flex-1" />
+                <span class="text-xs font-mono text-ink-700 w-12 text-right">{{ form.captionStrokeMm }} mm</span>
+              </div>
+              <span class="block text-[10px] text-ink-400">Naikkan agar huruf lebih tebal dan mudah dibaca di cetakan.</span>
+            </label>
             <KeychainFontPicker v-if="needsFont" v-model="form.fontUrl" :preview-text="fontPreview" :show-downloader-link="false" />
             <label class="block text-sm">Sumber warna<select v-model="colorMode" class="input mt-1"><option value="hex">Warna HEX</option><option value="material">Material filament</option></select></label>
             <ToolColorBar v-model:colors="form.colors" v-model:mode="colorMode" v-model:material-ids="materialIds" :fields="colorFields" :show-mode-switch="false" />

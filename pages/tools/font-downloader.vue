@@ -127,7 +127,18 @@ async function showHover(font, el) {
   }
 }
 
+const hoverEnabled = ref(false)
+
+function syncHoverMode() {
+  const enabled = import.meta.client
+    && window.innerWidth >= 1024
+    && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+  hoverEnabled.value = enabled
+  if (!enabled) clearHover()
+}
+
 function onRowEnter(font, event) {
+  if (!hoverEnabled.value) return
   clearTimeout(hoverLeaveTimer)
   clearTimeout(hoverEnterTimer)
   hoverEnterTimer = setTimeout(() => {
@@ -174,6 +185,8 @@ async function selectFont(font) {
 
 function onRowClick(font) {
   clearTimeout(hoverLeaveTimer)
+  clearTimeout(hoverEnterTimer)
+  clearHover()
   selectFont(font)
 }
 
@@ -233,6 +246,7 @@ async function downloadToDevice(family, variant) {
       throw new Error(msg)
     }
     const blob = await res.blob()
+    if (blob.size < 100) throw new Error('File font kosong atau tidak valid')
     const fallback = `${String(family).replace(/\s+/g, '')}.ttf`
     const name = filenameFromDisposition(res.headers.get('content-disposition'), fallback)
     downloadBlob(blob, name)
@@ -323,9 +337,25 @@ async function deleteFont(filename) {
   }
 }
 
+function onEscape(event) {
+  if (event.key === 'Escape') clearHover()
+}
+
+let hoverMq
+onMounted(() => {
+  syncHoverMode()
+  window.addEventListener('keydown', onEscape)
+  hoverMq = window.matchMedia('(hover: hover) and (pointer: fine)')
+  hoverMq.addEventListener('change', syncHoverMode)
+  window.addEventListener('resize', syncHoverMode)
+})
+
 onUnmounted(() => {
   clearTimeout(hoverEnterTimer)
   clearTimeout(hoverLeaveTimer)
+  window.removeEventListener('keydown', onEscape)
+  hoverMq?.removeEventListener('change', syncHoverMode)
+  window.removeEventListener('resize', syncHoverMode)
 })
 </script>
 
@@ -334,8 +364,7 @@ onUnmounted(() => {
     <div>
       <h1 class="text-xl font-bold">Font Downloader</h1>
       <p class="text-sm text-ink-500 mt-1">
-        Klik font untuk preview dan unduh file TTF. Admin bisa juga menyimpan ke
-        <code class="text-xs bg-ink-100 px-1 rounded">public/fonts/</code>
+        Klik font untuk preview dan unduh file TTF. Admin bisa juga menyimpan ke server
         untuk generator.
       </p>
     </div>
@@ -484,7 +513,7 @@ onUnmounted(() => {
           </div>
           <div v-if="!installed?.length" class="flex-1 flex items-center justify-center p-8 text-sm text-ink-500 text-center">
             <div>
-              <p>Belum ada font di <code class="text-xs bg-ink-100 px-1 rounded">public/fonts/</code>.</p>
+              <p>Belum ada font lokal di server.</p>
               <p class="text-xs text-ink-400 mt-2">Admin bisa menyimpan font terpilih ke server untuk generator.</p>
             </div>
           </div>
@@ -540,9 +569,11 @@ onUnmounted(() => {
       :selected-variant="hoverVariant"
       :is-admin="isAdmin"
       :downloading="downloading"
+      :dismissible="!hoverEnabled"
       @update:selected-variant="hoverVariant = $event"
       @download="downloadHoverServer"
       @download-file="downloadHoverFile"
+      @close="clearHover"
       @mouseenter="onCardEnter"
       @mouseleave="onCardLeave"
     />

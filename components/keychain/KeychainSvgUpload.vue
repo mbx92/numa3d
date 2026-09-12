@@ -5,6 +5,7 @@ import { readSvgFile } from '~/utils/svgToShapes.js'
 const svgContent = defineModel('svgContent', { type: String, default: '' })
 const svgSizeMm = defineModel('svgSizeMm', { type: Number, default: 14 })
 const svgGapMm = defineModel('svgGapMm', { type: Number, default: 2 })
+const svgStrokeMm = defineModel('svgStrokeMm', { type: Number, default: 0 })
 const { toolLinkAttrs } = useStandaloneDisplay()
 
 const props = defineProps({
@@ -14,7 +15,12 @@ const props = defineProps({
   sizeMin: { type: Number, default: 6 },
   sizeMax: { type: Number, default: 28 },
   sizeStep: { type: Number, default: 0.5 },
-  showGap: { type: Boolean, default: true }
+  showGap: { type: Boolean, default: true },
+  showStroke: { type: Boolean, default: false },
+  strokeLabel: { type: String, default: 'Tebal garis logo' },
+  strokeMin: { type: Number, default: 0 },
+  strokeMax: { type: Number, default: 2 },
+  strokeStep: { type: Number, default: 0.1 }
 })
 
 const previewUrl = ref('')
@@ -109,6 +115,14 @@ function clearSvg() {
           <input v-model.number="svgGapMm" type="range" min="0" max="8" step="0.5" class="flex-1" />
           <span class="text-xs font-mono text-ink-700 w-12 text-right">{{ svgGapMm }} mm</span>
         </div>
+      </label>
+      <label v-if="showStroke" class="block space-y-1">
+        <span class="text-[11px] text-ink-600">{{ strokeLabel }}</span>
+        <div class="flex items-center gap-2">
+          <input v-model.number="svgStrokeMm" type="range" :min="strokeMin" :max="strokeMax" :step="strokeStep" class="flex-1" />
+          <span class="text-xs font-mono text-ink-700 w-12 text-right">{{ svgStrokeMm }} mm</span>
+        </div>
+        <span class="block text-[10px] text-ink-400">Naikkan untuk logo garis tipis agar tetap terlihat saat dicetak.</span>
       </label>
     </template>
   </div>

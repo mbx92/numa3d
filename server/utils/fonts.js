@@ -53,27 +53,59 @@ const POPULAR_FONTS = [
   'Alfa Slab One'
 ]
 
+function bundledFontsDirs() {
+  return [
+    join(process.cwd(), '.output', 'public', 'fonts'),
+    join(process.cwd(), 'public', 'fonts')
+  ]
+}
+
+function isFontFilename(name) {
+  return FONT_EXT.has(String(name).slice(String(name).lastIndexOf('.')).toLowerCase())
+}
+
+export function fontFileUrl(filename) {
+  return `/fonts/${encodeURIComponent(filename)}`
+}
+
+/** Writable dir for downloaded fonts. Bundled fonts stay in public/fonts. */
 export function fontsDir() {
-  const dir = join(process.cwd(), 'public', 'fonts')
+  const dir = process.env.FONTS_DIR || join(process.cwd(), 'data', 'fonts')
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   return dir
 }
 
-export function listInstalledFonts() {
-  const dir = fontsDir()
+function listFontsIn(dir) {
+  if (!existsSync(dir)) return []
   return readdirSync(dir)
-    .filter((name) => FONT_EXT.has(name.slice(name.lastIndexOf('.')).toLowerCase()))
+    .filter((name) => isFontFilename(name))
     .map((filename) => {
-      const full = join(dir, filename)
-      const st = statSync(full)
+      const st = statSync(join(dir, filename))
       return {
         filename,
-        url: `/fonts/${encodeURIComponent(filename)}`,
+        url: fontFileUrl(filename),
         size: st.size,
         modifiedAt: st.mtime.toISOString()
       }
     })
-    .sort((a, b) => a.filename.localeCompare(b.filename))
+}
+
+export function listInstalledFonts() {
+  const byName = new Map()
+  for (const dir of [...bundledFontsDirs(), fontsDir()]) {
+    for (const font of listFontsIn(dir)) byName.set(font.filename, font)
+  }
+  return [...byName.values()].sort((a, b) => a.filename.localeCompare(b.filename))
+}
+
+export function resolveFontPath(filename) {
+  const safe = basename(String(filename || ''))
+  if (!safe || safe !== filename || !isFontFilename(safe)) return null
+  for (const dir of [fontsDir(), ...bundledFontsDirs()]) {
+    const full = join(dir, safe)
+    if (existsSync(full)) return full
+  }
+  return null
 }
 
 export function variantLabel(key) {
@@ -171,7 +203,11 @@ function buildFilename(family, variantKey, ext) {
   return `${safeFamily}-${suffix}${ext}`
 }
 
-const FONT_CSS_UA = 'Mozilla/5.0 (compatible; Numa3D-FontDownloader/1.1)'
+const FONT_CSS_UAS = [
+  'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:27.0) Gecko/20100101 Firefox/27.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36',
+  'Mozilla/5.0 (compatible; Numa3D-FontDownloader/1.1)'
+]
 
 export function extractFontUrl(cssText) {
   const urls = [...String(cssText).matchAll(/url\((['"]?)(https?:\/\/[^)'"\s]+)\1\)/gi)].map((m) => m[2])
@@ -179,6 +215,36 @@ export function extractFontUrl(cssText) {
   return urls.find((u) => /\.(ttf|otf)(?:\?|$)/i.test(u))
     || urls.find((u) => /\.woff(?:\?|$)/i.test(u) && !/\.woff2/i.test(u))
     || urls[0]
+}
+
+export function fontExtFromUrl(url) {
+  const match = String(url).match(/\.(ttf|otf|woff2?)(?:\?|$)/i)
+  return match ? `.${match[1].toLowerCase()}` : '.ttf'
+}
+
+function isPrintableFontExt(ext) {
+  return ext === '.ttf' || ext === '.otf' || ext === '.woff'
+}
+
+function networkFontError(error, fallback) {
+  const code = error?.cause?.code || error?.code
+  if (code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || /fetch failed/i.test(String(error?.message || ''))) {
+    return new Error('Server tidak bisa menghubungi Google Fonts')
+  }
+  return error instanceof Error ? error : new Error(fallback)
+}
+
+async function fetchCssAndFont(cssUrl, ua) {
+  const cssRes = await fetch(cssUrl, { headers: { 'User-Agent': ua } })
+  if (!cssRes.ok) throw new Error(`Gagal mengambil CSS font (${cssRes.status})`)
+  const fontUrl = extractFontUrl(await cssRes.text())
+  const fontRes = await fetch(fontUrl, { headers: { 'User-Agent': ua } })
+  if (!fontRes.ok) throw new Error(`Gagal mengunduh file font (${fontRes.status})`)
+  const buffer = Buffer.from(await fontRes.arrayBuffer())
+  if (buffer.length < 100) throw new Error('File font kosong atau tidak valid')
+  const ext = fontExtFromUrl(fontUrl)
+  if (!isPrintableFontExt(ext)) throw new Error('Google mengirim WOFF2. Generator butuh TTF, OTF, atau WOFF.')
+  return { buffer, ext }
 }
 
 export async function fetchGoogleFontFile({ family, variant }) {
@@ -195,27 +261,30 @@ export async function fetchGoogleFontFile({ family, variant }) {
   const cssFamily = familyInfo.family.replace(/\s+/g, '+')
   const cssUrl = `https://fonts.googleapis.com/css2?family=${cssFamily}:ital,wght@${italic},${weight}&display=swap`
 
-  const cssRes = await fetch(cssUrl, { headers: { 'User-Agent': FONT_CSS_UA } })
-  if (!cssRes.ok) throw new Error(`Gagal mengambil CSS font (${cssRes.status})`)
-
-  const fontUrl = extractFontUrl(await cssRes.text())
-  const fontRes = await fetch(fontUrl, { headers: { 'User-Agent': FONT_CSS_UA } })
-  if (!fontRes.ok) throw new Error(`Gagal mengunduh file font (${fontRes.status})`)
-
-  const buffer = Buffer.from(await fontRes.arrayBuffer())
-  if (buffer.length < 100) throw new Error('File font kosong atau tidak valid')
-  const extMatch = fontUrl.match(/\.(ttf|otf|woff2?)(?:\?|$)/i)
-  const ext = extMatch ? `.${extMatch[1].toLowerCase()}` : '.ttf'
-  if (ext === '.woff2') throw new Error('Google mengirim WOFF2. Generator butuh TTF, OTF, atau WOFF — coba unduh ulang.')
-
-  const filename = buildFilename(familyInfo.family, varKey, ext)
-  return {
-    buffer,
-    filename,
-    family: familyInfo.family,
-    variantKey: varKey,
-    label: `${familyInfo.family} ${variantLabel(varKey)}`
+  let lastError
+  for (const ua of FONT_CSS_UAS) {
+    try {
+      const { buffer, ext } = await fetchCssAndFont(cssUrl, ua)
+      return {
+        buffer,
+        filename: buildFilename(familyInfo.family, varKey, ext),
+        family: familyInfo.family,
+        variantKey: varKey,
+        label: `${familyInfo.family} ${variantLabel(varKey)}`
+      }
+    } catch (error) {
+      lastError = networkFontError(error, 'Gagal mengunduh font dari Google')
+    }
   }
+  throw lastError || new Error('Gagal mengunduh font dari Google')
+}
+
+function mirrorDownloadedFont(filename, buffer) {
+  const dir = join(process.cwd(), '.output', 'public', 'fonts')
+  try {
+    if (!existsSync(dir)) return
+    writeFileSync(join(dir, filename), buffer)
+  } catch { /* production image may be read-only */ }
 }
 
 export async function downloadGoogleFont({ family, variant }) {
@@ -225,35 +294,27 @@ export async function downloadGoogleFont({ family, variant }) {
   if (existsSync(dest)) {
     const existing = readFileSync(dest)
     if (createHash('sha256').update(existing).digest('hex') === createHash('sha256').update(buffer).digest('hex')) {
-      return {
-        filename,
-        url: `/fonts/${encodeURIComponent(filename)}`,
-        size: buffer.length,
-        skipped: true,
-        label
-      }
+      return { filename, url: fontFileUrl(filename), size: buffer.length, skipped: true, label }
     }
   }
 
   writeFileSync(dest, buffer)
-  return {
-    filename,
-    url: `/fonts/${encodeURIComponent(filename)}`,
-    size: buffer.length,
-    skipped: false,
-    label
-  }
+  mirrorDownloadedFont(filename, buffer)
+  return { filename, url: fontFileUrl(filename), size: buffer.length, skipped: false, label }
 }
 
 export function deleteInstalledFont(filename) {
   const safe = basename(String(filename || ''))
-  if (!safe || safe !== filename) throw new Error('Nama file tidak valid')
-  const ext = safe.slice(safe.lastIndexOf('.')).toLowerCase()
-  if (!FONT_EXT.has(ext)) throw new Error('Hanya file font yang boleh dihapus')
+  if (!safe || safe !== filename || !isFontFilename(safe)) throw new Error('Nama file tidak valid')
 
-  const full = join(fontsDir(), safe)
-  if (!existsSync(full)) throw new Error('File font tidak ditemukan')
+  const downloaded = join(fontsDir(), safe)
+  if (!existsSync(downloaded)) {
+    if (resolveFontPath(safe)) throw new Error('Font bawaan tidak bisa dihapus')
+    throw new Error('File font tidak ditemukan')
+  }
 
-  unlinkSync(full)
+  unlinkSync(downloaded)
+  const mirror = join(process.cwd(), '.output', 'public', 'fonts', safe)
+  try { if (existsSync(mirror)) unlinkSync(mirror) } catch { /* ignore */ }
   return { ok: true, filename: safe }
 }

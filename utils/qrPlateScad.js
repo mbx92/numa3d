@@ -35,9 +35,11 @@ base_thickness = ${opts.baseThicknessMm}; // [1.2:0.2:8]
 detail_height = ${opts.detailHeightMm}; // [0.2:0.2:2]
 surface = ${fmt(opts.surfaceMode)}; // [raised,inlay]
 caption_height = ${opts.captionHeightMm}; // [3:0.5:14]
+caption_stroke = ${opts.captionStrokeMm}; // [0:0.05:1.5]
 business_name_height = ${opts.businessNameHeightMm}; // [3:0.5:14]
 header_logo_size = ${opts.headerLogoSizeMm}; // [8:1:36]
 header_logo_gap = ${opts.headerLogoGapMm}; // [0:0.5:10]
+header_logo_stroke = ${opts.headerLogoStrokeMm}; // [0:0.05:2]
 icon_size = ${opts.iconSizeMm}; // [8:1:26]
 mounting = ${fmt(opts.mounting)}; // [none,keyring,wall]
 hole_diameter = ${opts.holeDiameterMm}; // [3:0.5:8]
@@ -162,24 +164,29 @@ module column_icon(i) {
       }
   }
 }
+module thicken(d) {
+  if (d > 0) offset(r=d/2, $fn=24) children();
+  else children();
+}
 module column_caption(i) {
   cap = column_captions[i];
   if (len(cap) > 0) {
     pts = cap[0]; paths = cap[1]; aspect = cap[2];
     s = min(caption_height, qr_size/aspect);
-    translate([col_x(i), caption_y]) scale([s,s]) polygon(points=pts, paths=paths);
+    translate([col_x(i), caption_y]) thicken(caption_stroke) scale([s,s]) polygon(points=pts, paths=paths);
   }
 }
 module header_artwork() {
   if (len(business_points) > 0) polygon(points=business_points, paths=business_paths);
-  if (len(header_logo_rings) > 0) for (ring = header_logo_rings) polygon(ring);
+  if (len(header_logo_rings) > 0) thicken(header_logo_stroke)
+    union() for (ring = header_logo_rings) polygon(ring);
 }
 module decoration_artwork() {
   union() {
     header_artwork();
     if (qr_columns > 1) for (i = [0:qr_columns-1]) { column_caption(i); column_icon(i); }
     else {
-      if (len(caption_points) > 0) translate([0,caption_y]) scale([caption_scale,caption_scale])
+      if (len(caption_points) > 0) translate([0,caption_y]) thicken(caption_stroke) scale([caption_scale,caption_scale])
         polygon(points=caption_points, paths=caption_paths);
       if (len(icon_solids) > 0) translate([0,icon_y]) scale([icon_scale,icon_scale])
         translate([-(icon_bounds[0]+icon_bounds[1])/2, -(icon_bounds[2]+icon_bounds[3])/2]) icon_profile();

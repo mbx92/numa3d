@@ -17,8 +17,9 @@ export default defineEventHandler(async (event) => {
     const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase()
     setResponseHeaders(event, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Content-Length': String(buffer.length),
       'Content-Disposition': `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      'Cache-Control': 'private, max-age=86400'
+      'Cache-Control': 'private, max-age=3600'
     })
     return send(event, buffer)
   } catch (e) {

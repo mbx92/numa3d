@@ -197,6 +197,24 @@ test('business name and logo reserve a header band above the QR and stay scannab
   }
 })
 
+test('logo and caption stroke thicken the decoration mesh and SCAD offset', () => {
+  const thin = buildQrPlate(wasm, {
+    standStyle: 'none', iconId: 'none', caption: 'PAY',
+    headerLogoShapes: logoShapes, headerLogoSizeMm: 12, headerLogoStrokeMm: 0, captionStrokeMm: 0
+  }, font)
+  const thick = buildQrPlate(wasm, {
+    standStyle: 'none', iconId: 'none', caption: 'PAY',
+    headerLogoShapes: logoShapes, headerLogoSizeMm: 12, headerLogoStrokeMm: 1.2, captionStrokeMm: 0.8
+  }, font)
+  const a = solid(thin.parts.find((part) => part.role === 'icon').geometry)
+  const b = solid(thick.parts.find((part) => part.role === 'icon').geometry)
+  try { assert.ok(b.volume() > a.volume() * 1.05) } finally { a.delete(); b.delete() }
+  const scad = qrPlateScad(thick.design)
+  assert.match(scad, /header_logo_stroke = 1\.2/)
+  assert.match(scad, /caption_stroke = 0\.8/)
+  assert.match(scad, /offset\(r=d\/2/)
+})
+
 test('editing caption or QR text changes the exported mesh and SCAD contours', () => {
   const pay = buildQrPlate(wasm, { standStyle: 'none', iconId: 'none', caption: 'PAY', content: 'https://a.example/' }, font)
   const menu = buildQrPlate(wasm, { standStyle: 'none', iconId: 'none', caption: 'MENU', content: 'https://b.example/' }, font)

@@ -95,6 +95,12 @@ function placeIcon(iconId, sizeMm, originX, originY) {
   }
 }
 
+function thickenSection(section, track, strokeMm) {
+  const grow = Number(strokeMm) / 2
+  if (!(grow > 0.01)) return section
+  return track(section.offset(grow, 'Round', 2, 32))
+}
+
 function placeHeaderLogo(shapesData, sizeMm, originX, originY, maxWidthMm) {
   if (!shapesData?.length) return { rings: [], aspect: 0 }
   const shapes = deserializeShapes(shapesData)
@@ -139,10 +145,10 @@ export function buildQrPlate(wasm, input, fontBuffer = null) {
       const captionScale = caption.rings.length ? Math.min(opts.captionHeightMm, opts.qrSizeMm / caption.aspect) : 0
       if (captionScale && captionScale < 2) throw new Error('Tulisan terlalu kecil — pendekkan tulisan atau perbesar QR')
       if (caption.rings.length) {
-        const section = track(new CrossSection(caption.rings.map((ring) => ring.map(([x, y]) => [
+        const section = thickenSection(track(new CrossSection(caption.rings.map((ring) => ring.map(([x, y]) => [
           x * captionScale + code.centerX,
           y * captionScale + code.captionCenterY
-        ])), 'NonZero'))
+        ])), 'NonZero')), track, opts.captionStrokeMm)
         addDecoration(section)
       }
       const placed = placeIcon(code.iconId, Math.min(opts.iconSizeMm, opts.qrSizeMm), code.centerX, code.iconCenterY)
@@ -177,7 +183,7 @@ export function buildQrPlate(wasm, input, fontBuffer = null) {
     )
     design.headerLogoRings = headerLogo
     if (headerLogo.rings.length) {
-      addDecoration(track(new CrossSection(headerLogo.rings, 'NonZero')))
+      addDecoration(thickenSection(track(new CrossSection(headerLogo.rings, 'NonZero')), track, opts.headerLogoStrokeMm))
     }
     const firstCaption = codes.length === 1 ? (codes[0]?.captionRings || { rings: [], aspect: 0 }) : { rings: [], aspect: 0 }
     if (codes.length === 1 && codes[0]?.icon) design.icon = codes[0].icon
