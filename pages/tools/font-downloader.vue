@@ -14,6 +14,7 @@ import {
   ChevronRightIcon
 } from '@heroicons/vue/24/outline'
 import { formatFontFilename } from '~/utils/keychainFonts.js'
+import { downloadBlob } from '~/utils/downloadBlob.js'
 
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const toast = useToast()
@@ -136,7 +137,7 @@ function onRowEnter(font, event) {
 
 function onRowLeave() {
   clearTimeout(hoverEnterTimer)
-  hoverLeaveTimer = setTimeout(clearHover, 180)
+  hoverLeaveTimer = setTimeout(clearHover, 400)
 }
 
 function onCardEnter() {
@@ -144,7 +145,69 @@ function onCardEnter() {
 }
 
 function onCardLeave() {
-  hoverLeaveTimer = setTimeout(clearHover, 180)
+  hoverLeaveTimer = setTimeout(clearHover, 400)
+}
+
+const selectedFont = ref(null)
+const selectedDetail = ref(null)
+const selectedVariant = ref('400')
+const selectedLoading = ref(false)
+
+async function selectFont(font) {
+  selectedFont.value = font
+  selectedVariant.value = font.variants?.includes('400') ? '400' : font.variants?.[0] || '400'
+  selectedLoading.value = true
+  try {
+    selectedDetail.value = await loadFamilyDetail(font)
+    if (!selectedDetail.value.variants.includes(selectedVariant.value)) {
+      selectedVariant.value = selectedDetail.value.variants[0] || '400'
+    }
+    await googlePreview.loadFamily(font.family, selectedVariant.value)
+    await nextTick()
+    document.getElementById('font-download-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  } catch (e) {
+    toast.error(e.data?.statusMessage || e.message || 'Gagal memuat font')
+  } finally {
+    selectedLoading.value = false
+  }
+}
+
+function onRowClick(font) {
+  clearTimeout(hoverLeaveTimer)
+  selectFont(font)
+}
+
+watch(selectedVariant, async (variant) => {
+  if (!selectedFont.value?.family) return
+  await googlePreview.loadFamily(selectedFont.value.family, variant)
+})
+
+function variantLabel(key) {
+  const names = {
+    100: 'Thin',
+    200: 'Extra Light',
+    300: 'Light',
+    400: 'Regular',
+    500: 'Medium',
+    600: 'Semi Bold',
+    700: 'Bold',
+    800: 'Extra Bold',
+    900: 'Black'
+  }
+  const italic = String(key).endsWith('i')
+  const weight = italic ? key.slice(0, -1) : key
+  const label = names[weight] || weight
+  return italic ? `${label} Italic` : label
+}
+
+function filenameFromDisposition(header, fallback) {
+  const raw = String(header || '')
+  const star = raw.match(/filename\*=UTF-8''([^;]+)/i)
+  if (star) {
+    try { return decodeURIComponent(star[1]) } catch { /* ignore */ }
+  }
+  const quoted = raw.match(/filename="([^"]+)"/i)
+  return quoted?.[1] || fallback
 }
 
 watch(hoverVariant, async (variant) => {
@@ -156,27 +219,69 @@ watch(catalogPage, clearHover)
 
 const downloading = ref(false)
 
-async function downloadHoverFont() {
-  if (!hoverDetail.value || !hoverVariant.value) return
+async function downloadToDevice(family, variant) {
+  if (!family || !variant) return
+  downloading.value = true
+  try {
+    const res = await fetch(`/api/fonts/file?family=${encodeURIComponent(family)}&variant=${encodeURIComponent(variant)}`)
+    if (!res.ok) {
+      let msg = 'Gagal mengunduh font'
+      try {
+        const err = await res.json()
+        msg = err.statusMessage || err.message || msg
+      } catch { /* not json */ }
+      throw new Error(msg)
+    }
+    const blob = await res.blob()
+    const fallback = `${String(family).replace(/\s+/g, '')}.ttf`
+    const name = filenameFromDisposition(res.headers.get('content-disposition'), fallback)
+    downloadBlob(blob, name)
+    toast.success(`Font terunduh: ${name}`)
+  } catch (e) {
+    toast.error(e.message || 'Gagal mengunduh font')
+  } finally {
+    downloading.value = false
+  }
+}
+
+async function saveToServer(family, variant) {
+  if (!family || !variant) return
   downloading.value = true
   try {
     const result = await $fetch('/api/fonts/download', {
       method: 'POST',
-      body: {
-        family: hoverDetail.value.family,
-        variant: hoverVariant.value
-      }
+      body: { family, variant }
     })
     await refreshInstalled()
     toast.success(
       result.skipped
         ? `Font sudah ada: ${result.filename}`
-        : `Font terunduh: ${result.filename}`
+        : `Font tersimpan: ${result.filename}`
     )
   } catch (e) {
-    toast.error(e.data?.statusMessage || e.message || 'Gagal mengunduh font')
+    toast.error(e.data?.statusMessage || e.message || 'Gagal menyimpan font')
   } finally {
     downloading.value = false
+  }
+}
+
+function downloadHoverFile() {
+  if (!hoverDetail.value) return
+  downloadToDevice(hoverDetail.value.family, hoverVariant.value)
+}
+
+function downloadHoverServer() {
+  if (!hoverDetail.value) return
+  saveToServer(hoverDetail.value.family, hoverVariant.value)
+}
+
+async function downloadLocal(font) {
+  try {
+    const res = await fetch(font.url)
+    if (!res.ok) throw new Error('Gagal mengunduh file lokal')
+    downloadBlob(await res.blob(), font.filename)
+  } catch (e) {
+    toast.error(e.message || 'Gagal mengunduh font')
   }
 }
 
@@ -229,8 +334,9 @@ onUnmounted(() => {
     <div>
       <h1 class="text-xl font-bold">Font Downloader</h1>
       <p class="text-sm text-ink-500 mt-1">
-        Arahkan kursor ke font untuk preview · unduh ke
+        Klik font untuk preview dan unduh file TTF. Admin bisa juga menyimpan ke
         <code class="text-xs bg-ink-100 px-1 rounded">public/fonts/</code>
+        untuk generator.
       </p>
     </div>
 
@@ -256,7 +362,7 @@ onUnmounted(() => {
               />
             </div>
             <p class="text-xs text-ink-400 mt-2">
-              Hover untuk preview · {{ CATALOG_PAGE_SIZE }} per halaman
+              Klik untuk unduh · {{ CATALOG_PAGE_SIZE }} per halaman
               <span v-if="searchDebounced"> · {{ catalogTotal }} hasil</span>
             </p>
             <div class="mt-2">
@@ -272,8 +378,9 @@ onUnmounted(() => {
             <div
               v-for="font in catalogFonts"
               :key="font.family"
-              class="px-4 py-3 cursor-default transition-colors"
-              :class="hoverFont?.family === font.family ? 'bg-accent-50/70' : 'hover:bg-ink-50'"
+              class="px-4 py-3 cursor-pointer transition-colors"
+              :class="selectedFont?.family === font.family || hoverFont?.family === font.family ? 'bg-accent-50/70' : 'hover:bg-ink-50'"
+              @click="onRowClick(font)"
               @mouseenter="onRowEnter(font, $event)"
               @mouseleave="onRowLeave"
             >
@@ -311,9 +418,64 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Font terpasang -->
-      <div class="lg:col-span-3">
-        <div class="panel min-h-[28rem] flex flex-col">
+      <div class="lg:col-span-3 space-y-4">
+        <div id="font-download-panel" class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Unduh font</span>
+          </div>
+          <div v-if="!selectedFont" class="p-6 text-sm text-ink-500 text-center">
+            Klik nama font di katalog untuk memilih varian dan mengunduh file.
+          </div>
+          <div v-else class="p-4 space-y-3">
+            <div>
+              <p class="text-lg font-semibold truncate" :style="googlePreview.styleFor(selectedFont.family)">
+                {{ selectedFont.family }}
+              </p>
+              <p class="text-xs text-ink-500 mt-0.5">
+                {{ selectedDetail?.category || selectedFont.category }}
+                · {{ selectedDetail?.variants?.length || selectedFont.variants?.length }} varian
+              </p>
+            </div>
+            <div class="rounded-panel border border-ink-200 bg-ink-50 px-4 py-5 min-h-[4.5rem] flex items-center justify-center">
+              <p
+                v-if="!selectedLoading"
+                class="text-2xl text-center break-words max-w-full leading-tight"
+                :style="googlePreview.styleFor(selectedFont.family)"
+              >
+                {{ previewText || 'NUMA 3D' }}
+              </p>
+              <p v-else class="text-sm text-ink-500">Memuat preview…</p>
+            </div>
+            <div v-if="selectedDetail?.variants?.length">
+              <label class="label">Varian</label>
+              <select v-model="selectedVariant" class="input text-sm">
+                <option v-for="v in selectedDetail.variants" :key="v" :value="v">{{ variantLabel(v) }}</option>
+              </select>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="btn-primary text-sm"
+                :disabled="downloading || selectedLoading || !selectedDetail"
+                @click="downloadToDevice(selectedDetail.family, selectedVariant)"
+              >
+                <ArrowDownTrayIcon class="w-4 h-4" />
+                {{ downloading ? 'Mengunduh…' : 'Unduh file' }}
+              </button>
+              <button
+                v-if="isAdmin"
+                type="button"
+                class="btn-secondary text-sm"
+                :disabled="downloading || selectedLoading || !selectedDetail"
+                @click="saveToServer(selectedDetail.family, selectedVariant)"
+              >
+                {{ downloading ? 'Menyimpan…' : 'Simpan ke server' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel min-h-[18rem] flex flex-col">
           <div class="panel-header">
             <span class="panel-title">Font lokal</span>
             <button type="button" class="btn-secondary text-xs py-1.5 px-2" @click="refreshInstalled()">
@@ -323,7 +485,7 @@ onUnmounted(() => {
           <div v-if="!installed?.length" class="flex-1 flex items-center justify-center p-8 text-sm text-ink-500 text-center">
             <div>
               <p>Belum ada font di <code class="text-xs bg-ink-100 px-1 rounded">public/fonts/</code>.</p>
-              <p class="text-xs text-ink-400 mt-2">Hover font di katalog lalu unduh ke server.</p>
+              <p class="text-xs text-ink-400 mt-2">Admin bisa menyimpan font terpilih ke server untuk generator.</p>
             </div>
           </div>
           <ul v-else class="divide-y divide-ink-100 overflow-y-auto flex-1">
@@ -334,9 +496,14 @@ onUnmounted(() => {
                   <div class="font-mono text-sm truncate">{{ font.filename }}</div>
                   <div class="text-xs text-ink-500">{{ formatSize(font.size) }}</div>
                 </div>
-                <a :href="font.url" class="btn-secondary text-xs py-1.5 px-2 shrink-0" download>
+                <button
+                  type="button"
+                  class="btn-secondary text-xs py-1.5 px-2 shrink-0"
+                  title="Unduh file"
+                  @click="downloadLocal(font)"
+                >
                   <ArrowDownTrayIcon class="w-4 h-4" />
-                </a>
+                </button>
                 <button
                   v-if="isAdmin"
                   type="button"
@@ -374,7 +541,8 @@ onUnmounted(() => {
       :is-admin="isAdmin"
       :downloading="downloading"
       @update:selected-variant="hoverVariant = $event"
-      @download="downloadHoverFont"
+      @download="downloadHoverServer"
+      @download-file="downloadHoverFile"
       @mouseenter="onCardEnter"
       @mouseleave="onCardLeave"
     />

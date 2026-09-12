@@ -6,6 +6,7 @@ import Module from 'manifold-3d'
 import jsQR from 'jsqr'
 import { unzipSync, strFromU8 } from 'fflate'
 import { createQrPlateDesign, qrPayload, qrPlateSvg } from '../utils/qrPlateDesign.js'
+import { qrPlateScad } from '../utils/qrPlateScad.js'
 import { QR_PLATE_ICONS } from '../utils/qrPlateIcons.js'
 registerHooks({ resolve(specifier, context, next) { return next(specifier === 'opentype.js' ? 'opentype.js/dist/opentype.mjs' : specifier, context) } })
 const { buildQrPlate } = await import('../utils/qrPlateCore.js')
@@ -158,6 +159,23 @@ test('coordinate welding used by STL importers preserves QR volume at diagonal j
       finally { original.delete(); welded.delete() }
     }
   }
+})
+
+test('editing caption or QR text changes the exported mesh and SCAD contours', () => {
+  const pay = buildQrPlate(wasm, { standStyle: 'none', iconId: 'none', caption: 'PAY', content: 'https://a.example/' }, font)
+  const menu = buildQrPlate(wasm, { standStyle: 'none', iconId: 'none', caption: 'MENU', content: 'https://b.example/' }, font)
+  const payIcon = pay.parts.find((part) => part.role === 'icon')
+  const menuIcon = menu.parts.find((part) => part.role === 'icon')
+  assert.ok(payIcon && menuIcon)
+  assert.notDeepEqual(
+    Array.from(payIcon.geometry.positions.slice(0, 24)),
+    Array.from(menuIcon.geometry.positions.slice(0, 24))
+  )
+  assert.notEqual(pay.design.payload, menu.design.payload)
+  const payScad = qrPlateScad(pay.design)
+  const menuScad = qrPlateScad(menu.design)
+  assert.match(payScad, /caption_points = \[\[/)
+  assert.notEqual(payScad, menuScad)
 })
 
 test('3MF separates stand from multipart plaque, STL keeps all parts and SCAD includes stand and icon', async () => {

@@ -25,7 +25,7 @@ function arc(r, thickness, from, to, cy = 0) {
 export function qrIconContours(id) {
   switch (id) {
     case 'none': return { solid: [], holes: [] }
-    case 'wifi': return { solid: [arc(17, 2.3, 42, 138, -8), arc(11.5, 2.3, 42, 138, -8), circle(1.8, 0, -6)], holes: [] }
+    case 'wifi': return { solid: [arc(17, 2.3, 42, 138, -8), arc(12.2, 2.3, 42, 138, -8), arc(7.4, 2.3, 42, 138, -8), circle(1.8, 0, -6)], holes: [] }
     case 'whatsapp': return {
       // Silhouette of the uploaded WhatsApp mark (public/icons/whatsapp.png).
       solid: [[

@@ -65,7 +65,7 @@ const tools = [
   {
     to: '/tools/font-downloader',
     title: 'Font Downloader',
-    description: 'Cari & unduh font Google Fonts ke server untuk dipakai di generator keychain dan tools lain.',
+    description: 'Cari Google Fonts, unduh file TTF, atau simpan ke server untuk keychain dan tools lain.',
     icon: markRaw(ArrowDownTrayIcon),
     tags: ['Google Fonts', 'TTF', 'Keychain']
   },

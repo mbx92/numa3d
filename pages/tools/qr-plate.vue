@@ -1,7 +1,7 @@
 <script setup>
 import { QrCodeIcon, PlayIcon, StopIcon, ArrowDownTrayIcon, CloudArrowUpIcon, PhotoIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { QR_PLATE_DEFAULTS, createQrPlateDesign, qrPlateSvg } from '~/utils/qrPlateDesign.js'
-import { generateQrPlate } from '~/utils/qrPlateGenerator.js'
+import { generateQrPlate, disposeQrPlateWorker } from '~/utils/qrPlateGenerator.js'
 import { QR_PLATE_ICONS, qrIconSvg } from '~/utils/qrPlateIcons.js'
 import { decodeWhatsappQrFile } from '~/utils/qrFromImage.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
@@ -65,13 +65,13 @@ let controller = null, serial = 0
 const state = useGeneratorState(form, result, generateModel)
 const { runGenerate, ensureFreshResult, isFresh } = state
 
+const previewKey = ref(0)
+
 async function generateModel() {
   const token = ++serial
   controller?.abort()
   controller = new AbortController()
   const signal = controller.signal
-  const revision = state.revision.value
-  const snapshot = JSON.parse(JSON.stringify(form))
   generating.value = true
   error.value = ''
   const previous = result.value
@@ -79,15 +79,34 @@ async function generateModel() {
   await nextTick()
   previous?.dispose()
   if (token !== serial) return
+  const revision = state.revision.value
+  const snapshot = JSON.parse(JSON.stringify(form))
   try {
     const output = await generateQrPlate(snapshot, { signal })
     if (token !== serial) { output.dispose(); return }
     result.value = output
+    previewKey.value += 1
     state.markGenerated(revision)
   } catch (e) {
     if (token === serial && e.name !== 'AbortError') error.value = e.message || 'Generate gagal'
   } finally { if (token === serial) generating.value = false }
 }
+
+let textTimer
+watch(
+  () => [
+    form.plateLayout, form.contentType, form.content, form.caption,
+    form.wifiCaption, form.whatsappCaption, form.wifiSsid, form.wifiPassword,
+    form.wifiSecurity, form.wifiHidden, form.whatsappPayload, form.fontUrl,
+    form.errorCorrection
+  ],
+  () => {
+    clearTimeout(textTimer)
+    textTimer = setTimeout(() => {
+      if (!draft.value.error) runGenerate()
+    }, 450)
+  }
+)
 function cancel() {
   serial++
   controller?.abort()
@@ -135,15 +154,25 @@ async function freshResult() {
   if (!(await ensureFreshResult())) throw new Error(error.value || 'Pengaturan berubah saat model dibuat — klik Generate lagi')
   return result.value
 }
+function fileSlug(label) {
+  return String(label || 'QR Plate').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'qr_plate'
+}
+
 async function download() {
   if (exporting.value || saving.value) return
   exporting.value = true
   const selected = format.value
   try {
+    if (selected === 'svg') {
+      if (!draft.value.design) throw new Error(draft.value.error || 'Pengaturan belum valid')
+      downloadBlob(new Blob([qrPlateSvg(draft.value.design)], { type: 'image/svg+xml' }), `${fileSlug(form.label)}.svg`)
+      toast.success('File siap diunduh')
+      return
+    }
     const output = await freshResult()
     const formats = {
       '3mf': ['get3mfBlob', '3mf'], stl: ['getStlZipBlob', 'zip'], glb: ['getGlbBlob', 'glb'],
-      scad: ['getScadBlob', 'scad'], svg: ['getSvgBlob', 'svg']
+      scad: ['getScadBlob', 'scad']
     }
     const [method, ext] = formats[selected]
     const blob = await output[method]()
@@ -167,7 +196,9 @@ async function saveToGallery() {
 }
 onMounted(runGenerate)
 onBeforeUnmount(() => {
+  clearTimeout(textTimer)
   cancel()
+  disposeQrPlateWorker()
   result.value?.dispose()
   result.value = null
 })
@@ -306,7 +337,7 @@ onBeforeUnmount(() => {
             </div>
             <div v-if="view === '3d'" class="qr-plate-preview" :aria-busy="generating">
               <ClientOnly>
-                <KeychainPreview v-if="result" :parts="previewParts" :show-grid="showGrid" z-up-model />
+                <KeychainPreview v-if="result" :key="previewKey" :parts="previewParts" :show-grid="showGrid" z-up-model />
                 <div v-else class="h-full flex items-center justify-center text-center p-8 text-sm text-ink-500" role="status">{{ generating ? 'Membuat geometri pelat dan QR…' : 'Isi konten lalu klik Generate 3D.' }}</div>
                 <template #fallback><div class="p-8 text-ink-500">Menyiapkan preview…</div></template>
               </ClientOnly>
@@ -326,13 +357,17 @@ onBeforeUnmount(() => {
             </div>
           </section>
           <p v-if="draft.error || error" class="panel p-3 bg-red-50 text-red-700 text-sm" role="alert">{{ draft.error || error }}</p>
-          <p v-if="result && !isFresh" class="panel p-3 bg-amber-50 text-amber-800 text-sm" role="status">Pengaturan berubah. Preview 3D belum diperbarui; unduhan akan membuat ulang model.</p>
+          <p v-if="result && !isFresh" class="panel p-3 bg-amber-50 text-amber-800 text-sm" role="status">Teks atau pengaturan berubah. Model 3D sedang dibuat ulang agar unduhan ikut berubah.</p>
           <p v-for="warning in draft.design?.warnings || []" :key="warning" class="panel p-3 bg-amber-50 text-amber-800 text-sm">{{ warning }}</p>
 
           <section class="panel p-4 space-y-3" aria-label="Ekspor pelat QR">
             <h3 class="font-semibold">Ekspor model</h3>
             <label class="block text-sm">Nama file<input v-model="form.label" maxlength="64" class="input mt-1" /></label>
             <div class="flex flex-wrap gap-2">
+              <button v-if="generating" type="button" class="btn-secondary" @click="cancel"><StopIcon class="w-4 h-4" /> Batal</button>
+              <button type="button" class="btn-primary" :disabled="generating || exporting || saving || !!draft.error" @click="runGenerate">
+                <PlayIcon class="w-4 h-4" /> {{ generating ? 'Membentuk pelat…' : 'Generate 3D' }}
+              </button>
               <select v-model="format" class="input !w-auto max-w-full" aria-label="Format unduhan">
                 <option value="3mf">3MF · warna & alas terpisah</option><option value="stl">STL · semua bagian dalam ZIP</option><option value="glb">GLB · model terpasang</option><option value="scad">OpenSCAD · source .scad</option><option value="svg">SVG · QR 2D</option>
               </select>
@@ -344,6 +379,13 @@ onBeforeUnmount(() => {
             <GeneratorHppPanel :result="isFresh ? result : null" :color-fields="colorFields" :material-ids="materialIds" :colors="form.colors" :color-mode="colorMode" />
           </section>
         </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-end gap-2 pb-2">
+        <button v-if="generating" type="button" class="btn-secondary" @click="cancel"><StopIcon class="w-4 h-4" /> Batal</button>
+        <button type="button" class="btn-primary" :disabled="generating || exporting || saving || !!draft.error" @click="runGenerate">
+          <PlayIcon class="w-4 h-4" /> {{ generating ? 'Membentuk pelat…' : 'Generate 3D' }}
+        </button>
       </div>
     </div>
   </div>

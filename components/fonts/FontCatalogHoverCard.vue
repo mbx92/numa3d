@@ -12,7 +12,7 @@ const props = defineProps({
   downloading: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:selectedVariant', 'download', 'mouseenter', 'mouseleave'])
+const emit = defineEmits(['update:selectedVariant', 'download', 'download-file', 'mouseenter', 'mouseleave'])
 
 const googlePreview = useGoogleFontPreview()
 
@@ -22,7 +22,7 @@ const cardStyle = computed(() => {
   }
   const gap = 12
   const cardW = 320
-  const cardH = 280
+  const cardH = 360
   let left = props.anchor.right + gap
   let top = props.anchor.top
 
@@ -116,19 +116,26 @@ watch(
                 </select>
               </div>
 
-              <button
-                v-if="isAdmin && detail"
-                type="button"
-                class="btn-primary w-full text-sm"
-                :disabled="downloading"
-                @click="emit('download')"
-              >
-                <ArrowDownTrayIcon class="w-4 h-4" />
-                {{ downloading ? 'Mengunduh…' : 'Unduh ke server' }}
-              </button>
-              <p v-else-if="!isAdmin" class="text-[11px] text-ink-400 text-center">
-                Login admin untuk mengunduh font.
-              </p>
+              <div v-if="detail" class="space-y-2">
+                <button
+                  type="button"
+                  class="btn-primary w-full text-sm"
+                  :disabled="downloading"
+                  @click="emit('download-file')"
+                >
+                  <ArrowDownTrayIcon class="w-4 h-4" />
+                  {{ downloading ? 'Mengunduh…' : 'Unduh file' }}
+                </button>
+                <button
+                  v-if="isAdmin"
+                  type="button"
+                  class="btn-secondary w-full text-sm"
+                  :disabled="downloading"
+                  @click="emit('download')"
+                >
+                  {{ downloading ? 'Menyimpan…' : 'Simpan ke server' }}
+                </button>
+              </div>
             </template>
           </div>
         </div>

@@ -156,10 +156,11 @@ export async function getGoogleFontFamily(family) {
   return meta
 }
 
-function variantToCssSpec(variantKey) {
-  const italic = String(variantKey).endsWith('i')
-  const weight = italic ? variantKey.slice(0, -1) : variantKey
-  return { italic: italic ? 1 : 0, weight: Number(weight) || 400 }
+export function variantToCssSpec(variantKey) {
+  const raw = String(variantKey || '400').trim().toLowerCase()
+  const italic = raw === 'italic' || raw.endsWith('i') || raw.includes('italic')
+  const weight = Number(String(variantKey).replace(/[^0-9]/g, '')) || 400
+  return { italic: italic ? 1 : 0, weight }
 }
 
 function buildFilename(family, variantKey, ext) {
@@ -170,13 +171,17 @@ function buildFilename(family, variantKey, ext) {
   return `${safeFamily}-${suffix}${ext}`
 }
 
-function extractFontUrl(cssText) {
-  const match = cssText.match(/url\(([^)]+)\)\s*format\(/i)
-  if (!match) throw new Error('URL font tidak ditemukan di respons Google Fonts')
-  return match[1].replace(/['"]/g, '')
+const FONT_CSS_UA = 'Mozilla/5.0 (compatible; Numa3D-FontDownloader/1.1)'
+
+export function extractFontUrl(cssText) {
+  const urls = [...String(cssText).matchAll(/url\((['"]?)(https?:\/\/[^)'"\s]+)\1\)/gi)].map((m) => m[2])
+  if (!urls.length) throw new Error('URL font tidak ditemukan di respons Google Fonts')
+  return urls.find((u) => /\.(ttf|otf)(?:\?|$)/i.test(u))
+    || urls.find((u) => /\.woff(?:\?|$)/i.test(u) && !/\.woff2/i.test(u))
+    || urls[0]
 }
 
-export async function downloadGoogleFont({ family, variant }) {
+export async function fetchGoogleFontFile({ family, variant }) {
   const fam = String(family || '').trim()
   const varKey = String(variant || '400').trim()
   if (!fam) throw new Error('Nama font wajib diisi')
@@ -190,18 +195,31 @@ export async function downloadGoogleFont({ family, variant }) {
   const cssFamily = familyInfo.family.replace(/\s+/g, '+')
   const cssUrl = `https://fonts.googleapis.com/css2?family=${cssFamily}:ital,wght@${italic},${weight}&display=swap`
 
-  const cssRes = await fetch(cssUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+  const cssRes = await fetch(cssUrl, { headers: { 'User-Agent': FONT_CSS_UA } })
   if (!cssRes.ok) throw new Error(`Gagal mengambil CSS font (${cssRes.status})`)
 
   const fontUrl = extractFontUrl(await cssRes.text())
-  const fontRes = await fetch(fontUrl)
+  const fontRes = await fetch(fontUrl, { headers: { 'User-Agent': FONT_CSS_UA } })
   if (!fontRes.ok) throw new Error(`Gagal mengunduh file font (${fontRes.status})`)
 
   const buffer = Buffer.from(await fontRes.arrayBuffer())
+  if (buffer.length < 100) throw new Error('File font kosong atau tidak valid')
   const extMatch = fontUrl.match(/\.(ttf|otf|woff2?)(?:\?|$)/i)
   const ext = extMatch ? `.${extMatch[1].toLowerCase()}` : '.ttf'
+  if (ext === '.woff2') throw new Error('Google mengirim WOFF2. Generator butuh TTF, OTF, atau WOFF — coba unduh ulang.')
 
   const filename = buildFilename(familyInfo.family, varKey, ext)
+  return {
+    buffer,
+    filename,
+    family: familyInfo.family,
+    variantKey: varKey,
+    label: `${familyInfo.family} ${variantLabel(varKey)}`
+  }
+}
+
+export async function downloadGoogleFont({ family, variant }) {
+  const { buffer, filename, label } = await fetchGoogleFontFile({ family, variant })
   const dest = join(fontsDir(), filename)
 
   if (existsSync(dest)) {
@@ -212,7 +230,7 @@ export async function downloadGoogleFont({ family, variant }) {
         url: `/fonts/${encodeURIComponent(filename)}`,
         size: buffer.length,
         skipped: true,
-        label: `${familyInfo.family} ${variantLabel(varKey)}`
+        label
       }
     }
   }
@@ -223,7 +241,7 @@ export async function downloadGoogleFont({ family, variant }) {
     url: `/fonts/${encodeURIComponent(filename)}`,
     size: buffer.length,
     skipped: false,
-    label: `${familyInfo.family} ${variantLabel(varKey)}`
+    label
   }
 }
 

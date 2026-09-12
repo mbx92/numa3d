@@ -3,10 +3,54 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { zipSync, strToU8 } from 'fflate'
 import { unpackGeometry } from './geometryPack.js'
 import { partsToGlbBuffer, printGroupsTo3mfBuffer } from './keychainExport.js'
-import { runCodeStudioJob } from './codeStudioJob.js'
 import { createQrPlateDesign, qrPlateSvg } from './qrPlateDesign.js'
 import { qrPlateScad } from './qrPlateScad.js'
 import { qrPlateAssemblyTransform } from './qrPlateStand.js'
+
+let plateWorker = null
+let plateJob = 0
+
+export function disposeQrPlateWorker() {
+  plateWorker?.terminate()
+  plateWorker = null
+  plateJob += 1
+}
+
+function getPlateWorker() {
+  if (plateWorker) return plateWorker
+  plateWorker = new Worker(new URL('../workers/qrPlate.worker.js', import.meta.url), { type: 'module' })
+  plateWorker.addEventListener('error', () => { plateWorker = null })
+  return plateWorker
+}
+
+function runQrPlateJob(payload, { signal, timeoutMs = 60000 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Generate dibatalkan', 'AbortError'))
+    const worker = getPlateWorker()
+    const id = ++plateJob
+    let settled = false
+    const finish = (error, result) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      worker.removeEventListener('message', onMessage)
+      if (error) reject(error)
+      else resolve(result)
+    }
+    const onAbort = () => finish(new DOMException('Generate dibatalkan', 'AbortError'))
+    const onMessage = ({ data }) => {
+      if (data?.id !== id) return
+      if (data?.error) finish(new Error(data.error))
+      else if (data?.result) finish(null, data.result)
+      else finish(new Error('Respons worker tidak valid'))
+    }
+    const timer = setTimeout(() => finish(new Error('Generate melewati 60 detik. Sederhanakan desain lalu coba lagi.')), timeoutMs)
+    worker.addEventListener('message', onMessage)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    try { worker.postMessage({ id, ...payload }) } catch (error) { finish(error) }
+  })
+}
 
 export function buildQrPlateResult(raw) {
   const design = raw.design
@@ -84,7 +128,8 @@ export function buildQrPlateResult(raw) {
 }
 
 export async function generateQrPlate(input, { signal } = {}) {
-  const design = createQrPlateDesign(input)
+  const snapshot = JSON.parse(JSON.stringify(input))
+  const design = createQrPlateDesign(snapshot)
   const { opts } = design
   if (signal?.aborted) throw new DOMException('Generate dibatalkan', 'AbortError')
   if (typeof Worker === 'undefined') throw new Error('Generator QR memerlukan browser dengan Web Worker')
@@ -97,9 +142,6 @@ export async function generateQrPlate(input, { signal } = {}) {
     if (!response.ok) throw new Error(`Font gagal dimuat (HTTP ${response.status})`)
     fontBuffer = await response.arrayBuffer()
   }
-  const raw = await runCodeStudioJob(
-    () => new Worker(new URL('../workers/qrPlate.worker.js', import.meta.url), { type: 'module' }),
-    { opts, fontBuffer }, { signal }
-  )
+  const raw = await runQrPlateJob({ opts: snapshot, fontBuffer }, { signal })
   return buildQrPlateResult(raw)
 }
