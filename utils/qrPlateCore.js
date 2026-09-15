@@ -1,4 +1,4 @@
-import { parse, Path } from 'opentype.js'
+import { parse, Path } from './opentypeLib.js'
 import { createQrPlateDesign } from './qrPlateDesign.js'
 import { opentypePathToShapes } from './opentypeToShapes.js'
 import { shapesToRings } from './clickerManifold/meshUtils.js'

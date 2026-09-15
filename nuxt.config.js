@@ -28,6 +28,11 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   vite: {
     plugins: isProduction ? [] : [devAppManifestPlugin()],
+    resolve: {
+      alias: {
+        'opentype.js': 'opentype.js/dist/opentype.mjs'
+      }
+    },
     optimizeDeps: {
       exclude: ['manifold-3d']
     },
@@ -35,6 +40,11 @@ export default defineNuxtConfig({
       format: 'es'
     },
     assetsInclude: ['**/*.wasm']
+  },
+  nitro: {
+    alias: {
+      'opentype.js': 'opentype.js/dist/opentype.mjs'
+    }
   },
   devServer: {
     host: '0.0.0.0',

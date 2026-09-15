@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { parse, Path } from 'opentype.js'
+import { parse, Path } from './opentypeLib.js'
 import { opentypePathToShapes } from './opentypeToShapes.js'
 import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import {

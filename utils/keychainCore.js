@@ -1,7 +1,7 @@
 // Logika generate keychain — 2D di Clipper/font, solid di Manifold WASM.
 import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { parse, Path } from 'opentype.js'
+import { parse, Path } from './opentypeLib.js'
 import { opentypePathToShapes } from './opentypeToShapes.js'
 import {
   buildBaseSilhouette,
