@@ -2,7 +2,9 @@ import { Mesh, MeshStandardMaterial } from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { zipSync, strToU8 } from 'fflate'
 import { unpackGeometry } from './geometryPack.js'
-import { partsToGlbBuffer, printGroupsTo3mfBuffer } from './keychainExport.js'
+import { partsToGlbBuffer } from './keychainExport.js'
+import { createPrintProjectExport } from './printProjectExport.js'
+import { TOOL_PRINT_PROFILES } from './slicerProjectSettings.js'
 import { createQrPlateDesign, qrPlateSvg } from './qrPlateDesign.js'
 import { qrPlateScad } from './qrPlateScad.js'
 import { qrPlateAssemblyTransform } from './qrPlateStand.js'
@@ -93,6 +95,7 @@ export function buildQrPlateResult(raw) {
   })
   const groups = [{ name: design.opts.label, parts: parts.filter((p) => p.group === 'plate') }]
   if (design.stand) groups.push({ name: 'Alas dudukan', parts: parts.filter((p) => p.group === 'stand') })
+  const export3mf = createPrintProjectExport(groups, slug, TOOL_PRINT_PROFILES['qr-plate'].id)
   let disposed = false
   const cache = new Map()
   const usable = () => { if (disposed) throw new Error('Hasil sudah dibuang — Generate ulang') }
@@ -109,10 +112,9 @@ export function buildQrPlateResult(raw) {
     slug, design, dimensions: raw.dimensions, volumeMm3: raw.volumeMm3, triangles: raw.triangles,
     warnings: raw.warnings, basePreviewParts: parts.filter((p) => p.group === 'plate'), baseExportParts: parts,
     assemblyPreviewParts: assembly, printPreviewParts: printParts,
-    get3mfBlob() {
+    get3mfBlob(options) {
       usable()
-      if (!cache.has('3mf')) cache.set('3mf', new Blob([printGroupsTo3mfBuffer(groups, slug, undefined, { processPreset: 'pla-detail-0.4' })], { type: 'model/3mf' }))
-      return cache.get('3mf')
+      return export3mf(options)
     },
     getStlZipBlob() {
       usable()

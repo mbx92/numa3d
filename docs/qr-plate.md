@@ -15,7 +15,7 @@ Pelat memiliki bagian kosong 12 mm di bawah dekorasi untuk masuk ke slot. Pelat 
 
 ## Format
 
-- **3MF:** warna pelat dipertahankan sebagai multipart; alas menjadi objek terpisah dan ditata pada plate 260 × 260 mm. Kombinasi ukuran yang tidak muat menghasilkan pesan kesalahan.
+- **3MF:** warna pelat dipertahankan sebagai multipart; alas menjadi objek terpisah dan ditata pada plate 260 × 260 mm. Kombinasi ukuran yang tidak muat menghasilkan pesan kesalahan. Profil QR Plate Detail untuk Kobra X nozzle 0,4 mm dan PLA disertakan secara default; pilihan **Sertakan profil** berlaku untuk unduhan maupun simpan 3MF ke Galeri. Rincian: [profil cetak generator](generator-print-profiles.md).
 - **STL ZIP:** bingkai, panel terang, pola QR, ikon/tulisan bila digunakan, serta alas bila digunakan. Impor seluruh warna pelat sebagai satu objek multipart dengan posisi relatif tetap. Alas diimpor terpisah. Petunjuk juga ada dalam ZIP.
 - **GLB:** model berwarna dalam posisi terpasang.
 - **OpenSCAD:** QR dan kontur ikon/font disematkan tanpa pustaka tambahan. Ukuran pelat, inlay, lubang, jenis alas, slot, dan susunan dapat diedit. `part` mengekspor bagian tertentu pada koordinat asalnya. Isi QR, jenis ikon, dan tulisan diganti melalui generator lalu diekspor ulang.

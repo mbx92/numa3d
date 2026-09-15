@@ -68,6 +68,7 @@ const toast = useToast()
 const themes = KEYCHAIN_THEME_LIST
 const attachmentTypes = ATTACHMENT_TYPES
 const exportFormat = ref('3mf')
+const { includePrintProfile, printExportOptions } = useSlicerProfile('keychain')
 const activeAttachment = computed(
   () => attachmentTypes.find((t) => t.id === form.attachmentType) || attachmentTypes[0]
 )
@@ -244,7 +245,7 @@ async function downloadPart(part) {
   try {
     if (!(await ensureFreshResult())) return
     const fmt = exportFormat.value
-    const { blob, filename } = await resolveGeneratorPartExport(result.value, part, fmt)
+    const { blob, filename } = await resolveGeneratorPartExport(result.value, part, fmt, printExportOptions.value)
     if (!blob) throw new Error('Part tidak tersedia')
     downloadBlob(blob, filename)
     const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
@@ -288,7 +289,7 @@ async function saveToGallery() {
     const model = result.value
     const fmt = exportFormat.value
     const files = await Promise.all(['base', 'text'].map((part) =>
-      resolveGeneratorPartExport(model, part, fmt)
+      resolveGeneratorPartExport(model, part, fmt, printExportOptions.value)
     ))
     if (!files[0]?.blob) throw new Error('Part utama tidak tersedia')
     for (const file of files) {
@@ -333,7 +334,7 @@ function restartWizard() {
   disposePrev = null
   prevDispose?.()
 }
-const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFreshResult)
+const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFreshResult, () => printExportOptions.value)
 
 </script>
 
@@ -535,6 +536,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                   <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
                 </select>
               </KeychainCompactField>
+              <SlicerProfileSettings v-if="exportFormat === '3mf'" v-model="includePrintProfile" tool="keychain" />
               <PrintPlateExport v-if="exportFormat === '3mf'" :busy="exportingPlate" @download="downloadPlate" />
               <div class="space-y-2">
                 <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('base')">
@@ -554,6 +556,8 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                   {{ saving ? 'Menyimpan…' : 'Galeri' }}
                 </button>
               </div>
+              <GeneratorSliceHpp :result="isResultFresh ? result : null" tool="keychain" :print-options="printExportOptions" />
+              <details class="text-xs"><summary class="cursor-pointer text-ink-500">Estimasi volume &amp; recipe produk</summary>
               <GeneratorHppPanel
                 :result="isResultFresh ? result : null"
                 :color-fields="HPP_COLOR_FIELDS"
@@ -561,6 +565,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                 :colors="form.colors"
                 :color-mode="colorMode"
               />
+              </details>
               <p class="text-[10px] text-ink-400 leading-relaxed">3MF OrcaSlicer · Bagian warna tetap tergabung dalam satu objek.</p>
             </template>
             <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>

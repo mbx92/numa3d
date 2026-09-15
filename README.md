@@ -79,18 +79,18 @@ Kalau produk punya **harga jual tersimpan** (`list_price` > 0), katalog dan tomb
 
 Margin bersih penjualan = `(harga jual × (1 − fee marketplace%) − HPP) × qty`. Penjualan baru menyimpan snapshot `hpp_per_unit` saat transaksi, jadi laporan tidak berubah kalau harga material/mesin nanti diubah.
 
-Panel Export di generator (clicker, mesh-clicker, keychain, lightbox) bisa mengisi recipe produk dari volume mesh × infill (bukan hasil slicer). Waktu cetak tetap diisi manual di tab Recipe. Tes: `node --test tests/hpp.test.js`.
+QR Plate, Keychain, dan Clicker memiliki **Slice & hitung HPP**: API lokal menjalankan OrcaSlicer lalu memakai gram dan durasi dari G-code untuk menghitung HPP per plate dengan asumsi biaya yang bisa diubah. [Panduan dan hasil uji](docs/slicing-hpp.md). Estimasi volume mesh × infill dan pengisian recipe yang lama tetap tersedia pada bagian terlipat; waktu recipe tersebut tetap diisi manual. Tes: `node --test tests/hpp.test.js`.
 
 ## Export plate 3MF untuk OrcaSlicer
 
-Di panel Export generator keychain, clicker, mesh clicker, atau lightbox, pilih **3MF → Plate 260 × 260 · Semua bagian**. Buka file sebagai **proyek** di OrcaSlicer agar susunan plate dan bagian warna dipertahankan. File mengacu pada preset **Anycubic Kobra X 0.4 nozzle**, dengan volume cetak 260 × 260 × 260 mm. Pilih profil proses dan filament yang biasa digunakan; file tidak menyertakan suhu atau G-code mesin.
+Di panel Export generator keychain, clicker, mesh clicker, atau lightbox, pilih **3MF → Plate 260 × 260 · Semua bagian**. Buka file sebagai **proyek** di OrcaSlicer agar susunan plate dan bagian warna dipertahankan. File mengacu pada preset **Anycubic Kobra X 0.4 nozzle**, dengan volume cetak 260 × 260 × 260 mm. QR Plate, Keychain, dan Clicker menyertakan profil awal PLA sesuai generator, dengan ringkasan layer, dinding, infill, kecepatan, dan suhu di panel ekspor. Nonaktifkan **Sertakan profil** untuk memilih proses dan filament sendiri di OrcaSlicer. Mesh Clicker dan Lightbox tetap memakai pengaturan dari slicer. File tidak menyertakan G-code mesin. Lihat [profil cetak generator](docs/generator-print-profiles.md).
 
 - Komponen cetak disusun pada satu plate, berjarak 6 mm, dengan margin tepi 5 mm. Setiap komponen menyentuh Z=0 dan bagian warnanya tetap sejajar.
 - Tutup clicker datar dibalik menghadap plate. Mesh impor mempertahankan orientasinya dan dapat memerlukan support. Lightbox memakai geometri front/side dan stand dalam orientasi cetak, terpisah dari back.
 - Jika tidak muat, ekspor ditolak dengan pesan untuk mengunduh per bagian atau mengecilkan desain. Ukuran model tidak otomatis diperkecil; belum ada pembagian otomatis ke beberapa plate. Margin ini untuk geometri model, belum menghitung brim, support, atau purge tower dari profil slicer.
 - Tombol ekspor per bagian juga menempatkan komponen di tengah plate. STL dan GLB tetap tersedia.
 
-Tes layout dan struktur arsip: `node --test tests/printPlateExport.test.js`. Tes rumus HPP/harga jual: `node --test tests/hpp.test.js`. Verifikasi integrasi dilakukan dengan impor/simpan ulang CLI OrcaSlicer 2.4.2, `--arrange 0 --orient 0`, serta profil proses uji terpisah: bounding box dunia, Z=0, grup objek, dan slot filament tetap sama untuk sampel keychain, clicker, dan lightbox. CLI memerlukan profil proses lengkap (termasuk pengaturan purge); ekspor ini hanya membawa layout dan referensi printer. Belum ada verifikasi cetak fisik.
+Tes layout dan struktur arsip: `node --test tests/printPlateExport.test.js`. Tes rumus HPP/harga jual: `node --test tests/hpp.test.js`. Verifikasi layout sebelumnya dilakukan dengan impor/simpan ulang CLI OrcaSlicer 2.4.2, `--arrange 0 --orient 0`, serta profil proses uji terpisah: bounding box dunia, Z=0, grup objek, dan slot filament tetap sama untuk sampel keychain, clicker, dan lightbox. Profil PLA ketiga generator utama juga diuji terpisah; rincian ada di [profil cetak generator](docs/generator-print-profiles.md). CLI memerlukan konfigurasi proses lengkap untuk pengaturan yang tidak disertakan proyek. Belum ada verifikasi cetak fisik.
 
 ## Keputusan desain v1
 

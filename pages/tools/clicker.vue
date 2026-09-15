@@ -52,6 +52,7 @@ const form = reactive({
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const toast = useToast()
 const exportFormat = ref('3mf')
+const { includePrintProfile, printExportOptions } = useSlicerProfile('clicker')
 const activePreset = computed(() => getSwitchPreset(form.switchPresetId))
 
 const activeToolPanel = ref('design')
@@ -239,7 +240,7 @@ async function downloadPart(part) {
   try {
     if (!(await ensureFreshResult())) return
     const fmt = exportFormat.value
-    const { blob, filename } = await resolveGeneratorPartExport(result.value, part, fmt)
+    const { blob, filename } = await resolveGeneratorPartExport(result.value, part, fmt, printExportOptions.value)
     if (!blob) throw new Error('Part tidak tersedia')
     downloadBlob(blob, filename)
     const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
@@ -283,7 +284,7 @@ async function saveToGallery() {
     const model = result.value
     const fmt = exportFormat.value
     const files = await Promise.all(['base', 'lid'].map((part) =>
-      resolveGeneratorPartExport(model, part, fmt)
+      resolveGeneratorPartExport(model, part, fmt, printExportOptions.value)
     ))
     if (!files[0]?.blob) throw new Error('Part utama tidak tersedia')
     for (const file of files) {
@@ -321,7 +322,7 @@ function restartWizard() {
 watch(canSimulateClick, (ok) => {
   if (!ok) simulatingClick.value = false
 })
-const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFreshResult)
+const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFreshResult, () => printExportOptions.value)
 
 </script>
 
@@ -463,6 +464,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                   <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
                 </select>
               </KeychainCompactField>
+              <SlicerProfileSettings v-if="exportFormat === '3mf'" v-model="includePrintProfile" tool="clicker" />
               <PrintPlateExport v-if="exportFormat === '3mf'" :busy="exportingPlate" @download="downloadPlate" />
               <div class="space-y-2">
                 <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('base')">
@@ -482,6 +484,8 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                   {{ saving ? 'Menyimpan…' : 'Galeri' }}
                 </button>
               </div>
+              <GeneratorSliceHpp :result="isResultFresh ? result : null" tool="clicker" :print-options="printExportOptions" />
+              <details class="text-xs"><summary class="cursor-pointer text-ink-500">Estimasi volume &amp; recipe produk</summary>
               <GeneratorHppPanel
                 :result="isResultFresh ? result : null"
                 :color-fields="COLOR_FIELDS"
@@ -489,6 +493,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                 :colors="form.colors"
                 :color-mode="colorMode"
               />
+              </details>
             </template>
             <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
           </template>

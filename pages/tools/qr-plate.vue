@@ -28,6 +28,7 @@ const standStyles = [
 const showGrid = ref(true)
 const showPassword = ref(false)
 const format = ref('3mf')
+const { includePrintProfile, printExportOptions } = useSlicerProfile('qr-plate')
 const whatsappPreview = ref('')
 const whatsappFileName = ref('')
 const whatsappReading = ref(false)
@@ -189,7 +190,7 @@ async function download() {
       scad: ['getScadBlob', 'scad']
     }
     const [method, ext] = formats[selected]
-    const blob = await output[method]()
+    const blob = await (selected === '3mf' ? output[method](printExportOptions.value) : output[method]())
     downloadBlob(blob, `${output.slug}.${ext}`)
     toast.success('File siap diunduh')
   } catch (e) { toast.error(e.message || 'Ekspor gagal') }
@@ -200,7 +201,7 @@ async function saveToGallery() {
   saving.value = true
   try {
     const output = await freshResult()
-    const blob = output.get3mfBlob()
+    const blob = output.get3mfBlob(printExportOptions.value)
     const body = new FormData()
     body.append('file', new File([blob], `${output.slug}.3mf`, { type: blob.type }))
     await $fetch('/api/library-files', { method: 'POST', body, timeout: 120000, retry: 0 })
@@ -400,6 +401,7 @@ onBeforeUnmount(() => {
 
           <section class="panel p-4 space-y-3" aria-label="Ekspor pelat QR">
             <h3 class="font-semibold">Ekspor model</h3>
+            <SlicerProfileSettings v-model="includePrintProfile" tool="qr-plate" />
             <label class="block text-sm">Nama file<input v-model="form.label" maxlength="64" class="input mt-1" /></label>
             <div class="flex flex-wrap gap-2">
               <button v-if="generating" type="button" class="btn-secondary" @click="cancel"><StopIcon class="w-4 h-4" /> Batal</button>
@@ -407,15 +409,17 @@ onBeforeUnmount(() => {
                 <PlayIcon class="w-4 h-4" /> {{ generating ? 'Membentuk pelat…' : 'Generate 3D' }}
               </button>
               <select v-model="format" class="input !w-auto max-w-full" aria-label="Format unduhan">
-                <option value="3mf">3MF · PLA Detail 0,12 mm</option><option value="stl">STL · semua bagian dalam ZIP</option><option value="glb">GLB · model terpasang</option><option value="scad">OpenSCAD · source .scad</option><option value="svg">SVG · QR 2D</option>
+                <option value="3mf">3MF · proyek OrcaSlicer</option><option value="stl">STL · semua bagian dalam ZIP</option><option value="glb">GLB · model terpasang</option><option value="scad">OpenSCAD · source .scad</option><option value="svg">SVG · QR 2D</option>
               </select>
               <button type="button" class="btn-primary" :disabled="generating || exporting || saving || !!draft.error" @click="download"><ArrowDownTrayIcon class="w-4 h-4" /> {{ exporting ? 'Mengekspor…' : 'Unduh' }}</button>
               <button v-if="isAdmin" type="button" class="btn-secondary" :disabled="generating || exporting || saving || !!draft.error" @click="saveToGallery"><CloudArrowUpIcon class="w-4 h-4" /> {{ saving ? 'Menyimpan…' : 'Simpan 3MF ke Galeri' }}</button>
             </div>
             <p class="text-xs text-ink-500">3MF menyusun pelat datar dan alas sebagai objek cetak terpisah. STL berisi bagian bingkai, panel, QR, ikon/tulisan, dan alas yang digunakan. Impor warna pelat sebagai satu objek multipart.</p>
-            <p v-if="format === '3mf'" class="text-xs text-ink-500">Buka sebagai proyek di OrcaSlicer dengan profil Kobra X nozzle 0,4 mm terpasang. Termasuk proses PLA 0,12 mm, Arachne, nozzle 215 °C pada layer pertama / 205 °C berikutnya, dan textured bed 60 °C. Sesuaikan dengan filamen Anda sebelum slicing.</p>
             <details class="text-xs text-ink-500"><summary class="cursor-pointer text-ink-700">Tentang source OpenSCAD</summary><p class="mt-2 leading-relaxed">File .scad mandiri menyimpan QR, ikon, dan kontur tulisan model ini. Ukuran, permukaan, lubang, serta model alas dapat diubah di OpenSCAD. Untuk mengganti isi QR, ikon, atau tulisan, buat ulang melalui halaman ini.</p></details>
-            <GeneratorHppPanel :result="isFresh ? result : null" :color-fields="colorFields" :material-ids="materialIds" :colors="form.colors" :color-mode="colorMode" />
+            <GeneratorSliceHpp :result="isFresh ? result : null" tool="qr-plate" :print-options="printExportOptions" />
+            <details class="text-xs"><summary class="cursor-pointer text-ink-500">Estimasi volume &amp; recipe produk</summary>
+              <GeneratorHppPanel :result="isFresh ? result : null" :color-fields="colorFields" :material-ids="materialIds" :colors="form.colors" :color-mode="colorMode" />
+            </details>
           </section>
         </div>
       </div>

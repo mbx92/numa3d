@@ -1,9 +1,29 @@
 // Orca project overrides for small PLA artwork on the installed Kobra X preset.
 // These are process/material settings, not a replacement machine profile.
 // Temperature baseline: Orca's Anycubic PLA @Anycubic Kobra X 0.4 nozzle.
+export const TOOL_PRINT_PROFILES = Object.freeze({
+  'qr-plate': Object.freeze({
+    id: 'qr-plate-pla-0.4', label: 'QR Plate Detail',
+    note: 'Utamakan ketajaman pola QR dan tulisan. Uji pemindaian QR setelah cetak.',
+    settings: Object.freeze({ layer_height: '0.12', wall_loops: '2', sparse_infill_density: '15%', outer_wall_speed: '40', top_surface_speed: '30' })
+  }),
+  keychain: Object.freeze({
+    id: 'keychain-pla-0.4', label: 'Keychain Detail',
+    note: 'Dinding lebih tebal untuk gantungan, dengan kecepatan permukaan lebih rendah. Uji kecocokan teks dengan rongga base.',
+    settings: Object.freeze({ layer_height: '0.12', wall_loops: '3', sparse_infill_density: '20%', outer_wall_speed: '35', top_surface_speed: '25' })
+  }),
+  clicker: Object.freeze({
+    id: 'clicker-pla-0.4', label: 'Clicker Presisi',
+    note: 'Utamakan dinding socket dan sambungan. Uji pemasangan switch, lid, serta gerak engsel jika digunakan.',
+    settings: Object.freeze({ layer_height: '0.16', wall_loops: '3', sparse_infill_density: '20%', outer_wall_speed: '35', top_surface_speed: '30' })
+  })
+})
+
 export function slicerProjectSettings(preset, filamentCount) {
-  if (!preset) return {}
-  if (preset !== 'pla-detail-0.4') throw new Error('Profil proses 3MF tidak dikenal')
+  if (preset == null) return {}
+  const profile = Object.values(TOOL_PRINT_PROFILES).find((entry) => entry.id === preset)
+  if (!profile && preset !== 'pla-detail-0.4') throw new Error('Profil proses 3MF tidak dikenal')
+  if (!Number.isInteger(filamentCount) || filamentCount < 1) throw new Error('Jumlah slot filament tidak valid')
   const slots = (value) => Array(filamentCount).fill(value)
   return {
     print_settings_id: 'Numa3D PLA Detail 0.12 @Anycubic Kobra X',
@@ -29,6 +49,10 @@ export function slicerProjectSettings(preset, filamentCount) {
     nozzle_temperature: slots('205'),
     nozzle_temperature_initial_layer: slots('215'),
     textured_plate_temp: slots('60'),
-    textured_plate_temp_initial_layer: slots('60')
+    textured_plate_temp_initial_layer: slots('60'),
+    ...(profile ? {
+      ...profile.settings,
+      print_settings_id: `Numa3D ${profile.label} ${profile.settings.layer_height} @Anycubic Kobra X`
+    } : {})
   }
 }

@@ -1,6 +1,6 @@
 import { downloadBlob } from '~/utils/downloadBlob.js'
 
-export function usePrintPlateExport(result, ensureFresh) {
+export function usePrintPlateExport(result, ensureFresh, getExportOptions = () => undefined) {
   const toast = useToast()
   const exportingPlate = ref(false)
   async function downloadPlate() {
@@ -9,7 +9,7 @@ export function usePrintPlateExport(result, ensureFresh) {
     try {
       if (ensureFresh && !(await ensureFresh())) return
       if (!result.value) return
-      const blob = result.value.getPlate3mfBlob()
+      const blob = result.value.getPlate3mfBlob(getExportOptions())
       downloadBlob(blob, `${result.value.slug}_plate_260x260.3mf`)
       toast.success('Plate 3MF siap dibuka sebagai proyek di OrcaSlicer')
     } catch (error) {

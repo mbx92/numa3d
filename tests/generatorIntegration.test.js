@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
-import { unzipSync } from 'fflate'
+import { unzipSync, strFromU8 } from 'fflate'
+import { TOOL_PRINT_PROFILES } from '../utils/slicerProjectSettings.js'
 
 test('text generators recover from a failed font fetch and export real STL/3MF geometry', async (t) => {
   const hooks = registerHooks({
@@ -42,9 +43,24 @@ test('text generators recover from a failed font fetch and export real STL/3MF g
         const threemf = await resolveGeneratorPartExport(result, part, '3mf')
         const zip = unzipSync(new Uint8Array(await threemf.blob.arrayBuffer()))
         assert.ok(zip['3D/3dmodel.model'], `${name}/${part} 3MF must contain a model`)
+        if (TOOL_PRINT_PROFILES[name]) {
+          const settings = JSON.parse(strFromU8(zip['Metadata/project_settings.config']))
+          assert.ok(settings.print_settings_id.includes(TOOL_PRINT_PROFILES[name].label))
+          const plain = await resolveGeneratorPartExport(result, part, '3mf', { processPreset: null })
+          const plainZip = unzipSync(new Uint8Array(await plain.blob.arrayBuffer()))
+          assert.equal(JSON.parse(strFromU8(plainZip['Metadata/project_settings.config'])).layer_height, undefined)
+          assert.deepEqual(plainZip['3D/3dmodel.model'], zip['3D/3dmodel.model'])
+          const restored = await resolveGeneratorPartExport(result, part, '3mf')
+          assert.equal(restored.blob, threemf.blob)
+        }
       }
       const zip = unzipSync(new Uint8Array(await result.getPlate3mfBlob().arrayBuffer()))
       assert.ok(zip['Metadata/project_settings.config'])
+      if (TOOL_PRINT_PROFILES[name]) {
+        assert.ok(JSON.parse(strFromU8(zip['Metadata/project_settings.config'])).print_settings_id.includes(TOOL_PRINT_PROFILES[name].label))
+        const plainZip = unzipSync(new Uint8Array(await result.getPlate3mfBlob({ processPreset: null }).arrayBuffer()))
+        assert.equal(JSON.parse(strFromU8(plainZip['Metadata/project_settings.config'])).layer_height, undefined)
+      }
     } finally {
       result.dispose()
     }

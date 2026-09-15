@@ -1,4 +1,6 @@
 import { createGeneratorWorkerClient, GeneratorWorkerError } from './generatorWorkerClient.js'
+import { createPrintProjectExport } from './printProjectExport.js'
+import { TOOL_PRINT_PROFILES } from './slicerProjectSettings.js'
 // API generate clicker — offload ke Web Worker agar UI tidak freeze.
 import { generateClickerCore } from './clickerCore.js'
 import { unpackGeometry } from './geometryPack.js'
@@ -7,7 +9,6 @@ import {
   EXPORT_FORMATS,
   exportFilename,
   exportMime,
-  printGroupsTo3mfBuffer,
   partsToColoredStlBuffer,
   partsToGlbBuffer,
   partsToMultiSolidStlBuffer
@@ -113,20 +114,21 @@ function buildLiveResult(raw) {
   let baseBlobCache = null
   let baseColorStlCache = null
   let baseMultiStlCache = null
-  let base3mfCache = null
   let baseGlbCache = null
   let lidBlobCache = null
   let lidColorStlCache = null
   let lidMultiStlCache = null
-  let lid3mfCache = null
   let lidGlbCache = null
   const lidStlBuffer = raw.lidStlBuffer || raw.accentStlBuffer
 
+  const processPreset = raw.shapeMode === 'mesh' ? null : TOOL_PRINT_PROFILES.clicker.id
+  const baseGroup = { name: 'Base', parts: base3mfParts }
+  const lidGroup = { name: 'Lid', parts: lidExportParts, faceDown: raw.shapeMode !== 'mesh' }
+  const exportLid3mf = createPrintProjectExport([lidGroup], `${raw.slug}_lid`, processPreset)
+
   return {
     slug: raw.slug,
-    getPlate3mfBlob() {
-      return new Blob([printGroupsTo3mfBuffer([{ name: 'Base', parts: base3mfParts }, { name: 'Lid', parts: lidExportParts, faceDown: raw.shapeMode !== 'mesh' }], raw.slug)], { type: 'model/3mf' })
-    },
+    getPlate3mfBlob: createPrintProjectExport([baseGroup, lidGroup], raw.slug, processPreset),
     warnings: raw.warnings || [],
     shapeMode: raw.shapeMode,
     displayMode: raw.displayMode,
@@ -188,27 +190,13 @@ function buildLiveResult(raw) {
     getAccentMultiStlBlob() {
       return this.getLidMultiStlBlob()
     },
-    getBase3mfBlob() {
-      if (!base3mfCache) {
-        base3mfCache = new Blob(
-          [printGroupsTo3mfBuffer([{ name: 'Base', parts: base3mfParts }], `${raw.slug}_base`)],
-          { type: 'model/3mf' }
-        )
-      }
-      return base3mfCache
-    },
-    getLid3mfBlob() {
+    getBase3mfBlob: createPrintProjectExport([baseGroup], `${raw.slug}_base`, processPreset),
+    getLid3mfBlob(options) {
       if (!lidExportParts.length) return null
-      if (!lid3mfCache) {
-        lid3mfCache = new Blob(
-          [printGroupsTo3mfBuffer([{ name: 'Lid', parts: lidExportParts, faceDown: raw.shapeMode !== 'mesh' }], `${raw.slug}_lid`)],
-          { type: 'model/3mf' }
-        )
-      }
-      return lid3mfCache
+      return exportLid3mf(options)
     },
-    getAccent3mfBlob() {
-      return this.getLid3mfBlob()
+    getAccent3mfBlob(options) {
+      return this.getLid3mfBlob(options)
     },
     async getBaseGlbBlob() {
       if (!baseGlbCache) {

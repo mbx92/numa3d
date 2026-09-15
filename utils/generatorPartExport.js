@@ -18,7 +18,7 @@ const SUFFIXES = {
 }
 
 // Downloads and gallery uploads use the same model snapshot and format mapping.
-export async function resolveGeneratorPartExport(model, part, format) {
+export async function resolveGeneratorPartExport(model, part, format, options) {
   if (!model) throw new Error('Generate model dulu untuk export')
   const config = PARTS[part]
   if (!config || !EXPORT_FORMATS.some((entry) => entry.id === format)) {
@@ -29,7 +29,7 @@ export async function resolveGeneratorPartExport(model, part, format) {
   }
   const method = config.names.map((name) => `get${name}${SUFFIXES[format]}`)
     .find((name) => typeof model[name] === 'function')
-  const blob = method ? await model[method]() : null
+  const blob = method ? await (format === '3mf' ? model[method](options) : model[method]()) : null
   const suffix = part === 'stand' ? `stand_${model.dimensions?.standModelId || 'model'}` : part
   const originalFilename = config.filenames.map((key) => model[key]).find(Boolean)
   const filename = format === 'stl' && originalFilename

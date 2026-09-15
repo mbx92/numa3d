@@ -1,10 +1,10 @@
 <script setup>
 definePageMeta({
   layout: 'tool',
-  toolTitle: 'Tools'
+  toolTitle: 'Tools Beta'
 })
 </script>
 
 <template>
-  <ToolCatalog />
+  <ToolCatalog beta />
 </template>

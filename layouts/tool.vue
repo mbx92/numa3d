@@ -6,15 +6,19 @@ import {
   UserIcon,
   ArrowRightStartOnRectangleIcon
 } from '@heroicons/vue/24/outline'
+import { isBetaToolPath } from '~/utils/toolNavigation.js'
 
 const route = useRoute()
 const authUser = useState('authUser')
 
 const toolTitle = computed(() => route.meta.toolTitle || 'Tools')
-const toolBeta = computed(() => !!route.meta.toolBeta)
+const toolBeta = computed(() => isBetaToolPath(route.path) || !!route.meta.toolBeta)
 const fullBleed = computed(() => !!route.meta.toolFullBleed)
 
 const backLink = computed(() => {
+  if (isBetaToolPath(route.path) && route.path.replace(/\/+$/, '') !== '/tools/beta') {
+    return { to: '/tools/beta', label: 'Tools Beta' }
+  }
   if (route.path.startsWith('/tools/') && route.path !== '/tools' && route.path !== '/tools/') {
     return { to: '/tools', label: 'Tools' }
   }

@@ -1,4 +1,6 @@
 import { createGeneratorWorkerClient } from './generatorWorkerClient.js'
+import { createPrintProjectExport } from './printProjectExport.js'
+import { TOOL_PRINT_PROFILES } from './slicerProjectSettings.js'
 // API generate keychain — offload ke Web Worker agar UI tidak freeze.
 import { getKeychainTheme } from './keychainThemes.js'
 import { generateKeychainCore } from './keychainCore.js'
@@ -9,7 +11,6 @@ import {
   EXPORT_FORMATS,
   exportFilename,
   exportMime,
-  printGroupsTo3mfBuffer,
   partsToColoredStlBuffer,
   partsToGlbBuffer,
   partsToMultiSolidStlBuffer
@@ -103,16 +104,12 @@ function buildLiveResult(raw) {
   let textColorStlCache = null
   let baseMultiStlCache = null
   let textMultiStlCache = null
-  let base3mfCache = null
-  let text3mfCache = null
   let baseGlbCache = null
   let textGlbCache = null
 
   return {
     slug: raw.slug,
-    getPlate3mfBlob() {
-      return new Blob([printGroupsTo3mfBuffer([{ name: 'Base', parts: base3mfParts }, { name: 'Teks', parts: textExportParts }], raw.slug)], { type: 'model/3mf' })
-    },
+    getPlate3mfBlob: createPrintProjectExport([{ name: 'Base', parts: base3mfParts }, { name: 'Teks', parts: textExportParts }], raw.slug, TOOL_PRINT_PROFILES.keychain.id),
     themeId: raw.themeId,
     themeName: raw.themeName,
     attachmentType: raw.attachmentType,
@@ -157,24 +154,8 @@ function buildLiveResult(raw) {
       }
       return textMultiStlCache
     },
-    getBase3mfBlob() {
-      if (!base3mfCache) {
-        base3mfCache = new Blob(
-          [printGroupsTo3mfBuffer([{ name: 'Base', parts: base3mfParts }], `${raw.slug}_base`)],
-          { type: 'model/3mf' }
-        )
-      }
-      return base3mfCache
-    },
-    getText3mfBlob() {
-      if (!text3mfCache) {
-        text3mfCache = new Blob(
-          [printGroupsTo3mfBuffer([{ name: 'Teks', parts: textExportParts }], `${raw.slug}_text`)],
-          { type: 'model/3mf' }
-        )
-      }
-      return text3mfCache
-    },
+    getBase3mfBlob: createPrintProjectExport([{ name: 'Base', parts: base3mfParts }], `${raw.slug}_base`, TOOL_PRINT_PROFILES.keychain.id),
+    getText3mfBlob: createPrintProjectExport([{ name: 'Teks', parts: textExportParts }], `${raw.slug}_text`, TOOL_PRINT_PROFILES.keychain.id),
     async getBaseGlbBlob() {
       if (!baseGlbCache) {
         baseGlbCache = new Blob([await partsToGlbBuffer(baseExportParts)], { type: 'model/gltf-binary' })
