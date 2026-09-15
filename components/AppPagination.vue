@@ -34,11 +34,12 @@ function go(p) {
     v-if="total > 0"
     class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3 py-2.5 border-t border-ink-200 text-sm"
   >
-    <div class="flex items-center gap-2 text-ink-500 order-2 sm:order-1">
+    <div class="flex items-center gap-2 text-ink-500 order-2 sm:order-1 min-w-0">
       <span class="whitespace-nowrap">{{ rangeStart }}–{{ rangeEnd }} dari {{ total }}</span>
       <select
         :value="pageSize"
-        class="input !px-2 !w-auto text-xs"
+        class="input w-max min-w-[6.75rem] shrink-0 !pl-2.5 !pr-8 text-xs"
+        aria-label="Baris per halaman"
         @change="emit('update:pageSize', Number($event.target.value))"
       >
         <option v-for="n in pageSizeOptions" :key="n" :value="n">{{ n }} / hal</option>
