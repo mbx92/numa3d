@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { BoxGeometry } from 'three'
 import { unzipSync, strFromU8 } from 'fflate'
-import { TOOL_PRINT_PROFILES, slicerProjectSettings } from '../utils/slicerProjectSettings.js'
+import { TOOL_PRINT_PROFILES, slicerProjectSettings, flushVolumesMatrix } from '../utils/slicerProjectSettings.js'
 import { createPrintProjectExport } from '../utils/printProjectExport.js'
 import { resolveGeneratorPartExport } from '../utils/generatorPartExport.js'
 
@@ -18,11 +18,18 @@ test('all tool profiles set every filament slot without overriding machine G-cod
     for (const key of ['filament_settings_id', 'filament_type', 'filament_diameter', 'nozzle_temperature', 'nozzle_temperature_initial_layer', 'textured_plate_temp', 'textured_plate_temp_initial_layer']) {
       assert.equal(settings[key].length, 4, key)
     }
-    for (const key of ['machine_start_gcode', 'machine_end_gcode', 'filament_flow_ratio', 'pressure_advance', 'xy_hole_compensation', 'xy_contour_compensation']) {
+    for (const key of ['machine_start_gcode', 'machine_end_gcode', 'filament_flow_ratio', 'pressure_advance', 'post_process']) {
       assert.equal(settings[key], undefined, key)
     }
+    assert.equal(settings.sparse_infill_pattern, 'gyroid')
+    assert.equal(settings.enable_prime_tower, '1')
+    assert.equal(settings.flush_volumes_matrix.length, 16)
+    assert.equal(settings.flush_volumes_matrix[0], '0')
+    assert.equal(settings.flush_volumes_matrix[1], '70')
+    assert.equal(slicerProjectSettings(profile.id, 1).enable_prime_tower, '0')
   }
   assert.deepEqual(slicerProjectSettings(null, 2), {})
+  assert.deepEqual(flushVolumesMatrix(2), ['0', '70', '70', '0'])
   assert.throws(() => slicerProjectSettings('unknown', 1), /tidak dikenal/)
   assert.throws(() => slicerProjectSettings(TOOL_PRINT_PROFILES.keychain.id, 0), /slot filament/)
 })

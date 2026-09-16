@@ -1,6 +1,8 @@
 // Orca project overrides for small PLA artwork on the installed Kobra X preset.
 // These are process/material settings, not a replacement machine profile.
 // Temperature baseline: Orca's Anycubic PLA @Anycubic Kobra X 0.4 nozzle.
+import { KOBRA_X_HQ_016_PROCESS } from './kobraXHq016Process.js'
+
 export const TOOL_PRINT_PROFILES = Object.freeze({
   'qr-plate': Object.freeze({
     id: 'qr-plate-pla-0.4', label: 'QR Plate Detail',
@@ -19,13 +21,26 @@ export const TOOL_PRINT_PROFILES = Object.freeze({
   })
 })
 
+const DEFAULT_FLUSH = 70
+
+export function flushVolumesMatrix(filamentCount, volume = DEFAULT_FLUSH) {
+  if (!Number.isInteger(filamentCount) || filamentCount < 1) throw new Error('Jumlah slot filament tidak valid')
+  const matrix = []
+  for (let from = 0; from < filamentCount; from++) {
+    for (let to = 0; to < filamentCount; to++) matrix.push(from === to ? '0' : String(volume))
+  }
+  return matrix
+}
+
 export function slicerProjectSettings(preset, filamentCount) {
   if (preset == null) return {}
   const profile = Object.values(TOOL_PRINT_PROFILES).find((entry) => entry.id === preset)
   if (!profile && preset !== 'pla-detail-0.4') throw new Error('Profil proses 3MF tidak dikenal')
   if (!Number.isInteger(filamentCount) || filamentCount < 1) throw new Error('Jumlah slot filament tidak valid')
   const slots = (value) => Array(filamentCount).fill(value)
+  const multiColor = filamentCount > 1
   return {
+    ...KOBRA_X_HQ_016_PROCESS,
     print_settings_id: 'Numa3D PLA Detail 0.12 @Anycubic Kobra X',
     layer_height: '0.12',
     initial_layer_print_height: '0.2',
@@ -43,6 +58,9 @@ export function slicerProjectSettings(preset, filamentCount) {
     bottom_shell_layers: '5',
     sparse_infill_density: '15%',
     ironing_type: 'no ironing',
+    enable_prime_tower: multiColor ? '1' : '0',
+    flush_volumes_matrix: flushVolumesMatrix(filamentCount),
+    flush_multiplier: '1',
     filament_settings_id: slots('Anycubic PLA @Anycubic Kobra X 0.4 nozzle'),
     filament_type: slots('PLA'),
     filament_diameter: slots('1.75'),

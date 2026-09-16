@@ -528,7 +528,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
           </template>
 
           <template v-else-if="activeToolPanel === 'colors'">
-            <p class="text-xs text-ink-500">Material dari stok, 1 warna abu-abu, atau hex.</p>
+            <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
             <ToolColorBar
               v-model:mode="colorMode"
               v-model:colors="form.colors"

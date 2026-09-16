@@ -13,7 +13,9 @@ import {
   estimateMaterialLines,
   geometryVolumeMm3,
   gramsFromVolumeMm3,
-  mergeGeneratorRecipe
+  mergeGeneratorRecipe,
+  printMinutesFromSlice,
+  slicerToEstimateLines
 } from '../utils/meshHppEstimate.js'
 
 const settings = { electricityRatePerKwh: 1445, machineUsageHoursPerMonth: 100 }
@@ -121,4 +123,38 @@ test('merge recipe mengganti filament, mempertahankan part dan packaging', () =>
   assert.equal(merged.recipes[0].quantityUsed, 12.3)
   assert.equal(merged.recipes[0].printTimeMinutes, 25)
   assert.equal(merged.recipes[1].materialId, 9)
+})
+
+test('merge recipe memakai menit cetak dari Orca jika diberikan', () => {
+  const merged = mergeGeneratorRecipe({
+    existingRecipes: [
+      { materialId: 1, quantityUsed: 40, printTimeMinutes: 25, machineId: 2, failureRatePercent: 8, laborMinutes: 10, laborRatePerHour: 15000 }
+    ],
+    estimateLines: [{ materialId: 4, quantityUsed: 4.65, type: 'filament' }],
+    materials: [{ id: 1, type: 'filament' }, { id: 4, type: 'filament' }],
+    machineId: 2,
+    printTimeMinutes: 27
+  })
+  assert.equal(merged.recipes[0].quantityUsed, 4.65)
+  assert.equal(merged.recipes[0].printTimeMinutes, 27)
+})
+
+test('hasil slice Orca dipetakan ke material warna dan dibulatkan ke menit recipe', () => {
+  assert.equal(printMinutesFromSlice({ printTimeSeconds: 1594 }), 27)
+  const { lines, skipped } = slicerToEstimateLines(
+    { filamentGrams: [2.07, 1.39], colors: ['#111111', '#ff0000'] },
+    {
+      colorFields: [{ key: 'base', label: 'Base' }, { key: 'text', label: 'Teks' }],
+      materialIds: { base: 1, text: 4 },
+      colors: { base: '#111111', text: '#FF0000' },
+      materials: [
+        { id: 1, name: 'PLA hitam', unit: 'gram', type: 'filament' },
+        { id: 4, name: 'PLA merah', unit: 'gram', type: 'filament' }
+      ]
+    }
+  )
+  assert.equal(skipped.length, 0)
+  assert.equal(lines.length, 2)
+  assert.equal(lines.find((line) => line.materialId === 1).quantityUsed, 2.1)
+  assert.equal(lines.find((line) => line.materialId === 4).quantityUsed, 1.4)
 })

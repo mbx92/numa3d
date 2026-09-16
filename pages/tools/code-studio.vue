@@ -18,7 +18,7 @@ const saving = ref(false)
 const error = ref('')
 const format = ref('3mf')
 const showGrid = ref(true)
-const colorMode = ref('hex')
+const colorMode = ref('material')
 const materialIds = ref({})
 const colorFields = [{ key: 'base', label: 'Model', short: 'Model', materialType: 'filament' }]
 const toast = useToast()
@@ -79,7 +79,7 @@ function loadExample() {
   form.values = {}
   form.colors.base = example.color || '#f97316'
   materialIds.value = {}
-  colorMode.value = 'hex'
+  colorMode.value = 'material'
   runGenerate()
 }
 function onEditorInput() {
@@ -146,7 +146,7 @@ async function openCode(event) {
     form.label = String(data.label || 'Code Studio').slice(0, 64)
     form.colors = { base: /^#[0-9a-f]{6}$/i.test(data.color) ? data.color : '#f97316' }
     materialIds.value = {}
-    colorMode.value = 'hex'
+    colorMode.value = 'material'
     exampleId.value = ''
     runGenerate()
   } catch (e) { toast.error(e.message || 'File kode tidak valid') }

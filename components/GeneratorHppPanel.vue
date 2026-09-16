@@ -118,7 +118,7 @@ async function applyRecipe() {
       Generate ulang setelah mengubah desain untuk memperbarui estimasi HPP.
     </p>
     <p v-else-if="needsMaterial" class="text-[11px] text-amber-700">
-      Pilih material di panel Warna (mode Material). Mode 1 warna tidak mengisi recipe.
+      Pilih material di panel Warna. Recipe terisi setelah setiap bagian punya material.
     </p>
 
     <template v-else>

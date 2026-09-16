@@ -9,7 +9,7 @@ Target awal: Anycubic Kobra X, nozzle 0,4 mm, PLA, dan textured plate. Profil me
 3. Unduh 3MF dan buka sebagai **proyek** di OrcaSlicer dengan preset printer Kobra X terpasang.
 4. Periksa pemetaan warna, support, brim, purge tower, dan preview hasil Slice sebelum mencetak.
 
-Tombol **Slice & hitung HPP** juga menjalankan slicing pada OrcaSlicer lokal dan langsung menampilkan HPP dengan asumsi biaya yang bisa diubah. Lihat [slicing lokal dan HPP](slicing-hpp.md) untuk hasil uji nyata ketiga generator dan konfigurasi server.
+Tombol **Slice gram & waktu** menjalankan CLI OrcaSlicer di server dengan proses yang sama yang tertanam di 3MF. Jendela desktop masih bisa beda jika filament atau flush di akun Orca sudah dikalibrasi. Lihat [slicing lokal untuk data produksi](slicing-hpp.md).
 
 Pilihan profil berlaku untuk plate lengkap, ekspor per bagian, dan 3MF yang disimpan ke Galeri. Mengubah pilihan ini tidak memerlukan generate ulang geometri. Jika dimatikan, ekspor hanya membawa model, warna, layout, dan referensi printer; proses serta filament dipilih di OrcaSlicer. STL dan GLB tidak membawa profil cetak.
 
@@ -21,9 +21,9 @@ Pilihan profil berlaku untuk plate lengkap, ekspor per bagian, dan 3MF yang disi
 | Keychain Detail | 0,12 mm | 3 | 20% | 35 mm/s | 25 mm/s |
 | Clicker Presisi | 0,16 mm | 3 | 20% | 35 mm/s | 30 mm/s |
 
-Semua profil memakai layer pertama 0,2 mm, Arachne, lima lapisan atas/bawah, ironing nonaktif, dan kecepatan layer pertama 25 mm/s. Suhu awal mengikuti baseline preset Anycubic PLA Kobra X yang terpasang: nozzle 215 °C pada layer pertama, 205 °C berikutnya, serta textured bed 60 °C. Profil proses di atas adalah pilihan awal Numa3D; angka kecepatan dan ketebalan belum divalidasi lewat cetak fisik.
+Semua profil memakai layer pertama 0,2 mm, Arachne, lima lapisan atas/bawah, ironing nonaktif, dan kecepatan layer pertama 25 mm/s. Suhu awal mengikuti baseline preset Anycubic PLA Kobra X yang terpasang: nozzle 215 °C pada layer pertama, 205 °C berikutnya, serta textured bed 60 °C. 3MF juga membawa sisa proses Kobra X 0,16 mm High Quality (infill gyroid, prime tower, flush 70 mm³, kecepatan lain) supaya File → Open tidak mengisi kekosongan dari proses yang sedang dipilih di Orca. Profil proses di atas adalah pilihan awal Numa3D; angka kecepatan dan ketebalan belum divalidasi lewat cetak fisik.
 
-Profil tidak menyertakan machine G-code, flow ratio, pressure advance, maupun kompensasi XY. Pengaturan yang tidak disertakan mengikuti konfigurasi OrcaSlicer. Toleransi geometri (rongga teks, socket switch, engsel, dan slot alas) tetap diatur pada generator; hasil cetaknya perlu diuji. Sesuaikan suhu dan kalibrasi dengan filament yang digunakan. Referensi: [kalibrasi toleransi OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/wiki/tolerance_calib) dan [Arachne](https://www.orcaslicer.com/wiki/print_settings/quality/quality_settings_wall_generator).
+Profil tidak menyertakan machine G-code, flow ratio, pressure advance, maupun perintah post-process. CLI memuat filament stok Anycubic PLA; desktop memakai salinan filament di akun Orca (termasuk kalibrasi flush). Toleransi geometri (rongga teks, socket switch, engsel, dan slot alas) tetap diatur pada generator; hasil cetaknya perlu diuji. Sesuaikan suhu dan kalibrasi dengan filament yang digunakan. Referensi: [kalibrasi toleransi OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer/wiki/tolerance_calib) dan [Arachne](https://www.orcaslicer.com/wiki/print_settings/quality/quality_settings_wall_generator).
 
 Uji fisik yang perlu dilakukan:
 

@@ -435,7 +435,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
           </template>
 
           <template v-else-if="activeToolPanel === 'colors'">
-            <p class="text-xs text-ink-500">Material dari stok, 1 warna abu-abu, atau hex.</p>
+            <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
             <ToolColorBar
               v-model:mode="colorMode"
               v-model:colors="form.colors"
@@ -484,7 +484,15 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
                   {{ saving ? 'Menyimpan…' : 'Galeri' }}
                 </button>
               </div>
-              <GeneratorSliceHpp :result="isResultFresh ? result : null" tool="clicker" :print-options="printExportOptions" />
+              <GeneratorSliceHpp
+                :result="isResultFresh ? result : null"
+                tool="clicker"
+                :print-options="printExportOptions"
+                :color-fields="COLOR_FIELDS"
+                :material-ids="colorMaterialIds"
+                :colors="form.colors"
+                :color-mode="colorMode"
+              />
               <details class="text-xs"><summary class="cursor-pointer text-ink-500">Estimasi volume &amp; recipe produk</summary>
               <GeneratorHppPanel
                 :result="isResultFresh ? result : null"

@@ -1,5 +1,4 @@
-import { sliceGenerator3mf } from '../../utils/orcaSlicer.js'
-import { computeSlicerHpp } from '../../../utils/slicerHpp.js'
+import { sliceGenerator3mf, computeSlicerHpp } from '../../utils/orcaSlicer.js'
 
 export default defineEventHandler(async (event) => {
   // Authentication is enforced by server/middleware/auth.js. This only estimates; it never starts a printer.
@@ -11,10 +10,11 @@ export default defineEventHandler(async (event) => {
   const includeProfile = parts?.find((part) => part.name === 'includeProfile')?.data.toString() !== 'false'
   if (!file) throw createError({ statusCode: 400, statusMessage: 'File 3MF wajib disertakan' })
   try {
-    const costs = JSON.parse(parts?.find((part) => part.name === 'costs')?.data.toString() || '{}')
-    if (!costs || typeof costs !== 'object' || Array.isArray(costs)) throw new Error('Asumsi biaya tidak valid')
-    computeSlicerHpp({ totalGrams: 1, printTimeSeconds: 1 }, costs)
+    const costsRaw = parts?.find((part) => part.name === 'costs')?.data.toString()
     const slice = await sliceGenerator3mf(file.data, { tool, includeProfile })
+    if (!costsRaw) return slice
+    const costs = JSON.parse(costsRaw)
+    if (!costs || typeof costs !== 'object' || Array.isArray(costs)) throw new Error('Asumsi biaya tidak valid')
     return { ...slice, hpp: computeSlicerHpp(slice, costs) }
   }
   catch (error) { throw createError({ statusCode: error.statusCode || 422, statusMessage: error.message }) }

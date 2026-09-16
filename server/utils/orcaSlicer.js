@@ -1,17 +1,61 @@
 import { access, readFile, writeFile, mkdtemp, rm } from 'node:fs/promises'
 import { join, dirname, resolve, relative, isAbsolute } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate'
-import { TOOL_PRINT_PROFILES, slicerProjectSettings } from '../../utils/slicerProjectSettings.js'
-import { parseOrcaGcodeStats } from '../../utils/slicerHpp.js'
 
 const MAX_BYTES = 40 * 1024 * 1024
 const ARCHIVE_FILES = new Set(['[Content_Types].xml', '_rels/.rels', '3D/3dmodel.model', 'Metadata/model_settings.config', 'Metadata/project_settings.config'])
 const OBJECT_KEYS = new Set(['name', 'extruder', 'plater_id', 'plater_name', 'locked', 'object_id', 'instance_id', 'identify_id'])
+const WIN_ORCA = 'C:/Program Files/OrcaSlicer/orca-slicer.exe'
+const MAC_ORCA = '/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer'
+const MAC_PROFILES = '/Applications/OrcaSlicer.app/Contents/Resources/profiles/Anycubic'
+const MACHINE_PRESET = 'Anycubic Kobra X 0.4 nozzle'
 let active = false
+let slicerModsPromise
 
-export function prepareSlicerInput(bytes, tool, includeProfile = true) {
+function loadSlicerModules() {
+  if (!slicerModsPromise) {
+    const dir = join(process.cwd(), 'utils')
+    slicerModsPromise = Promise.all([
+      import(pathToFileURL(join(dir, 'slicerProjectSettings.js')).href),
+      import(pathToFileURL(join(dir, 'slicerHpp.js')).href)
+    ]).then(([project, hpp]) => ({
+      TOOL_PRINT_PROFILES: project.TOOL_PRINT_PROFILES,
+      slicerProjectSettings: project.slicerProjectSettings,
+      parseOrcaGcodeStats: hpp.parseOrcaGcodeStats,
+      computeSlicerHpp: hpp.computeSlicerHpp
+    }))
+  }
+  return slicerModsPromise
+}
+
+export async function computeSlicerHpp(stats, costs) {
+  return (await loadSlicerModules()).computeSlicerHpp(stats, costs)
+}
+
+export function resolveOrcaInstall({ executable = process.env.ORCA_SLICER_PATH, profilesPath = process.env.ORCA_PROFILES_PATH } = {}) {
+  const resolvedExecutable = executable
+    || (process.platform === 'darwin' ? MAC_ORCA : '')
+    || (process.platform === 'win32' ? WIN_ORCA : '')
+  const resolvedProfiles = profilesPath
+    || (process.platform === 'darwin' ? MAC_PROFILES : '')
+    || (resolvedExecutable ? join(dirname(resolvedExecutable), 'resources', 'profiles', 'Anycubic') : '')
+  return { executable: resolvedExecutable, profilesPath: resolvedProfiles }
+}
+
+export async function orcaSlicerStatus(options) {
+  const { executable, profilesPath } = resolveOrcaInstall(options)
+  if (!executable) return { ready: false, message: 'OrcaSlicer belum dikonfigurasi pada server ini' }
+  try { await access(executable) } catch { return { ready: false, message: 'OrcaSlicer tidak ditemukan pada server ini' } }
+  try { await access(join(profilesPath, 'machine', `${MACHINE_PRESET}.json`)) }
+  catch { return { ready: false, message: 'Profil Anycubic Kobra X tidak ditemukan pada server ini' } }
+  return { ready: true, message: 'OrcaSlicer siap di server ini' }
+}
+
+export async function prepareSlicerInput(bytes, tool, includeProfile = true) {
+  const { TOOL_PRINT_PROFILES, slicerProjectSettings } = await loadSlicerModules()
   const profile = TOOL_PRINT_PROFILES[tool]
   if (!profile) throw new Error('Generator tidak didukung untuk slicing')
   if (!bytes?.length || bytes.length > MAX_BYTES) throw new Error('Ukuran 3MF maksimal 40 MB')
@@ -82,25 +126,31 @@ function runOrca(executable, args, cwd) {
   })
 }
 
-export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, executable = process.env.ORCA_SLICER_PATH, profilesPath = process.env.ORCA_PROFILES_PATH } = {}) {
+export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, executable, profilesPath } = {}) {
   if (active) throw Object.assign(new Error('OrcaSlicer sedang memproses model lain. Coba lagi setelah selesai.'), { statusCode: 409 })
-  executable ||= process.platform === 'win32' ? 'C:/Program Files/OrcaSlicer/orca-slicer.exe' : ''
+  const install = resolveOrcaInstall({ executable, profilesPath })
+  executable = install.executable
+  profilesPath = install.profilesPath
   if (!executable) throw new Error('OrcaSlicer belum dikonfigurasi pada server ini')
   try { await access(executable) } catch { throw new Error('OrcaSlicer tidak ditemukan pada server ini') }
   if (active) throw Object.assign(new Error('OrcaSlicer sedang memproses model lain. Coba lagi setelah selesai.'), { statusCode: 409 })
-  const input = prepareSlicerInput(bytes, tool, includeProfile)
+  const input = await prepareSlicerInput(bytes, tool, includeProfile)
   active = true
   let directory
   try {
     directory = await mkdtemp(join(tmpdir(), 'numa3d-slice-'))
-    const profiles = profilesPath || join(dirname(executable), 'resources', 'profiles', 'Anycubic')
+    const { TOOL_PRINT_PROFILES, parseOrcaGcodeStats } = await loadSlicerModules()
+    const profiles = profilesPath
     const machine = await loadPreset(profiles, 'machine', 'Anycubic Kobra X 0.4 nozzle')
     const processPreset = await loadPreset(profiles, 'process', '0.16mm High Quality @Anycubic Kobra X 0.4 nozzle')
     const filament = await loadPreset(profiles, 'filament', 'Anycubic PLA @Anycubic Kobra X 0.4 nozzle')
     // Installed Kobra X preset has 0 although the CLI accepts only 10–18 for this optional field.
     if (machine.retraction_distances_when_cut?.every((value) => Number(value) === 0)) delete machine.retraction_distances_when_cut
-    // Supplement the project without replacing embedded process values.
-    for (const key of Object.keys(input.settings)) if (!['name', 'version', 'print_settings_id'].includes(key)) delete processPreset[key]
+    // Apply the same process keys that are embedded in the 3MF, so CLI and File > Open share one process.
+    const skipProcess = new Set(['name', 'version', 'printer_settings_id', 'printer_model', 'nozzle_diameter', 'printable_area', 'printable_height', 'filament_colour'])
+    for (const [key, value] of Object.entries(input.settings)) {
+      if (!skipProcess.has(key)) processPreset[key] = value
+    }
     if (includeProfile) processPreset.name = processPreset.print_settings_id = input.settings.print_settings_id
     processPreset.post_process = []
     const machinePath = join(directory, 'machine.json'), processPath = join(directory, 'process.json'), filamentPath = join(directory, 'filament.json')

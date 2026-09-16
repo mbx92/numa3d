@@ -1,5 +1,6 @@
-/** Mode warna global tools: material stok, 1 warna abu-abu, atau hex. */
+/** Warna tools hanya dari material stok. HEX preview mengikuti swatch material. */
 export function useToolColorMode() {
   const mode = useState('toolColorMode', () => 'material')
+  if (mode.value !== 'material') mode.value = 'material'
   return { mode }
 }

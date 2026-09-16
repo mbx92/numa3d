@@ -175,11 +175,72 @@ function partLabel(part, fieldKey) {
   return fieldKey || part?.role || part?.name || 'part'
 }
 
-export function mergeGeneratorRecipe({ existingRecipes = [], existingPackaging = [], estimateLines = [], materials = [], machineId = null }) {
+export function slicerToEstimateLines(
+  slice,
+  { colorFields = [], materialIds = {}, colors = {}, materials = [], switchMaterialId = null } = {}
+) {
+  const byId = new Map((materials || []).map((m) => [Number(m.id), m]))
+  const gramsByMaterial = new Map()
+  const skipped = []
+  const slots = slice?.filamentGrams || []
+  const slotColors = slice?.colors || []
+  for (let i = 0; i < slots.length; i++) {
+    const qty = Number(slots[i]) || 0
+    const hex = hexNorm(slotColors[i])
+    const field = colorFields.find((f) => hexNorm(colors[f.key]) === hex)
+    const materialId = field ? Number(materialIds[field.key]) : NaN
+    if (!Number.isInteger(materialId) || materialId <= 0) {
+      skipped.push(field?.label || field?.key || `warna ${i + 1}`)
+      continue
+    }
+    if (qty <= 0) continue
+    gramsByMaterial.set(materialId, (gramsByMaterial.get(materialId) || 0) + qty)
+  }
+  const lines = [...gramsByMaterial.entries()]
+    .map(([materialId, grams]) => {
+      const material = byId.get(materialId) || null
+      return {
+        materialId,
+        materialName: material?.name || `Material #${materialId}`,
+        unit: material?.unit || 'gram',
+        type: material?.type || 'filament',
+        quantityUsed: Math.round(grams * 10) / 10,
+        material
+      }
+    })
+    .filter((line) => line.quantityUsed > 0)
+    .sort((a, b) => a.materialName.localeCompare(b.materialName))
+  const switchId = Number(switchMaterialId)
+  if (Number.isInteger(switchId) && switchId > 0) {
+    const material = byId.get(switchId)
+    if (material && !lines.some((line) => line.materialId === switchId)) {
+      lines.push({
+        materialId: switchId,
+        materialName: material.name,
+        unit: material.unit || 'pcs',
+        type: material.type || 'part',
+        quantityUsed: 1,
+        material,
+        isSwitchPart: true
+      })
+    }
+  }
+  return { lines, skipped: [...new Set(skipped)] }
+}
+
+export function printMinutesFromSlice(slice) {
+  const seconds = Number(slice?.printTimeSeconds)
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0
+  return Math.max(1, Math.round(seconds / 60))
+}
+
+export function mergeGeneratorRecipe({ existingRecipes = [], existingPackaging = [], estimateLines = [], materials = [], machineId = null, printTimeMinutes: overrideMinutes } = {}) {
   const byId = new Map((materials || []).map((m) => [Number(m.id), m]))
   const keepParts = (existingRecipes || []).filter((r) => byId.get(Number(r.materialId))?.type === 'part')
   const oldPrint = (existingRecipes || []).find((r) => byId.get(Number(r.materialId))?.type !== 'part') || existingRecipes?.[0]
-  const printTimeMinutes = Math.round(Number(oldPrint?.printTimeMinutes) || 0)
+  const printTimeMinutes = overrideMinutes != null && overrideMinutes !== ''
+    ? Math.max(0, Math.round(Number(overrideMinutes) || 0))
+    : Math.round(Number(oldPrint?.printTimeMinutes) || 0)
   const laborMinutes = Math.round(Number(oldPrint?.laborMinutes) || 0)
   const laborRatePerHour = Math.round(Number(oldPrint?.laborRatePerHour) || 0)
   const failureRatePercent = Number(oldPrint?.failureRatePercent) >= 0 ? Number(oldPrint.failureRatePercent) : 5
