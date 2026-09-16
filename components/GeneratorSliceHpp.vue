@@ -1,11 +1,13 @@
 <script setup>
 import { CheckIcon } from '@heroicons/vue/24/outline'
 import { computeHpp } from '~/utils/hpp.js'
-import { mergeGeneratorRecipe, printMinutesFromSlice, slicerToEstimateLines } from '~/utils/meshHppEstimate.js'
+import { slicerToEstimateLines } from '~/utils/meshHppEstimate.js'
+import { generatorProductRecipes } from '~/utils/generatorProduct.js'
 
 const props = defineProps({
   result: { type: Object, default: null },
   tool: { type: String, required: true },
+  modelName: { type: String, default: '' },
   printOptions: { type: Object, default: () => ({}) },
   colorFields: { type: Array, default: () => [] },
   materialIds: { type: Object, default: () => ({}) },
@@ -16,13 +18,15 @@ const props = defineProps({
 
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const toast = useToast()
-const { data: products } = await useFetch('/api/products', { server: false, lazy: true })
 const { data: materials } = await useFetch('/api/materials', { server: false, lazy: true })
 const { data: machines } = await useFetch('/api/machines', { server: false, lazy: true })
 const { data: settings } = await useFetch('/api/settings', { server: false, lazy: true })
 const { data: slicerStatus } = await useFetch('/api/slicer/status', { server: false, lazy: true })
 
-const productId = ref('')
+const productName = ref('')
+const savedProduct = shallowRef(null)
+let slicedModelBlob = null
+let saveRequestId = null
 const machineId = ref('')
 const sliced = shallowRef(null)
 const busy = ref(false)
@@ -31,9 +35,13 @@ const error = ref('')
 let requestVersion = 0
 watch(() => [props.result, props.printOptions.processPreset], () => {
   sliced.value = null
+  slicedModelBlob = null
+  savedProduct.value = null
+  saveRequestId = null
+  productName.value = (props.modelName || props.result?.slug || '').slice(0, 120)
   error.value = ''
   requestVersion++
-})
+}, { immediate: true })
 
 const duration = computed(() => {
   if (!sliced.value) return ''
@@ -49,31 +57,24 @@ const estimate = computed(() => sliced.value
     switchMaterialId: props.switchMaterialId
   })
   : { lines: [], skipped: [] })
-const printMinutes = computed(() => printMinutesFromSlice(sliced.value))
-const selectedProduct = computed(() =>
-  (products.value || []).find((p) => Number(p.id) === Number(productId.value))
-)
+const completeMaterials = computed(() => estimate.value.lines.length > 0 && !estimate.value.skipped.length && estimate.value.lines.every((line) => line.material))
 const hppPreview = computed(() => {
-  if (!estimate.value.lines.length) return null
+  if (!completeMaterials.value) return null
   const machine = (machines.value || []).find((m) => Number(m.id) === Number(machineId.value)) || null
-  const recipes = estimate.value.lines.map((line, i) => ({
-    materialId: line.materialId,
-    quantityUsed: line.quantityUsed,
-    printTimeMinutes: i === 0 ? printMinutes.value : 0,
-    failureRatePercent: 5,
-    laborMinutes: 0,
-    laborRatePerHour: 0,
-    material: line.material,
-    machine: i === 0 ? machine : null
-  }))
+  const recipes = generatorProductRecipes(estimate.value.lines, {
+    printTimeSeconds: sliced.value.printTimeSeconds, machineId: machineId.value
+  }).map((row, index) => ({ ...row, material: estimate.value.lines[index].material, machine: row.machineId ? machine : null }))
   return computeHpp(recipes, [], settings.value)
 })
 
 async function slice() {
-  if (busy.value || !props.result) return
+  if (busy.value || saving.value || !props.result) return
   busy.value = true
   error.value = ''
   sliced.value = null
+  slicedModelBlob = null
+  savedProduct.value = null
+  saveRequestId = null
   const version = ++requestVersion
   try {
     const model = props.result
@@ -81,38 +82,38 @@ async function slice() {
     if (!exporter) throw new Error('Model belum mendukung slicing')
     const options = { ...props.printOptions }
     const body = new FormData()
-    body.append('file', await exporter.call(model, options), 'model.3mf')
+    const blob = await exporter.call(model, options)
+    body.append('file', blob, 'model.3mf')
     body.append('tool', props.tool)
     body.append('includeProfile', String(options.processPreset !== null))
     const response = await $fetch('/api/slicer/slice', { method: 'POST', body, timeout: 200000, retry: 0 })
-    if (version === requestVersion) sliced.value = response
+    if (version === requestVersion) {
+      sliced.value = response
+      slicedModelBlob = blob
+      saveRequestId = crypto.randomUUID()
+    }
   } catch (e) {
     if (version === requestVersion) error.value = e.data?.statusMessage || e.message || 'Slicing gagal'
   } finally { busy.value = false }
 }
 
-async function applyRecipe() {
-  if (saving.value || !props.result || !isAdmin.value || !productId.value || !estimate.value.lines.length) return
+async function saveNewProduct() {
+  if (saving.value || busy.value || !props.result || !isAdmin.value || !productName.value.trim() || !completeMaterials.value || !slicedModelBlob || savedProduct.value) return
   saving.value = true
+  const version = requestVersion
   try {
-    const targetProductId = productId.value
-    const model = props.result
-    const slice = sliced.value
-    const product = await $fetch(`/api/products/${targetProductId}`)
-    if (!props.result || props.result !== model || sliced.value !== slice) throw new Error('Desain atau hasil slice berubah. Slice ulang sebelum mengisi recipe.')
-    const body = mergeGeneratorRecipe({
-      existingRecipes: product.recipes || [],
-      existingPackaging: product.packaging || [],
-      estimateLines: estimate.value.lines.map((line) => ({ ...line })),
-      materials: materials.value || [],
-      machineId: machineId.value || null,
-      printTimeMinutes: printMinutesFromSlice(slice)
-    })
-    if (!body.recipes.length) throw new Error('Tidak ada baris recipe untuk disimpan')
-    await $fetch(`/api/products/${targetProductId}/recipe`, { method: 'PUT', body })
-    toast.success(`Recipe ${product.name}: ${formatNumber(slice.totalGrams, 2)} g · ${printMinutesFromSlice(slice)} menit.`)
+    const body = new FormData()
+    body.append('file', slicedModelBlob, 'model.3mf')
+    body.append('product', JSON.stringify({
+      requestId: saveRequestId, name: productName.value.trim(), tool: props.tool,
+      machineId: machineId.value || null, printTimeSeconds: sliced.value.printTimeSeconds,
+      materials: estimate.value.lines.map((line) => ({ materialId: line.materialId, quantityUsed: line.quantityUsed }))
+    }))
+    const product = await $fetch('/api/products/from-generator', { method: 'POST', body, retry: 0 })
+    if (version === requestVersion) savedProduct.value = product
+    toast.success(`Produk baru "${product.name}" tersimpan beserta model 3MF dan recipe.`)
   } catch (e) {
-    toast.error(e.data?.statusMessage || e.message || 'Gagal mengisi recipe')
+    toast.error(e.data?.statusMessage || e.message || 'Gagal membuat produk baru')
   } finally {
     saving.value = false
   }
@@ -121,14 +122,11 @@ async function applyRecipe() {
 
 <template>
   <section class="space-y-2 pt-3 border-t border-ink-200">
-    <h3 class="text-sm font-semibold">Estimasi Orca untuk recipe</h3>
-    <p class="text-[10px] text-ink-400 leading-relaxed">
-      Orca hanya menghitung gram filament dan waktu cetak. Angka itu diisi ke recipe produk; HPP memakai harga material dan mesin di katalog.
-    </p>
+    <h3 class="text-sm font-semibold">HPP &amp; produk baru</h3>
     <p class="text-[10px]" :class="slicerStatus?.ready ? 'text-emerald-700' : 'text-amber-700'">
       {{ slicerStatus?.message || 'Memeriksa OrcaSlicer di server…' }}
     </p>
-    <button type="button" class="btn-primary w-full text-sm" :disabled="busy || !result || slicerStatus?.ready === false" @click="slice">
+    <button type="button" class="btn-primary w-full text-sm" :disabled="busy || saving || !result || slicerStatus?.ready === false" @click="slice">
       {{ busy ? 'OrcaSlicer sedang memproses…' : 'Slice gram & waktu' }}
     </button>
     <p v-if="!result" class="text-xs text-ink-500">Generate model dulu sebelum slicing.</p>
@@ -161,15 +159,12 @@ async function applyRecipe() {
         HPP katalog {{ formatIDR(hppPreview.total) }}
       </p>
       <label class="block">
-        <span class="label !text-[10px]">Produk</span>
-        <select v-model="productId" class="input text-sm">
-          <option value="">— pilih —</option>
-          <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
+        <span class="label !text-[10px]">Nama produk baru</span>
+        <input v-model="productName" class="input text-sm" maxlength="120" placeholder="Nama model custom" :disabled="saving || !!savedProduct" />
       </label>
       <label class="block">
         <span class="label !text-[10px]">Mesin (opsional)</span>
-        <select v-model="machineId" class="input text-sm">
+        <select v-model="machineId" class="input text-sm" :disabled="saving || !!savedProduct">
           <option value="">—</option>
           <option v-for="m in machines" :key="m.id" :value="m.id">{{ m.name }}</option>
         </select>
@@ -178,13 +173,14 @@ async function applyRecipe() {
         v-if="isAdmin"
         type="button"
         class="btn-primary w-full text-sm"
-        :disabled="saving || !productId || !estimate.lines.length"
-        @click="applyRecipe"
+        :disabled="saving || busy || !productName.trim() || !completeMaterials || !!savedProduct"
+        @click="saveNewProduct"
       >
         <CheckIcon class="w-4 h-4" />
-        {{ saving ? 'Menyimpan…' : 'Isi recipe produksi' }}
+        {{ saving ? 'Menyimpan…' : savedProduct ? 'Produk sudah tersimpan' : 'Simpan sebagai produk baru' }}
       </button>
-      <p v-else-if="selectedProduct" class="text-[10px] text-ink-400">Hanya admin yang bisa menulis recipe.</p>
+      <p v-else class="text-[10px] text-ink-400">Hanya admin yang bisa membuat produk.</p>
+      <NuxtLink v-if="savedProduct" :to="`/products/${savedProduct.id}`" class="inline-block text-accent-600 hover:underline">Buka produk {{ savedProduct.name }}</NuxtLink>
       <p class="text-ink-500">Estimasi OrcaSlicer {{ sliced.slicerVersion }}. Bukan perintah ke printer.</p>
     </div>
   </section>

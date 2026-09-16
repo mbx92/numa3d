@@ -487,21 +487,13 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
               <GeneratorSliceHpp
                 :result="isResultFresh ? result : null"
                 tool="clicker"
+                :model-name="form.label || `Clicker ${result?.slug || ''}`"
                 :print-options="printExportOptions"
                 :color-fields="COLOR_FIELDS"
                 :material-ids="colorMaterialIds"
                 :colors="form.colors"
                 :color-mode="colorMode"
               />
-              <details class="text-xs"><summary class="cursor-pointer text-ink-500">Estimasi volume &amp; recipe produk</summary>
-              <GeneratorHppPanel
-                :result="isResultFresh ? result : null"
-                :color-fields="COLOR_FIELDS"
-                :material-ids="colorMaterialIds"
-                :colors="form.colors"
-                :color-mode="colorMode"
-              />
-              </details>
             </template>
             <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
           </template>

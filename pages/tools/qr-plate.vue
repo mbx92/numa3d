@@ -522,6 +522,7 @@ onBeforeUnmount(() => {
             <GeneratorSliceHpp
               :result="isFresh ? result : null"
               tool="qr-plate"
+              :model-name="form.label"
               :print-options="printExportOptions"
               :color-fields="colorFields"
               :material-ids="materialIds"

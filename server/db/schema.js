@@ -11,6 +11,7 @@ import {
   boolean,
   jsonb
 } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'staff'])
 export const materialTypeEnum = pgEnum('material_type', ['filament', 'resin', 'part'])
@@ -69,10 +70,16 @@ export const users = pgTable('users', {
 })
 
 // Semua nilai uang disimpan sebagai integer rupiah (tanpa desimal).
+export const filamentTypes = pgTable('filament_types', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull()
+}, (table) => ({ nameUnique: uniqueIndex('filament_types_name_unique').on(sql`lower(${table.name})`) }))
+
 export const materials = pgTable('materials', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   type: materialTypeEnum('type').notNull().default('filament'),
+  filamentTypeId: integer('filament_type_id').references(() => filamentTypes.id, { onDelete: 'restrict' }),
   unit: text('unit').notNull().default('gram'), // gram | ml
   pricePerUnit: integer('price_per_unit').notNull().default(0),
   stockQuantity: real('stock_quantity').notNull().default(0),

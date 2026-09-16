@@ -28,7 +28,15 @@ Asumsi biaya, sesuai permintaan pengguna untuk memakai perkiraan:
 | Kemasan | Rp1.000/plate |
 | Switch/komponen tambahan | Rp0; isi sendiri sesuai jumlah komponen |
 
-HPP Clicker di atas belum memasukkan pembelian switch. Tidak ada harga perkiraan yang ditulis ke database material atau mesin. Panel **Asumsi biaya** menyediakan semua nilai ini untuk diubah. Estimasi volume dan pengisian recipe yang lama tetap tersedia dalam bagian terlipat terpisah.
+HPP Clicker pada sampel di atas belum memasukkan pembelian switch. Tidak ada harga perkiraan yang ditulis ke database material atau mesin. Panel saat ini menghitung HPP memakai harga material katalog dan mesin yang dipilih.
+
+## Simpan model custom sebagai produk baru
+
+Pada QR Plate, Keychain, dan Clicker, pilih material di panel Warna, lakukan **Slice gram & waktu**, isi nama produk, lalu **Simpan sebagai produk baru**. Setiap penyimpanan model membuat produk berstatus draft, dengan file 3MF yang sama seperti yang dikirim untuk slicing, recipe gram material, dan waktu cetak hasil Orca. Waktu dan mesin hanya dicatat sekali untuk seluruh plate. Produk dibuat saat tombol simpan ditekan; Generate atau unduh saja tidak menambah produk.
+
+Panel estimasi volume lama dan pilihan memperbarui recipe produk lama sudah dihapus dari ketiga generator utama. Model atau profil yang berubah perlu di-slice ulang. Semua warna hasil slice harus dipetakan ke material sebelum produk dapat disimpan. HPP dihitung dari recipe dan harga katalog; biaya tenaga kerja dan kemasan dapat diatur di produk.
+
+`POST /api/products/from-generator` khusus admin menerima multipart `file` (3MF maksimal 40 MB) dan `product` (JSON: `requestId` UUID, `name`, `tool`, `materials` berisi `materialId`/`quantityUsed`, `printTimeSeconds`, serta `machineId` opsional). Produk, recipe, metadata file, dan audit disimpan dalam satu transaksi. Upload gagal membatalkan produk baru; percobaan ulang dengan requestId yang sama mengembalikan produk yang sudah tersimpan.
 
 ## API
 
@@ -60,6 +68,7 @@ Satu pekerjaan diproses sekaligus, batas 3 menit, maksimal 4 warna untuk konfigu
 ## Verifikasi
 
 - `node --test tests/slicerHpp.test.js tests/slicerProfiles.test.js tests/hpp.test.js`.
+- `node --test tests/generatorProduct.test.js`; set `GENERATOR_PRODUCT_DB_TEST=1` untuk uji transaksi pada database lokal yang sudah dimigrasi. Data uji dibatalkan setelah pengujian.
 - Slicing nyata ketiga sampel melalui `sliceGenerator3mf` berhasil.
 - Uji HTTP dengan handler dan middleware auth asli: request tanpa sesi mendapat 401; request multipart terautentikasi menghasilkan 4,65 g untuk sampel Keychain AB.
 - Statistik, pemetaan gram ke recipe, cache profil, validasi input, dan pemisahan waktu mesin diuji. Cetak fisik belum dilakukan.

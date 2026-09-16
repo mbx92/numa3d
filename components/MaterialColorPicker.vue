@@ -2,6 +2,7 @@
 import { ChevronDownIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { DEFAULT_MATERIAL_COLOR, materialSwatchColor, parseMaterialColor } from '~/utils/materialColor.js'
 import { materialTypeBadge, materialTypeLabel } from '~/utils/materialType.js'
+import { filamentFilterTabs, filterFilamentMaterials } from '~/utils/filamentTypes.js'
 
 const props = defineProps({
   materialId: { type: [Number, String], default: null },
@@ -13,13 +14,34 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 
-const { filterByType, materialById } = useToolMaterials()
+const { filterByType, materialById, filamentTypes, refresh, refreshFilamentTypes } = useToolMaterials()
 
 const open = ref(false)
 const root = ref(null)
+const dialog = ref(null)
+const selectedFilamentType = ref('all')
+const paletteId = useId()
 
 const options = computed(() => filterByType(props.materialType ?? 'filament'))
 const selected = computed(() => materialById(props.materialId))
+const showFilamentTabs = computed(() => (props.materialType ?? 'filament') === 'filament')
+const filamentTabs = computed(() => filamentFilterTabs(filamentTypes.value, options.value))
+const filteredOptions = computed(() => showFilamentTabs.value ? filterFilamentMaterials(options.value, selectedFilamentType.value) : options.value)
+watch(filamentTabs, (tabs) => {
+  if (!tabs.some((tab) => tab.id === selectedFilamentType.value)) selectedFilamentType.value = 'all'
+})
+watch(open, async (visible) => {
+  if (visible) await Promise.allSettled([refresh(), refreshFilamentTypes()])
+})
+
+function navigateTab(event, index) {
+  const length = filamentTabs.value.length
+  const next = event.key === 'ArrowRight' ? (index + 1) % length : event.key === 'ArrowLeft' ? (index + length - 1) % length : event.key === 'Home' ? 0 : event.key === 'End' ? length - 1 : null
+  if (next == null) return
+  event.preventDefault()
+  selectedFilamentType.value = filamentTabs.value[next].id
+  event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[next]?.focus()
+}
 
 const swatchHex = computed(() =>
   selected.value ? materialSwatchColor(selected.value) || parseMaterialColor(props.hex) : parseMaterialColor(props.hex)
@@ -42,7 +64,7 @@ function pick(material) {
 
 function onDocClick(event) {
   if (!open.value || !root.value) return
-  if (!root.value.contains(event.target)) close()
+  if (!root.value.contains(event.target) && !dialog.value?.contains(event.target)) close()
 }
 
 function onKeydown(event) {
@@ -101,6 +123,7 @@ onUnmounted(() => {
         @click.self="close"
       >
         <div
+          ref="dialog"
           role="dialog"
           aria-modal="true"
           :aria-label="`Pilih material untuk ${label}`"
@@ -122,14 +145,27 @@ onUnmounted(() => {
             </button>
           </div>
 
+          <div v-if="showFilamentTabs" role="tablist" aria-label="Jenis filament" class="flex gap-1 overflow-x-auto border-b border-ink-100 px-3 py-2">
+            <button
+              v-for="(tab, index) in filamentTabs" :id="`${paletteId}-tab-${tab.id}`" :key="tab.id"
+              type="button" role="tab" :aria-selected="selectedFilamentType === tab.id" :aria-controls="`${paletteId}-panel`"
+              :tabindex="selectedFilamentType === tab.id ? 0 : -1"
+              class="shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium"
+              :class="selectedFilamentType === tab.id ? 'bg-accent-500 text-white' : 'bg-ink-100 text-ink-600 hover:bg-ink-200'"
+              @click="selectedFilamentType = tab.id" @keydown="navigateTab($event, index)"
+            >{{ tab.label }} <span class="opacity-70">{{ tab.count }}</span></button>
+          </div>
+
+          <div :id="`${paletteId}-panel`" :role="showFilamentTabs ? 'tabpanel' : undefined" :aria-labelledby="showFilamentTabs ? `${paletteId}-tab-${selectedFilamentType}` : undefined">
           <div v-if="!options.length" class="px-4 py-8 text-center text-sm text-amber-700">
             Belum ada material {{ materialTypeLabel(materialType).toLowerCase() }}. Tambah di halaman Material.
           </div>
+          <p v-else-if="!filteredOptions.length" class="px-4 py-8 text-center text-sm text-ink-500">Belum ada warna untuk jenis filament ini.</p>
 
           <div v-else class="max-h-[min(24rem,60vh)] overflow-y-auto p-3">
             <div class="grid grid-cols-2 gap-2">
               <button
-                v-for="m in options"
+                v-for="m in filteredOptions"
                 :key="m.id"
                 type="button"
                 class="relative flex flex-col items-stretch rounded-lg border p-2.5 text-left transition-all hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/40"
@@ -147,7 +183,7 @@ onUnmounted(() => {
                 <span class="text-xs font-medium text-ink-800 leading-snug line-clamp-2">{{ m.name }}</span>
                 <span class="mt-1 inline-flex">
                   <span class="badge text-[9px] px-1.5 py-0" :class="materialTypeBadge(m.type)">
-                    {{ materialTypeLabel(m.type) }}
+                    {{ m.filamentTypeName || materialTypeLabel(m.type) }}
                   </span>
                 </span>
                 <span class="mt-1 text-[10px] font-mono text-ink-400">{{ m.color || 'tanpa swatch' }}</span>
@@ -159,6 +195,7 @@ onUnmounted(() => {
                 </span>
               </button>
             </div>
+          </div>
           </div>
         </div>
       </div>

@@ -558,22 +558,13 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
               <GeneratorSliceHpp
                 :result="isResultFresh ? result : null"
                 tool="keychain"
+                :model-name="`Keychain ${form.text || result?.slug || ''}`"
                 :print-options="printExportOptions"
                 :color-fields="HPP_COLOR_FIELDS"
                 :material-ids="colorMaterialIds"
                 :colors="form.colors"
                 :color-mode="colorMode"
               />
-              <details class="text-xs"><summary class="cursor-pointer text-ink-500">Estimasi volume &amp; recipe produk</summary>
-              <GeneratorHppPanel
-                :result="isResultFresh ? result : null"
-                :color-fields="HPP_COLOR_FIELDS"
-                :material-ids="colorMaterialIds"
-                :colors="form.colors"
-                :color-mode="colorMode"
-              />
-              </details>
-              <p class="text-[10px] text-ink-400 leading-relaxed">3MF OrcaSlicer · Bagian warna tetap tergabung dalam satu objek.</p>
             </template>
             <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
           </template>

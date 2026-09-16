@@ -50,6 +50,8 @@ Tes tanpa database/MinIO: `npm test`. Catatan audit, perbaikan generator, dan ch
 
 ## Struktur
 
+**Jenis filament:** halaman Material menyediakan pilihan jenis filament serta tombol **Jenis filament** untuk menambah, mengubah nama, atau menghapus jenis yang belum dipakai (admin). Pilihan awal PLA, PETG, ABS, ASA, dan TPU disimpan di database dan dapat dikembangkan, misalnya PLA Silk. Dialog warna generator menampilkan tab per jenis, **Semua**, serta **Belum diatur** untuk material lama. Migrasi: `0034_filament_types.sql`; tes filter: `node --test tests/filamentTypes.test.js`.
+
 - `server/db/schema.js` — semua tabel (users, materials, machines, expenses, products, product_recipes, packaging, product_packaging, sales, app_settings, product_files, audit_logs)
 - `server/db/migrations/` — file migrasi SQL Drizzle
 - `server/utils/hpp.js` — re-export rumus dari `utils/hpp.js`; `server/utils/productHpp.js` — loader HPP per produk

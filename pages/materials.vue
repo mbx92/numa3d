@@ -14,6 +14,8 @@ import { MATERIAL_TYPES, materialTypeLabel, materialTypeBadge, materialLowStock 
 import { DEFAULT_MATERIAL_COLOR, materialSwatchColor } from '~/utils/materialColor.js'
 
 const { data: materials, refresh } = await useFetch('/api/materials')
+const { data: filamentTypes, refresh: refreshFilamentTypes } = await useFetch('/api/filament-types')
+const showFilamentTypes = ref(false)
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 
 const search = ref('')
@@ -21,7 +23,7 @@ const filteredMaterials = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return materials.value || []
   return (materials.value || []).filter(
-    (m) => m.name.toLowerCase().includes(q) || (m.supplier || '').toLowerCase().includes(q)
+    (m) => `${m.name} ${m.supplier || ''} ${m.filamentTypeName || ''}`.toLowerCase().includes(q)
   )
 })
 const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } = usePagination(
@@ -49,6 +51,7 @@ function openAdd() {
   form.value = {
     name: '',
     type: 'filament',
+    filamentTypeId: null,
     unit: 'gram',
     pricePerUnit: 0,
     stockQuantity: 0,
@@ -69,6 +72,7 @@ function openCopy(m) {
   form.value = {
     name: `${m.name} (salinan)`,
     type: m.type || 'filament',
+    filamentTypeId: m.filamentTypeId ?? null,
     unit: m.unit || 'gram',
     pricePerUnit: m.pricePerUnit ?? 0,
     stockQuantity: 0,
@@ -119,6 +123,13 @@ async function saveAdjust() {
   adjustTarget.value = null
   await refresh()
 }
+
+async function refreshFilamentData() {
+  await Promise.all([refreshFilamentTypes(), refresh()])
+}
+function selectCreatedFilamentType(type) {
+  if (showForm.value && form.value.type === 'filament') form.value.filamentTypeId = type.id
+}
 </script>
 
 <template>
@@ -128,9 +139,12 @@ async function saveAdjust() {
         <h1 class="text-xl font-bold">Material</h1>
         <p class="text-sm text-ink-500">Filament, resin, dan komponen rakit (switch, magnet). Bukan box/stiker.</p>
       </div>
-      <button v-if="isAdmin" class="btn-primary" @click="openAdd">
+      <div v-if="isAdmin" class="flex flex-wrap justify-end gap-2">
+        <button class="btn-secondary" @click="showFilamentTypes = true">Jenis filament</button>
+      <button class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah Material</span><span class="sm:hidden">Tambah</span>
       </button>
+      </div>
     </div>
 
     <div class="relative w-full md:max-w-xs">
@@ -174,6 +188,7 @@ async function saveAdjust() {
                 <span class="badge" :class="materialTypeBadge(m.type)">
                   {{ materialTypeLabel(m.type) }}
                 </span>
+                <p v-if="m.type === 'filament'" class="text-xs text-ink-500 mt-1">{{ m.filamentTypeName || 'Belum diatur' }}</p>
               </td>
               <td class="num">{{ formatIDR(m.pricePerUnit) }}/{{ m.unit }}</td>
               <td class="num" :class="materialLowStock(m) ? 'text-amber-600 font-semibold' : ''">
@@ -225,6 +240,7 @@ async function saveAdjust() {
               {{ materialTypeLabel(m.type) }}
             </span>
           </div>
+          <div v-if="m.type === 'filament'" class="text-xs text-ink-500">{{ m.filamentTypeName || 'Belum diatur' }}</div>
           <div class="text-sm font-mono">{{ formatIDR(m.pricePerUnit) }}/{{ m.unit }}</div>
           <div class="text-sm font-mono" :class="materialLowStock(m) ? 'text-amber-600 font-semibold' : 'text-ink-500'">
             Stok {{ formatNumber(m.stockQuantity, 1) }} {{ m.unit }}
@@ -282,6 +298,16 @@ async function saveAdjust() {
             </select>
           </div>
         </div>
+        <div v-if="form.type === 'filament'" class="space-y-1">
+          <label class="label">Jenis filament</label>
+          <div class="flex gap-2">
+            <select v-model="form.filamentTypeId" class="input flex-1 min-w-0">
+              <option :value="null">Belum diatur</option>
+              <option v-for="type in filamentTypes" :key="type.id" :value="type.id">{{ type.name }}</option>
+            </select>
+            <button type="button" class="btn-secondary shrink-0" @click="showFilamentTypes = true"><PlusIcon class="w-4 h-4" />Jenis</button>
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Harga per unit</label>
@@ -304,6 +330,10 @@ async function saveAdjust() {
           <button type="submit" class="btn-primary"><CheckIcon class="w-4 h-4" />Simpan</button>
         </div>
       </form>
+    </AppModal>
+
+    <AppModal v-if="showFilamentTypes && isAdmin" title="Jenis filament" :nested="showForm" @close="showFilamentTypes = false">
+      <FilamentTypeManager :types="filamentTypes || []" @changed="refreshFilamentData" @created="selectCreatedFilamentType" />
     </AppModal>
 
     <AppModal v-if="adjustTarget" :title="`Penyesuaian Stok — ${adjustTarget.name}`" @close="adjustTarget = null">

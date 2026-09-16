@@ -8,6 +8,7 @@ export function useToolMaterials() {
   })
 
   const list = computed(() => materials.value || [])
+  const { data: filamentTypes, refresh: refreshFilamentTypes } = useFetch('/api/filament-types', { server: false, lazy: true })
 
   function filterByType(type) {
     if (!type) return list.value
@@ -32,6 +33,8 @@ export function useToolMaterials() {
     materials: list,
     pending,
     refresh,
+    filamentTypes: computed(() => filamentTypes.value || []),
+    refreshFilamentTypes,
     filterByType,
     materialById,
     hexFromMaterial,
