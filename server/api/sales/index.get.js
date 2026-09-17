@@ -3,6 +3,7 @@ import { useDb, schema } from '../../db/index.js'
 import { getHppForProducts } from '../../utils/productHpp.js'
 import { loadCustomOrderHppMap } from '../../utils/customOrders.js'
 import { saleMoney } from '../../utils/salePayment.js'
+import { recordedOrLiveHpp } from '../../utils/hpp.js'
 
 export default defineEventHandler(async (event) => {
   const q = getQuery(event)
@@ -27,6 +28,7 @@ export default defineEventHandler(async (event) => {
       ),
       quantity: schema.sales.quantity,
       salePricePerUnit: schema.sales.salePricePerUnit,
+      hppPerUnit: schema.sales.hppPerUnit,
       channel: schema.sales.channel,
       marketplaceFeePercent: schema.sales.marketplaceFeePercent,
       notes: schema.sales.notes,
@@ -52,7 +54,8 @@ export default defineEventHandler(async (event) => {
 
   return rows.map((r) => {
     const money = saleMoney(r)
-    const hpp = r.customOrderId ? customHpp.get(r.customOrderId)?.total ?? 0 : hppMap.get(r.productId)?.total ?? 0
+    const liveTotal = r.customOrderId ? customHpp.get(r.customOrderId)?.total ?? 0 : hppMap.get(r.productId)?.total ?? 0
+    const hpp = recordedOrLiveHpp(r.hppPerUnit, liveTotal)
     const netPricePerUnit = r.quantity ? Math.round(money.net / r.quantity) : 0
     return {
       ...r,

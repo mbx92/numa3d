@@ -27,7 +27,40 @@ export function parseCustomOrderBody(body) {
     packagingQuantityUsed: Math.max(Number(body.packagingQuantityUsed) || 0, 0),
     machineId: Number.isInteger(machineId) && machineId > 0 ? machineId : null,
     printTimeMinutes: Math.max(Math.round(Number(body.printTimeMinutes) || 0), 0),
+    failureRatePercent: Math.min(
+      Math.max(body.failureRatePercent == null || body.failureRatePercent === '' ? 5 : Number(body.failureRatePercent), 0),
+      100
+    ),
+    laborMinutes: Math.max(Math.round(Number(body.laborMinutes) || 0), 0),
+    laborRatePerHour: Math.max(Math.round(Number(body.laborRatePerHour) || 0), 0),
     notes: body.notes || null
+  }
+}
+
+export function customOrderHppInputs(order, { material, machine, packaging } = {}) {
+  return {
+    recipes: [
+      {
+        materialId: order.materialId,
+        quantityUsed: Number(order.materialQuantityUsed) || 0,
+        printTimeMinutes: order.printTimeMinutes || 0,
+        machineId: order.machineId,
+        failureRatePercent: Number(order.failureRatePercent) || 0,
+        laborMinutes: Number(order.laborMinutes) || 0,
+        laborRatePerHour: Number(order.laborRatePerHour) || 0,
+        material: material || null,
+        machine: machine || null
+      }
+    ],
+    packs: order.packagingId
+      ? [
+          {
+            packagingId: order.packagingId,
+            quantityUsed: Number(order.packagingQuantityUsed) || 0,
+            packaging: packaging || null
+          }
+        ]
+      : []
   }
 }
 
@@ -50,31 +83,8 @@ export function productionValuesFromOrder(order, extra = {}) {
 
 export async function hppForCustomOrder(order, { material, machine, packaging } = {}) {
   const settings = await getSettings()
-  return computeHpp(
-    [
-      {
-        materialId: order.materialId,
-        quantityUsed: Number(order.materialQuantityUsed) || 0,
-        printTimeMinutes: order.printTimeMinutes || 0,
-        machineId: order.machineId,
-        failureRatePercent: 0,
-        laborMinutes: 0,
-        laborRatePerHour: 0,
-        material: material || null,
-        machine: machine || null
-      }
-    ],
-    order.packagingId
-      ? [
-          {
-            packagingId: order.packagingId,
-            quantityUsed: Number(order.packagingQuantityUsed) || 0,
-            packaging: packaging || null
-          }
-        ]
-      : [],
-    settings
-  )
+  const { recipes, packs } = customOrderHppInputs(order, { material, machine, packaging })
+  return computeHpp(recipes, packs, settings)
 }
 
 export async function loadCustomOrderHppMap(orderIds) {
@@ -97,31 +107,12 @@ export async function loadCustomOrderHppMap(orderIds) {
       .leftJoin(schema.packaging, eq(schema.customOrders.packagingId, schema.packaging.id))
       .where(eq(schema.customOrders.id, id))
     if (!row) continue
-    map.set(id, computeHpp(
-      [
-        {
-          materialId: row.order.materialId,
-          quantityUsed: Number(row.order.materialQuantityUsed) || 0,
-          printTimeMinutes: row.order.printTimeMinutes || 0,
-          machineId: row.order.machineId,
-          failureRatePercent: 0,
-          laborMinutes: 0,
-          laborRatePerHour: 0,
-          material: row.material,
-          machine: row.machine
-        }
-      ],
-      row.order.packagingId
-        ? [
-            {
-              packagingId: row.order.packagingId,
-              quantityUsed: Number(row.order.packagingQuantityUsed) || 0,
-              packaging: row.packaging
-            }
-          ]
-        : [],
-      settings
-    ))
+    const { recipes, packs } = customOrderHppInputs(row.order, {
+      material: row.material,
+      machine: row.machine,
+      packaging: row.packaging
+    })
+    map.set(id, computeHpp(recipes, packs, settings))
   }
   return map
 }

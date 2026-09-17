@@ -1,3 +1,6 @@
+import { createGeneratorWorkerClient } from './generatorWorkerClient.js'
+import { createPrintProjectExport } from './printProjectExport.js'
+import { TOOL_PRINT_PROFILES } from './slicerProjectSettings.js'
 // API generate keychain — offload ke Web Worker agar UI tidak freeze.
 import { getKeychainTheme } from './keychainThemes.js'
 import { generateKeychainCore } from './keychainCore.js'
@@ -8,7 +11,6 @@ import {
   EXPORT_FORMATS,
   exportFilename,
   exportMime,
-  partsTo3mfBuffer,
   partsToColoredStlBuffer,
   partsToGlbBuffer,
   partsToMultiSolidStlBuffer
@@ -30,19 +32,21 @@ export const ATTACHMENT_TYPES = [
   { id: 'hook', label: 'Hook kait', description: 'Kait C terbuka — langsung diklip ke ring/bar' }
 ]
 
-let worker = null
-let workerReady = null
+const workerClient = createGeneratorWorkerClient(
+  () => new Worker(new URL('../workers/keychain.worker.js', import.meta.url), { type: 'module' })
+)
 
-function getWorker() {
-  if (typeof Worker === 'undefined') return null
-  if (!worker) {
-    worker = new Worker(new URL('../workers/keychain.worker.js', import.meta.url), { type: 'module' })
-    workerReady = new Promise((resolve, reject) => {
-      worker.onerror = (e) => reject(e.error || new Error('Worker error'))
-      resolve()
-    })
+let nodeWasmPromise = null
+async function getNodeWasm() {
+  if (!nodeWasmPromise) {
+    nodeWasmPromise = (async () => {
+      const Module = (await import('manifold-3d')).default
+      const wasm = await Module()
+      wasm.setup()
+      return wasm
+    })()
   }
-  return worker
+  return nodeWasmPromise
 }
 
 function mapPreviewPart(p, geos) {
@@ -66,7 +70,7 @@ function prepareWorkerOpts(opts) {
   if (svgContent) {
     const shapes = parseSvgToShapes(svgContent)
     if (!shapes.length) {
-      throw new Error('SVG tidak punya area fill — gunakan logo solid (bukan hanya garis)')
+      throw new Error('SVG tidak punya bidang atau garis yang terlihat')
     }
     cloned.svgShapes = serializeShapes(shapes)
     delete cloned.svgContent
@@ -92,6 +96,7 @@ function buildLiveResult(raw) {
         }
       ]
     : baseExportParts
+  if (raw.baseMergedExportGeometry) geos.push(base3mfParts[0].geometry)
 
   let baseBlobCache = null
   let textBlobCache = null
@@ -99,13 +104,12 @@ function buildLiveResult(raw) {
   let textColorStlCache = null
   let baseMultiStlCache = null
   let textMultiStlCache = null
-  let base3mfCache = null
-  let text3mfCache = null
   let baseGlbCache = null
   let textGlbCache = null
 
   return {
     slug: raw.slug,
+    getPlate3mfBlob: createPrintProjectExport([{ name: 'Base', parts: base3mfParts }, { name: 'Teks', parts: textExportParts }], raw.slug, TOOL_PRINT_PROFILES.keychain.id),
     themeId: raw.themeId,
     themeName: raw.themeName,
     attachmentType: raw.attachmentType,
@@ -150,24 +154,8 @@ function buildLiveResult(raw) {
       }
       return textMultiStlCache
     },
-    getBase3mfBlob() {
-      if (!base3mfCache) {
-        base3mfCache = new Blob(
-          [partsTo3mfBuffer(base3mfParts, `${raw.slug}_base`, { assembly: false })],
-          { type: 'model/3mf' }
-        )
-      }
-      return base3mfCache
-    },
-    getText3mfBlob() {
-      if (!text3mfCache) {
-        text3mfCache = new Blob(
-          [partsTo3mfBuffer(textExportParts, `${raw.slug}_text`, { assembly: true })],
-          { type: 'model/3mf' }
-        )
-      }
-      return text3mfCache
-    },
+    getBase3mfBlob: createPrintProjectExport([{ name: 'Base', parts: base3mfParts }], `${raw.slug}_base`, TOOL_PRINT_PROFILES.keychain.id),
+    getText3mfBlob: createPrintProjectExport([{ name: 'Teks', parts: textExportParts }], `${raw.slug}_text`, TOOL_PRINT_PROFILES.keychain.id),
     async getBaseGlbBlob() {
       if (!baseGlbCache) {
         baseGlbCache = new Blob([await partsToGlbBuffer(baseExportParts)], { type: 'model/gltf-binary' })
@@ -186,29 +174,10 @@ function buildLiveResult(raw) {
   }
 }
 
-function generateViaWorker(opts) {
-  const w = getWorker()
-  const id = Math.random().toString(36).slice(2)
-  return workerReady.then(
-    () =>
-      new Promise((resolve, reject) => {
-        let prepared
-        try {
-          prepared = prepareWorkerOpts(opts)
-        } catch (e) {
-          reject(e)
-          return
-        }
-        const handler = (event) => {
-          if (event.data?.id !== id) return
-          w.removeEventListener('message', handler)
-          if (event.data.error) reject(new Error(event.data.error))
-          else resolve(buildLiveResult(event.data.result))
-        }
-        w.addEventListener('message', handler)
-        w.postMessage({ id, opts: prepared })
-      })
-  )
+async function generateViaWorker(opts) {
+  const prepared = await prepareWorkerOpts(opts)
+  const raw = await workerClient.run(prepared)
+  return buildLiveResult(raw)
 }
 
 export async function generateKeychain(userOpts = {}) {
@@ -216,6 +185,6 @@ export async function generateKeychain(userOpts = {}) {
     return generateViaWorker(userOpts)
   }
   const prepared = prepareWorkerOpts(userOpts)
-  const raw = await generateKeychainCore(prepared)
+  const raw = await generateKeychainCore(prepared, await getNodeWasm())
   return buildLiveResult(raw)
 }

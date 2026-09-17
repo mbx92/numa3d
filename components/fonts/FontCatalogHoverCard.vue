@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowDownTrayIcon } from '@heroicons/vue/24/outline'
+import { ArrowDownTrayIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
   font: { type: Object, default: null },
@@ -9,10 +9,11 @@ const props = defineProps({
   previewText: { type: String, default: 'NUMA 3D' },
   selectedVariant: { type: String, default: '400' },
   isAdmin: { type: Boolean, default: false },
-  downloading: { type: Boolean, default: false }
+  downloading: { type: Boolean, default: false },
+  dismissible: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:selectedVariant', 'download', 'mouseenter', 'mouseleave'])
+const emit = defineEmits(['update:selectedVariant', 'download', 'download-file', 'close', 'mouseenter', 'mouseleave'])
 
 const googlePreview = useGoogleFontPreview()
 
@@ -22,7 +23,7 @@ const cardStyle = computed(() => {
   }
   const gap = 12
   const cardW = 320
-  const cardH = 280
+  const cardH = 360
   let left = props.anchor.right + gap
   let top = props.anchor.top
 
@@ -73,19 +74,36 @@ watch(
       leave-from-class="opacity-100 scale-100"
       leave-to-class="opacity-0 scale-95"
     >
+      <div v-if="font" class="contents">
+      <button
+        v-if="dismissible"
+        type="button"
+        class="fixed inset-0 z-[59] bg-ink-900/30"
+        aria-label="Tutup preview font"
+        @click="emit('close')"
+      />
       <div
-        v-if="font"
         class="fixed z-[60] w-80 pointer-events-auto"
         :style="cardStyle"
         @mouseenter="emit('mouseenter')"
         @mouseleave="emit('mouseleave')"
       >
         <div class="panel shadow-xl border border-ink-200 ring-1 ring-ink-900/5 overflow-hidden">
-          <div class="px-4 py-3 border-b border-ink-100 bg-gradient-to-r from-accent-50/80 to-white">
-            <p class="text-sm font-semibold text-ink-900 font-sans truncate">{{ font.family }}</p>
-            <p class="text-[11px] text-ink-500 mt-0.5">
-              {{ detail?.category || font.category }} · {{ detail?.variants?.length || font.variants?.length }} varian
-            </p>
+          <div class="px-4 py-3 border-b border-ink-100 bg-gradient-to-r from-accent-50/80 to-white flex items-start gap-2">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-semibold text-ink-900 font-sans truncate">{{ font.family }}</p>
+              <p class="text-[11px] text-ink-500 mt-0.5">
+                {{ detail?.category || font.category }} · {{ detail?.variants?.length || font.variants?.length }} varian
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn-secondary text-xs py-1 px-1.5 shrink-0"
+              aria-label="Tutup"
+              @click="emit('close')"
+            >
+              <XMarkIcon class="w-4 h-4" />
+            </button>
           </div>
 
           <div class="p-4 space-y-3">
@@ -116,22 +134,30 @@ watch(
                 </select>
               </div>
 
-              <button
-                v-if="isAdmin && detail"
-                type="button"
-                class="btn-primary w-full text-sm"
-                :disabled="downloading"
-                @click="emit('download')"
-              >
-                <ArrowDownTrayIcon class="w-4 h-4" />
-                {{ downloading ? 'Mengunduh…' : 'Unduh ke server' }}
-              </button>
-              <p v-else-if="!isAdmin" class="text-[11px] text-ink-400 text-center">
-                Login admin untuk mengunduh font.
-              </p>
+              <div v-if="detail" class="space-y-2">
+                <button
+                  type="button"
+                  class="btn-primary w-full text-sm"
+                  :disabled="downloading"
+                  @click="emit('download-file')"
+                >
+                  <ArrowDownTrayIcon class="w-4 h-4" />
+                  {{ downloading ? 'Mengunduh…' : 'Unduh file' }}
+                </button>
+                <button
+                  v-if="isAdmin"
+                  type="button"
+                  class="btn-secondary w-full text-sm"
+                  :disabled="downloading"
+                  @click="emit('download')"
+                >
+                  {{ downloading ? 'Menyimpan…' : 'Simpan ke server' }}
+                </button>
+              </div>
             </template>
           </div>
         </div>
+      </div>
       </div>
     </Transition>
   </Teleport>

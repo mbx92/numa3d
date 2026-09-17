@@ -4,6 +4,7 @@ import { getHppForProducts } from './productHpp.js'
 import { loadCustomOrderHppMap } from './customOrders.js'
 import { toDateStr } from './dates.js'
 import { saleMoney } from './salePayment.js'
+import { recordedOrLiveHpp } from './hpp.js'
 
 export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
   const db = useDb()
@@ -24,6 +25,7 @@ export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
       ),
       quantity: schema.sales.quantity,
       salePricePerUnit: schema.sales.salePricePerUnit,
+      hppPerUnit: schema.sales.hppPerUnit,
       channel: schema.sales.channel,
       marketplaceFeePercent: schema.sales.marketplaceFeePercent,
       discountAmount: schema.sales.discountAmount
@@ -38,9 +40,10 @@ export async function loadSalesWithHpp({ dateFrom, dateTo } = {}) {
 
   return rows.map((r) => {
     const money = saleMoney(r)
-    const hppPerUnit = r.customOrderId
+    const liveTotal = r.customOrderId
       ? customHpp.get(r.customOrderId)?.total ?? 0
       : hppMap.get(r.productId)?.total ?? 0
+    const hppPerUnit = recordedOrLiveHpp(r.hppPerUnit, liveTotal)
     const netPricePerUnit = r.quantity ? Math.round(money.net / r.quantity) : 0
     const totalHpp = hppPerUnit * r.quantity
     return {

@@ -25,8 +25,9 @@ import {
   generateKeychain
 } from '~/utils/keychainGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
+import { resolveGeneratorPartExport } from '~/utils/generatorPartExport.js'
 import { resolveInsertFit } from '~/utils/keychainCore.js'
-import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExport.js'
+import { EXPORT_FORMATS, exportMime } from '~/utils/keychainExport.js'
 import { resolveEyeletLayout } from '~/utils/shapeClipper.js'
 import { KEYCHAIN_THEME_LIST, getKeychainTheme } from '~/utils/keychainThemes.js'
 import ToolColorBar from '~/components/ToolColorBar.vue'
@@ -50,6 +51,7 @@ const BASE_COLOR_FIELDS = [
   { key: 'baseBottom', label: 'Dasar', short: 'Dasar', materialType: 'filament' },
   { key: 'cavityWall', label: 'Cavity', short: 'Cavity', materialType: 'filament' }
 ]
+const HPP_COLOR_FIELDS = [...TEXT_COLOR_FIELDS, ...BASE_COLOR_FIELDS]
 
 const { mode: colorMode } = useToolColorMode()
 const colorMaterialIds = ref({})
@@ -66,6 +68,7 @@ const toast = useToast()
 const themes = KEYCHAIN_THEME_LIST
 const attachmentTypes = ATTACHMENT_TYPES
 const exportFormat = ref('3mf')
+const { includePrintProfile, printExportOptions } = useSlicerProfile('keychain')
 const activeAttachment = computed(
   () => attachmentTypes.find((t) => t.id === form.attachmentType) || attachmentTypes[0]
 )
@@ -167,6 +170,8 @@ function resetAssemblyPreview() {
 
 let disposePrev = null
 let generateToken = 0
+const generationState = useGeneratorState(form, result, generateModel)
+const { runGenerate, ensureFreshResult, isFresh: isResultFresh } = generationState
 
 function clearPreviews() {
   basePreviewParts.value = []
@@ -175,19 +180,24 @@ function clearPreviews() {
 }
 
 onUnmounted(() => {
+  generateToken++
+  result.value = null
   clearPreviews()
   disposePrev?.()
 })
 
-async function runGenerate() {
+async function generateModel() {
   const token = ++generateToken
   generating.value = true
+  result.value = null
   const prevDispose = disposePrev
   disposePrev = null
   clearPreviews()
   previewKey.value += 1
   await nextTick()
   prevDispose?.()
+  if (token !== generateToken) return
+  const revision = generationState.revision.value
   try {
     const out = await generateKeychain({ ...form, colors: { ...form.colors } })
     if (token !== generateToken) {
@@ -196,6 +206,7 @@ async function runGenerate() {
     }
     disposePrev = () => out.dispose()
     result.value = out
+    generationState.markGenerated(revision)
     previewKey.value += 1
     basePreviewParts.value = out.basePreviewParts.map((p) => ({
       geometry: p.geometry,
@@ -231,58 +242,25 @@ async function runGenerate() {
 }
 
 async function downloadPart(part) {
-  if (!result.value) return
-  const slug = result.value.slug
-  const fmt = exportFormat.value
-  let blob
-  let filename
-
-  if (part === 'base') {
-    if (fmt === '3mf') {
-      blob = result.value.getBase3mfBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else if (fmt === 'glb') {
-      blob = await result.value.getBaseGlbBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else if (fmt === 'stl-parts') {
-      blob = result.value.getBaseMultiStlBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else if (fmt === 'stl-color') {
-      blob = result.value.getBaseColoredStlBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else {
-      blob = result.value.getBaseBlob()
-      filename = result.value.baseFilename
-    }
-  } else {
-    if (fmt === '3mf') {
-      blob = result.value.getText3mfBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else if (fmt === 'glb') {
-      blob = await result.value.getTextGlbBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else if (fmt === 'stl-parts') {
-      blob = result.value.getTextMultiStlBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else if (fmt === 'stl-color') {
-      blob = result.value.getTextColoredStlBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else {
-      blob = result.value.getTextBlob()
-      filename = result.value.textFilename
-    }
+  try {
+    if (!(await ensureFreshResult())) return
+    const fmt = exportFormat.value
+    const { blob, filename } = await resolveGeneratorPartExport(result.value, part, fmt, printExportOptions.value)
+    if (!blob) throw new Error('Part tidak tersedia')
+    downloadBlob(blob, filename)
+    const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
+    const partLabel = part === 'base' ? 'base' : 'teks'
+    toast.success(`Unduh ${partLabel} (${fmtLabel})`)
+  } catch (error) {
+    toast.error(error?.message || 'Export gagal')
   }
-
-  downloadBlob(blob, filename)
-  const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
-  toast.success(`Unduh ${part === 'base' ? 'base' : 'teks'} (${fmtLabel})`)
 }
 
 function uploadBlob(blob, filename) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const fd = new FormData()
-    fd.append('file', new File([blob], filename, { type: exportMime(exportFormat.value) }))
+    fd.append('file', new File([blob], filename, { type: blob.type || exportMime(exportFormat.value) }))
     xhr.open('POST', '/api/library-files')
     xhr.withCredentials = true
     xhr.onload = () => {
@@ -295,18 +273,30 @@ function uploadBlob(blob, filename) {
       if (xhr.status >= 200 && xhr.status < 300) resolve(body)
       else reject(new Error(body?.statusMessage || 'Upload gagal'))
     }
+    xhr.timeout = 120000
+    xhr.ontimeout = () => reject(new Error('Upload melewati batas waktu'))
+    xhr.onabort = () => reject(new Error('Upload dibatalkan'))
     xhr.onerror = () => reject(new Error('Upload gagal'))
     xhr.send(fd)
   })
 }
 
 async function saveToGallery() {
-  if (!result.value || !isAdmin.value) return
+  if (saving.value || !isAdmin.value) return
   saving.value = true
   try {
-    await uploadBlob(result.value.getBaseBlob(), result.value.baseFilename)
-    await uploadBlob(result.value.getTextBlob(), result.value.textFilename)
-    toast.success('Base & teks disimpan ke Galeri 3D')
+    if (!(await ensureFreshResult())) return
+    const model = result.value
+    const fmt = exportFormat.value
+    const files = await Promise.all(['base', 'text'].map((part) =>
+      resolveGeneratorPartExport(model, part, fmt, printExportOptions.value)
+    ))
+    if (!files[0]?.blob) throw new Error('Part utama tidak tersedia')
+    for (const file of files) {
+      if (file.blob) await uploadBlob(file.blob, file.filename)
+    }
+    const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
+    toast.success(`Model disimpan ke Galeri 3D (${fmtLabel})`)
   } catch (e) {
     toast.error(e?.message || 'Gagal menyimpan ke galeri')
   } finally {
@@ -334,6 +324,9 @@ function onWizardComplete(payload) {
 }
 
 function restartWizard() {
+  generationState.invalidate()
+  generateToken++
+  generating.value = false
   wizardDone.value = false
   result.value = null
   clearPreviews()
@@ -341,6 +334,8 @@ function restartWizard() {
   disposePrev = null
   prevDispose?.()
 }
+const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFreshResult, () => printExportOptions.value)
+
 </script>
 
 <template>
@@ -505,6 +500,7 @@ function restartWizard() {
 
           <!-- Colors -->
           <template v-else-if="activeToolPanel === 'colors'">
+            <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
             <div class="space-y-4">
               <div class="space-y-2">
                 <p class="text-xs font-medium text-ink-600">Teks & plate</p>
@@ -524,7 +520,6 @@ function restartWizard() {
                   v-model:colors="form.colors"
                   v-model:material-ids="colorMaterialIds"
                   :fields="BASE_COLOR_FIELDS"
-                  :show-mode-switch="false"
                   variant="list"
                   @change="runGenerate"
                 />
@@ -540,6 +535,8 @@ function restartWizard() {
                   <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
                 </select>
               </KeychainCompactField>
+              <SlicerProfileSettings v-if="exportFormat === '3mf'" v-model="includePrintProfile" tool="keychain" />
+              <PrintPlateExport v-if="exportFormat === '3mf'" :busy="exportingPlate" @download="downloadPlate" />
               <div class="space-y-2">
                 <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('base')">
                   <ArrowDownTrayIcon class="w-4 h-4" /> Base
@@ -558,7 +555,16 @@ function restartWizard() {
                   {{ saving ? 'Menyimpan…' : 'Galeri' }}
                 </button>
               </div>
-              <p class="text-[10px] text-ink-400 leading-relaxed">3MF untuk ACE Pro 2 · STL multi-part untuk split manual.</p>
+              <GeneratorSliceHpp
+                :result="isResultFresh ? result : null"
+                tool="keychain"
+                :model-name="`Keychain ${form.text || result?.slug || ''}`"
+                :print-options="printExportOptions"
+                :color-fields="HPP_COLOR_FIELDS"
+                :material-ids="colorMaterialIds"
+                :colors="form.colors"
+                :color-mode="colorMode"
+              />
             </template>
             <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
           </template>

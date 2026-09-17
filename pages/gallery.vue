@@ -15,6 +15,7 @@ import {
 import { isMeshClickerFile } from '~/utils/clickerManifold/meshImport.js'
 
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
+const { toolLinkAttrs } = useStandaloneDisplay()
 const { data: files, refresh: refreshFiles } = await useFetch('/api/library-files')
 
 const search = ref('')
@@ -310,6 +311,7 @@ async function saveRename() {
                 <NuxtLink
                   v-if="canMakeClicker(f)"
                   :to="{ path: '/tools/mesh-clicker', query: { libraryFileId: String(f.id) } }"
+                  v-bind="toolLinkAttrs"
                   class="inline-flex items-center gap-1 text-xs font-medium text-accent-600 hover:text-accent-700"
                   @click.stop
                 >
@@ -368,6 +370,7 @@ async function saveRename() {
                 <NuxtLink
                   v-if="canMakeClicker(f)"
                   :to="{ path: '/tools/mesh-clicker', query: { libraryFileId: String(f.id) } }"
+                  v-bind="toolLinkAttrs"
                   class="text-accent-600 hover:text-accent-700"
                   title="Jadikan clicker"
                   aria-label="Jadikan clicker"

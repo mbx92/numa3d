@@ -3,8 +3,8 @@ import { sanitizeText } from './sanitizeText.js'
 const METHODS = ['cash', 'transfer', 'marketplace', 'other']
 const MARKETPLACE = new Set(['tokopedia', 'shopee', 'tiktok_shop'])
 
-export function defaultPaymentStatus(channel) {
-  return MARKETPLACE.has(channel) ? 'unpaid' : 'paid'
+export function defaultPaymentStatus(_channel) {
+  return 'unpaid'
 }
 
 export function defaultPaymentMethod(channel, status) {

@@ -16,8 +16,6 @@ export const BASE_SHAPES = [
   { id: 'square', label: 'Kotak', description: 'Persegi dengan sudut membulat' },
   { id: 'rect', label: 'Persegi panjang', description: 'Proporsi mengikuti desain' },
   { id: 'hexagon', label: 'Heksagon', description: 'Enam sisi' },
-  { id: 'heart', label: 'Hati', description: 'Bentuk hati' },
-  { id: 'star', label: 'Bintang', description: 'Bintang 5 sudut' },
   { id: 'egg', label: 'Telur', description: 'Oval telur' }
 ]
 
@@ -26,7 +24,9 @@ export const TILE_BASE_SHAPE_IDS = ['circle', 'square', 'rect']
 
 export const KEYRING_POSITIONS = [
   { id: 'left', label: 'Kiri', angleDeg: 270 },
-  { id: 'top', label: 'Atas', angleDeg: 0 }
+  { id: 'top', label: 'Atas', angleDeg: 0 },
+  { id: 'right', label: 'Kanan', angleDeg: 90 },
+  { id: 'bottom', label: 'Bawah', angleDeg: 180 }
 ]
 
 export const DISPLAY_MODES = [
@@ -79,10 +79,36 @@ export const SWITCH_PRESETS = {
 
 export const SWITCH_PRESET_LIST = Object.values(SWITCH_PRESETS)
 
+export const SWITCH_PREVIEW_MODELS = [
+  {
+    id: 'simple',
+    name: 'Simple box',
+    description: 'Preview ringan berbentuk housing dan stem sederhana.'
+  },
+  {
+    id: 'hidden',
+    name: 'Tanpa switch',
+    description: 'Sembunyikan model switch di preview perakitan. Socket dan stem cetak tidak berubah.',
+    hide: true
+  }
+]
+
+export const SWITCH_PREVIEW_MODEL_IDS = SWITCH_PREVIEW_MODELS.map((model) => model.id)
+
+export function getSwitchPreviewModel(id) {
+  return SWITCH_PREVIEW_MODELS.find((model) => model.id === id) || SWITCH_PREVIEW_MODELS[0]
+}
+
 export const CLICKER_DEFAULTS = {
   label: 'Clicker',
   shapeMode: 'rect',
   baseShape: 'square',
+  perLetterShapes: false,
+  letterShapes: [],
+  flexiEnabled: false,
+  flexiConnectionStyle: 'hinge',
+  flexiClearanceMm: 0.35,
+  flexiStrapHoleMm: 3.2,
   text: 'CLICK',
   fontUrl: '/fonts/BarlowCondensed-BlackItalic.woff',
   svgContent: '',
@@ -94,6 +120,7 @@ export const CLICKER_DEFAULTS = {
   maxSizeMm: 40,
   displayMode: 'preview',
   switchPresetId: 'cherry_mx',
+  switchPreviewModelId: 'simple',
   fitToleranceMm: 0.15,
   slipToleranceMm: 0.4,
   stemFitPct: 0,
@@ -103,7 +130,7 @@ export const CLICKER_DEFAULTS = {
   imageMarginMm: 1.2,
   borderWidthMm: 2.6,
   topThicknessMm: 1.5,
-  imageDepthMm: 0.8,
+  imageDepthMm: 2,
   skirtThicknessMm: 1.4,
   outerWidthMm: 35,
   outerDepthMm: 35,
@@ -116,9 +143,13 @@ export const CLICKER_DEFAULTS = {
   lidInsetMm: 1.2,
   stemHoleMm: 4.2,
   keyringEnabled: false,
+  keyringStyle: 'loop',
   keyringHoleMm: 5.2,
-  keyringTabMm: 10,
+  keyringTabMm: 12,
   keyringAngleDeg: 270,
+  /** Clip kunci: inter-letter bottom rail + click latch (Shape, ≥2 glyphs, non-flexi). */
+  snapFitEnabled: false,
+  snapFitClearanceMm: 0.28,
   pinReliefEnabled: false,
   colors: {
     base: '#2d3748',
@@ -165,8 +196,23 @@ export function getSwitchPreset(id) {
   return SWITCH_PRESETS[id] || SWITCH_PRESETS.cherry_mx
 }
 
+
+/** Glyph characters from lid text (spaces ignored), matching footprint letter tiles. */
+export function glyphCharsFromText(text) {
+  return Array.from(String(text || '')).filter((ch) => ch.trim())
+}
+
+/** Keep letterShapes aligned with glyph tiles; pad with baseShape, trim extras. */
+export function syncLetterShapes(text, letterShapes = [], baseShape = 'square') {
+  const chars = glyphCharsFromText(text)
+  const fallback = TILE_BASE_SHAPE_IDS.includes(baseShape) ? baseShape : 'square'
+  const src = Array.isArray(letterShapes) ? letterShapes : []
+  return chars.map((_, i) => (TILE_BASE_SHAPE_IDS.includes(src[i]) ? src[i] : fallback))
+}
+
 export function resolveClickerOptions(userOpts = {}) {
   const preset = getSwitchPreset(userOpts.switchPresetId)
+  const switchPreviewModel = getSwitchPreviewModel(userOpts.switchPreviewModelId)
   const fitToleranceMm = Number.isFinite(Number(userOpts.fitToleranceMm))
     ? Number(userOpts.fitToleranceMm)
     : CLICKER_DEFAULTS.fitToleranceMm
@@ -198,14 +244,65 @@ export function resolveClickerOptions(userOpts = {}) {
     : (userOpts.shapeMode === 'rect' ? 'square' : CLICKER_DEFAULTS.baseShape)
 
   const isText = userOpts.shapeMode === 'text'
-  const imageMarginMm = Number(userOpts.imageMarginMm) || (isText ? 2.5 : CLICKER_DEFAULTS.imageMarginMm)
+  const imageMarginMm = userOpts.imageMarginMm != null && Number.isFinite(Number(userOpts.imageMarginMm))
+    ? Math.max(0, Number(userOpts.imageMarginMm))
+    : (isText ? 2.5 : CLICKER_DEFAULTS.imageMarginMm)
   const borderWidthMm = Number(userOpts.borderWidthMm) || (isText ? 3.5 : CLICKER_DEFAULTS.borderWidthMm)
+  const imageDepthMm = Number.isFinite(Number(userOpts.imageDepthMm))
+    ? Math.max(0.4, Math.min(4, Number(userOpts.imageDepthMm)))
+    : CLICKER_DEFAULTS.imageDepthMm
 
   return {
     ...CLICKER_DEFAULTS,
     ...userOpts,
     baseShape,
+    perLetterShapes: userOpts.shapeMode === 'rect' && userOpts.perLetterShapes === true,
+    letterShapes: userOpts.shapeMode === 'rect'
+      ? syncLetterShapes(userOpts.text, userOpts.letterShapes, baseShape)
+      : [],
+    flexiEnabled: userOpts.shapeMode === 'rect' && userOpts.flexiEnabled === true,
+    flexiConnectionStyle: userOpts.flexiConnectionStyle === 'strap' ? 'strap' : 'hinge',
+    flexiClearanceMm: Number.isFinite(Number(userOpts.flexiClearanceMm))
+      ? Math.max(0.2, Math.min(0.6, Number(userOpts.flexiClearanceMm)))
+      : CLICKER_DEFAULTS.flexiClearanceMm,
+    flexiStrapHoleMm: Number.isFinite(Number(userOpts.flexiStrapHoleMm))
+      ? Math.max(2.5, Math.min(5, Number(userOpts.flexiStrapHoleMm)))
+      : CLICKER_DEFAULTS.flexiStrapHoleMm,
     switchPresetId: preset.id,
+    switchPreviewModelId: switchPreviewModel.id,
+    switchPreviewModel,
+    keyringEnabled:
+      userOpts.shapeMode === 'rect'
+      && userOpts.flexiEnabled !== true
+      && userOpts.keyringEnabled === true,
+    /** Clip kunci antar shape: rail bawah + latch klik (bukan gantungan, bukan flexi). */
+    snapFitEnabled:
+      userOpts.shapeMode === 'rect'
+      && userOpts.flexiEnabled !== true
+      && (userOpts.snapFitEnabled === true || userOpts.keyringLinkEnabled === true),
+    snapFitClearanceMm: Number.isFinite(Number(userOpts.snapFitClearanceMm))
+      ? Math.max(0.25, Math.min(0.35, Number(userOpts.snapFitClearanceMm)))
+      : CLICKER_DEFAULTS.snapFitClearanceMm,
+    /** @deprecated alias — same as snapFitEnabled */
+    keyringLinkEnabled:
+      userOpts.shapeMode === 'rect'
+      && userOpts.flexiEnabled !== true
+      && (userOpts.snapFitEnabled === true || userOpts.keyringLinkEnabled === true),
+    keyringStyle: userOpts.keyringStyle === 'hole' ? 'hole' : 'loop',
+    keyringHoleMm: Number.isFinite(Number(userOpts.keyringHoleMm))
+      ? Math.max(3, Math.min(8, Number(userOpts.keyringHoleMm)))
+      : CLICKER_DEFAULTS.keyringHoleMm,
+    keyringAngleDeg: (() => {
+      const raw = Number(userOpts.keyringAngleDeg)
+      if (!Number.isFinite(raw)) return CLICKER_DEFAULTS.keyringAngleDeg
+      const normalized = ((raw % 360) + 360) % 360
+      const known = KEYRING_POSITIONS.map((p) => p.angleDeg)
+      const nearest = known.reduce((best, angle) => {
+        const d = Math.min(Math.abs(normalized - angle), 360 - Math.abs(normalized - angle))
+        return d < best.d ? { angle, d } : best
+      }, { angle: CLICKER_DEFAULTS.keyringAngleDeg, d: Infinity })
+      return nearest.d <= 20 ? nearest.angle : normalized
+    })(),
     preset,
     fitToleranceMm,
     slipToleranceMm,
@@ -217,6 +314,7 @@ export function resolveClickerOptions(userOpts = {}) {
     travelMm,
     capProudMm,
     imageMarginMm,
+    imageDepthMm,
     borderWidthMm,
     outerHeightMm,
     housingPocketMm,

@@ -15,6 +15,8 @@ const props = defineProps({
   autoExplode: { type: Boolean, default: false },
   showAssemblyControls: { type: Boolean, default: false },
   showGrid: { type: Boolean, default: true },
+  showSwitch: { type: Boolean, default: true },
+  showSwitchControl: { type: Boolean, default: false },
   filename: { type: String, default: '' },
   disabled: { type: Boolean, default: false }
 })
@@ -25,6 +27,7 @@ const emit = defineEmits([
   'update:explodeFactor',
   'update:autoExplode',
   'update:showGrid',
+  'update:showSwitch',
   'reset-positions'
 ])
 
@@ -279,7 +282,7 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <div class="px-2.5 py-2">
+        <div class="px-2.5 py-2 space-y-1.5">
           <button
             type="button"
             class="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-medium transition-colors disabled:opacity-40"
@@ -294,6 +297,21 @@ onUnmounted(() => {
           >
             <Squares2X2Icon class="h-3.5 w-3.5" />
             Grid {{ showGrid ? 'on' : 'off' }}
+          </button>
+          <button
+            v-if="showSwitchControl"
+            type="button"
+            class="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-medium transition-colors disabled:opacity-40"
+            :class="
+              showSwitch
+                ? 'border-ink-300 bg-ink-100 text-ink-800'
+                : 'border-ink-200 bg-white text-ink-600 hover:bg-ink-50'
+            "
+            :disabled="disabled"
+            :aria-pressed="showSwitch"
+            @click="emit('update:showSwitch', !showSwitch)"
+          >
+            Switch {{ showSwitch ? 'on' : 'off' }}
           </button>
         </div>
 

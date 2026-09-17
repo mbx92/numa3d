@@ -101,6 +101,7 @@ async function remove(p) {
               <th>Status</th>
               <th class="text-right">Stok</th>
               <th class="text-right">HPP / unit</th>
+              <th class="text-right">Harga jual</th>
               <th></th>
             </tr>
           </thead>
@@ -126,6 +127,10 @@ async function remove(p) {
                 <span v-if="p.hasRecipe">{{ formatIDR(p.hpp) }}</span>
                 <span v-else class="text-ink-400 text-xs">belum ada recipe</span>
               </td>
+              <td class="num">
+                <span v-if="p.sellingPrice">{{ formatIDR(p.sellingPrice) }}</span>
+                <span v-else class="text-ink-400 text-xs">—</span>
+              </td>
               <td class="whitespace-nowrap text-right">
                 <NuxtLink :to="`/products/${p.id}?tab=recipe`" class="btn-secondary">
                   <PencilSquareIcon class="w-3.5 h-3.5" />{{ isAdmin ? 'Recipe & HPP' : 'Lihat' }}
@@ -136,7 +141,7 @@ async function remove(p) {
               </td>
             </tr>
             <tr v-if="!total">
-              <td colspan="6" class="text-center text-ink-500 py-6">
+              <td colspan="7" class="text-center text-ink-500 py-6">
                 {{ search || statusFilter ? 'Tidak ada produk yang cocok.' : 'Belum ada produk.' }}
               </td>
             </tr>
@@ -171,7 +176,8 @@ async function remove(p) {
           <div class="text-sm font-mono">
             Stok {{ formatNumber(p.stockQuantity) }}
             <span v-if="p.hasRecipe"> · HPP {{ formatIDR(p.hpp) }}</span>
-            <span v-else class="text-ink-400 text-xs"> · belum ada recipe</span>
+            <span v-if="p.sellingPrice"> · jual {{ formatIDR(p.sellingPrice) }}</span>
+            <span v-else-if="!p.hasRecipe" class="text-ink-400 text-xs"> · belum ada recipe</span>
           </div>
           <div class="flex flex-wrap gap-1 pt-1">
                 <NuxtLink :to="`/products/${p.id}?tab=recipe`" class="btn-secondary">

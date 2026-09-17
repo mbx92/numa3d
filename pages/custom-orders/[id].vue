@@ -14,6 +14,7 @@ import {
   PlusIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline'
+import { customOrderHppFromForm, suggestedPrettyPrice } from '~/utils/hpp.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -21,6 +22,7 @@ const { data: order, refresh } = await useFetch(`/api/custom-orders/${id}`)
 const { data: materials } = await useFetch('/api/materials')
 const { data: machines } = await useFetch('/api/machines')
 const { data: packagingItems } = await useFetch('/api/packaging')
+const { data: settings } = await useFetch('/api/settings')
 
 const statusLabel = {
   open: 'Proses',
@@ -76,6 +78,19 @@ const canEdit = computed(() => order.value && order.value.status !== 'delivered'
 const selectedMaterial = computed(() =>
   (materials.value || []).find((m) => Number(m.id) === Number(form.value.materialId))
 )
+const hppPreview = computed(() =>
+  customOrderHppFromForm(
+    form.value,
+    { materials: materials.value, machines: machines.value, packagingItems: packagingItems.value },
+    settings.value
+  )
+)
+const suggestedPreview = computed(() =>
+  suggestedPrettyPrice(hppPreview.value.total, settings.value?.defaultMarginPercent, settings.value?.priceRoundStep)
+)
+function applySuggestedCustomPrice() {
+  if (suggestedPreview.value) form.value.pricePerUnit = suggestedPreview.value
+}
 
 function isModel(name) {
   return /\.(stl|obj|3mf|glb|gltf)$/i.test(name || '')
@@ -113,6 +128,9 @@ function startEdit() {
     packagingQuantityUsed: o.packagingQuantityUsed,
     machineId: o.machineId || '',
     printTimeMinutes: o.printTimeMinutes,
+    failureRatePercent: o.failureRatePercent ?? 5,
+    laborMinutes: o.laborMinutes || 0,
+    laborRatePerHour: o.laborRatePerHour || 0,
     notes: o.notes || ''
   }
   errorMsg.value = ''
@@ -333,7 +351,10 @@ async function deliver() {
           <div class="flex justify-between gap-2"><span class="text-ink-500">Packaging</span><span>{{ order.packagingName || '—' }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Mesin</span><span>{{ order.machineName || '—' }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Durasi / unit</span><span>{{ formatMinutes(order.printTimeMinutes) }}</span></div>
+          <div class="flex justify-between gap-2"><span class="text-ink-500">Buffer gagal</span><span>{{ formatNumber(order.failureRatePercent, 1) }}%</span></div>
+          <div class="flex justify-between gap-2"><span class="text-ink-500">Kerja / unit</span><span>{{ formatMinutes(order.laborMinutes) }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">HPP estimasi</span><span class="font-mono">{{ formatIDR(order.hpp) }}</span></div>
+          <div class="flex justify-between gap-2"><span class="text-ink-500">Harga saran</span><span class="font-mono">{{ formatIDR(order.suggestedPrice) }}</span></div>
           <p v-if="order.notes" class="text-xs text-ink-400 pt-2">{{ order.notes }}</p>
         </div>
         <form v-else class="p-4 space-y-3" @submit.prevent="saveEdit">
@@ -363,7 +384,17 @@ async function deliver() {
               <input v-model.number="form.quantity" type="number" min="1" class="input-num" required />
             </div>
             <div>
-              <label class="label">Harga / unit</label>
+              <div class="flex items-end justify-between gap-2 mb-1">
+                <label class="label !mb-0">Harga / unit</label>
+                <button
+                  v-if="suggestedPreview"
+                  type="button"
+                  class="text-xs font-medium text-accent-600 hover:text-accent-700"
+                  @click="applySuggestedCustomPrice"
+                >
+                  Pakai saran
+                </button>
+              </div>
               <IdrInput v-model="form.pricePerUnit" required />
             </div>
           </div>
@@ -405,6 +436,21 @@ async function deliver() {
               <input v-model.number="form.printTimeMinutes" type="number" min="0" class="input-num" required />
             </div>
           </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Gagal cetak (%)</label>
+              <input v-model.number="form.failureRatePercent" type="number" min="0" max="100" step="0.5" class="input-num" />
+            </div>
+            <div>
+              <label class="label">Kerja (menit / unit)</label>
+              <input v-model.number="form.laborMinutes" type="number" min="0" class="input-num" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Upah / jam</label>
+            <IdrInput v-model="form.laborRatePerHour" />
+          </div>
+          <p class="text-xs text-ink-500">HPP estimasi {{ formatIDR(hppPreview.total) }} · saran {{ formatIDR(suggestedPreview) }}</p>
           <div>
             <label class="label">Catatan</label>
             <input v-model="form.notes" class="input" placeholder="opsional — nozzle, infill, warna…" />

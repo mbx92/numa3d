@@ -5,6 +5,8 @@ import { readSvgFile } from '~/utils/svgToShapes.js'
 const svgContent = defineModel('svgContent', { type: String, default: '' })
 const svgSizeMm = defineModel('svgSizeMm', { type: Number, default: 14 })
 const svgGapMm = defineModel('svgGapMm', { type: Number, default: 2 })
+const svgStrokeMm = defineModel('svgStrokeMm', { type: Number, default: 0 })
+const { toolLinkAttrs } = useStandaloneDisplay()
 
 const props = defineProps({
   label: { type: String, default: 'Logo SVG (opsional)' },
@@ -13,7 +15,12 @@ const props = defineProps({
   sizeMin: { type: Number, default: 6 },
   sizeMax: { type: Number, default: 28 },
   sizeStep: { type: Number, default: 0.5 },
-  showGap: { type: Boolean, default: true }
+  showGap: { type: Boolean, default: true },
+  showStroke: { type: Boolean, default: false },
+  strokeLabel: { type: String, default: 'Tebal garis logo' },
+  strokeMin: { type: Number, default: 0 },
+  strokeMax: { type: Number, default: 2 },
+  strokeStep: { type: Number, default: 0.1 }
 })
 
 const previewUrl = ref('')
@@ -79,15 +86,20 @@ function clearSvg() {
       </button>
     </div>
 
-    <label
-      v-else
-      class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-ink-200 bg-ink-50/50 px-3 py-4 cursor-pointer hover:border-accent-400 hover:bg-accent-50/30 transition-colors"
-    >
-      <PhotoIcon class="w-6 h-6 text-ink-400" />
-      <span class="text-xs text-ink-600">Unggah file .svg</span>
-      <span class="text-[10px] text-ink-400">Maks. 1 MB · path/fill solid (gambar tertanam diabaikan)</span>
-      <input type="file" accept=".svg,image/svg+xml" class="sr-only" @change="onFileChange" />
-    </label>
+    <div v-else class="space-y-1.5">
+      <label
+        class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-ink-200 bg-ink-50/50 px-3 py-4 cursor-pointer hover:border-accent-400 hover:bg-accent-50/30 transition-colors"
+      >
+        <PhotoIcon class="w-6 h-6 text-ink-400" />
+        <span class="text-xs text-ink-600">Unggah file .svg</span>
+        <span class="text-[10px] text-ink-400">Maks. 1 MB · bidang dan garis SVG (gambar tertanam diabaikan)</span>
+        <input type="file" accept=".svg,image/svg+xml" class="sr-only" @change="onFileChange" />
+      </label>
+      <p class="text-[10px] text-ink-400">
+        Punya PNG?
+        <NuxtLink to="/tools/png-to-svg" v-bind="toolLinkAttrs" class="text-accent-600 hover:underline">PNG → SVG</NuxtLink>
+      </p>
+    </div>
 
     <template v-if="svgContent">
       <label class="block space-y-1">
@@ -103,6 +115,14 @@ function clearSvg() {
           <input v-model.number="svgGapMm" type="range" min="0" max="8" step="0.5" class="flex-1" />
           <span class="text-xs font-mono text-ink-700 w-12 text-right">{{ svgGapMm }} mm</span>
         </div>
+      </label>
+      <label v-if="showStroke" class="block space-y-1">
+        <span class="text-[11px] text-ink-600">{{ strokeLabel }}</span>
+        <div class="flex items-center gap-2">
+          <input v-model.number="svgStrokeMm" type="range" :min="strokeMin" :max="strokeMax" :step="strokeStep" class="flex-1" />
+          <span class="text-xs font-mono text-ink-700 w-12 text-right">{{ svgStrokeMm }} mm</span>
+        </div>
+        <span class="block text-[10px] text-ink-400">Naikkan untuk logo garis tipis agar tetap terlihat saat dicetak.</span>
       </label>
     </template>
   </div>

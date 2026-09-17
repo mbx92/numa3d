@@ -42,14 +42,22 @@ npm run dev          # http://localhost:3000
 
 Script lain: `npm run db:generate` (buat file migrasi baru setelah mengubah `server/db/schema.js`).
 
+Tes tanpa database/MinIO: `npm test`. Catatan audit, perbaikan generator, dan checklist sebelum deploy tersedia di [docs/generator-review.md](docs/generator-review.md).
+
+**Code Studio (beta):** Tools → Code Studio mengubah kode parametrik terbatas menjadi solid Manifold dengan preview Three.js, ekspor STL/3MF/GLB, galeri, dan HPP. Panduan sintaks, batas keamanan, serta contoh: [docs/code-studio.md](docs/code-studio.md).
+
+**QR Plate:** Tools → QR Plate Generator membuat pelat QR berbingkai (satu QR, atau Wi-Fi plus WhatsApp dari JPEG), pilihan ikon/tulisan, dan alas slot miring, tiang lurus, atau berlekuk. Ekspor 3MF, STL multipart, GLB terpasang, SVG, dan OpenSCAD mandiri. Panduan: [docs/qr-plate.md](docs/qr-plate.md).
+
 ## Struktur
+
+**Jenis filament:** halaman Material menyediakan pilihan jenis filament serta tombol **Jenis filament** untuk menambah, mengubah nama, atau menghapus jenis yang belum dipakai (admin). Pilihan awal PLA, PETG, ABS, ASA, dan TPU disimpan di database dan dapat dikembangkan, misalnya PLA Silk. Dialog warna generator menampilkan tab per jenis, **Semua**, serta **Belum diatur** untuk material lama. Migrasi: `0034_filament_types.sql`; tes filter: `node --test tests/filamentTypes.test.js`.
 
 - `server/db/schema.js` — semua tabel (users, materials, machines, expenses, products, product_recipes, packaging, product_packaging, sales, app_settings, product_files, audit_logs)
 - `server/db/migrations/` — file migrasi SQL Drizzle
-- `server/utils/hpp.js` — rumus HPP; `server/utils/productHpp.js` — loader HPP per produk
+- `server/utils/hpp.js` — re-export rumus dari `utils/hpp.js`; `server/utils/productHpp.js` — loader HPP per produk
 - `server/utils/rbac.js` — `requireAdmin(event)`, dipanggil di awal tiap endpoint yang khusus admin
 - `server/utils/audit.js` — `logAudit(event, {...})`, dipanggil setelah tiap mutasi berhasil
-- `server/utils/rateLimit.js` — rate limit login in-memory (per-IP dan per-IP+username)
+- `server/utils/rateLimit.js` — rate limit login in-memory (per-IP dan per-IP+username); **mati di `nuxt dev`**, aktif di production
 - `server/api/` — REST endpoints per entitas
 - `pages/` — Dashboard, Material, Mesin, Packaging, Produk & HPP (recipe builder), Pengeluaran, Penjualan, Laporan, Pengaturan, User, Log Aktivitas
 - `scripts/seed.js` — data contoh
@@ -67,16 +75,31 @@ HPP = material (qty × harga/unit)
 
 Tarif listrik (default Rp 1.445/kWh) dan asumsi jam pakai mesin per bulan (default 100 jam) diatur di halaman **Pengaturan** (tabel `app_settings`).
 
-Harga jual saran = `HPP ÷ (1 − margin%)`, dengan opsi pembulatan ke Rp 500 / Rp 1.000.
+Harga jual saran = `HPP ÷ (1 − margin%)`, lalu dibulatkan ke atas (default Rp 500; bisa 100 / 1.000 di Pengaturan).
 
-Margin bersih penjualan = `(harga jual × (1 − fee marketplace%) − HPP) × qty`.
+Kalau produk punya **harga jual tersimpan** (`list_price` > 0), katalog dan tombol “Pakai harga saran” memakai angka itu. Nol = selalu ikut rumus saran.
+
+Margin bersih penjualan = `(harga jual × (1 − fee marketplace%) − HPP) × qty`. Penjualan baru menyimpan snapshot `hpp_per_unit` saat transaksi, jadi laporan tidak berubah kalau harga material/mesin nanti diubah.
+
+QR Plate, Keychain, dan Clicker memiliki **Slice gram & waktu**: API lokal menjalankan OrcaSlicer hanya untuk gram filament dan durasi cetak, lalu angka itu bisa diisi ke recipe produk. HPP produksi memakai harga katalog. Panel menampilkan apakah OrcaSlicer siap di **server** (`GET /api/slicer/status`). [Panduan dan hasil uji](docs/slicing-hpp.md). Estimasi volume mesh × infill tetap ada di bagian terlipat jika Orca tidak tersedia. Tes: `node --test tests/hpp.test.js`.
+
+## Export plate 3MF untuk OrcaSlicer
+
+Di panel Export generator keychain, clicker, mesh clicker, atau lightbox, pilih **3MF → Plate 260 × 260 · Semua bagian**. Buka file sebagai **proyek** di OrcaSlicer agar susunan plate dan bagian warna dipertahankan. File mengacu pada preset **Anycubic Kobra X 0.4 nozzle**, dengan volume cetak 260 × 260 × 260 mm. QR Plate, Keychain, dan Clicker menyertakan profil awal PLA sesuai generator, dengan ringkasan layer, dinding, infill, kecepatan, dan suhu di panel ekspor. Nonaktifkan **Sertakan profil** untuk memilih proses dan filament sendiri di OrcaSlicer. Mesh Clicker dan Lightbox tetap memakai pengaturan dari slicer. File tidak menyertakan G-code mesin. Lihat [profil cetak generator](docs/generator-print-profiles.md).
+
+- Komponen cetak disusun pada satu plate, berjarak 6 mm, dengan margin tepi 5 mm. Setiap komponen menyentuh Z=0 dan bagian warnanya tetap sejajar.
+- Tutup clicker datar dibalik menghadap plate. Mesh impor mempertahankan orientasinya dan dapat memerlukan support. Lightbox memakai geometri front/side dan stand dalam orientasi cetak, terpisah dari back.
+- Jika tidak muat, ekspor ditolak dengan pesan untuk mengunduh per bagian atau mengecilkan desain. Ukuran model tidak otomatis diperkecil; belum ada pembagian otomatis ke beberapa plate. Margin ini untuk geometri model, belum menghitung brim, support, atau purge tower dari profil slicer.
+- Tombol ekspor per bagian juga menempatkan komponen di tengah plate. STL dan GLB tetap tersedia.
+
+Tes layout dan struktur arsip: `node --test tests/printPlateExport.test.js`. Tes rumus HPP/harga jual: `node --test tests/hpp.test.js`. Verifikasi layout sebelumnya dilakukan dengan impor/simpan ulang CLI OrcaSlicer 2.4.2, `--arrange 0 --orient 0`, serta profil proses uji terpisah: bounding box dunia, Z=0, grup objek, dan slot filament tetap sama untuk sampel keychain, clicker, dan lightbox. Profil PLA ketiga generator utama juga diuji terpisah; rincian ada di [profil cetak generator](docs/generator-print-profiles.md). CLI memerlukan konfigurasi proses lengkap untuk pengaturan yang tidak disertakan proyek. Belum ada verifikasi cetak fisik.
 
 ## Keputusan desain v1
 
 - Semua nilai uang disimpan sebagai integer rupiah; ditampilkan dengan format `Rp 15.000`.
 - Pengurangan stok masih manual (tombol "Stok ±" di halaman Material), tidak otomatis dari penjualan.
 - Ambang low-stock masih tetap (material < 200 gram/ml, packaging < 10 unit) — konstanta di `server/api/dashboard.get.js`.
-- Laporan memakai HPP produk saat ini × unit terjual (bukan snapshot HPP saat transaksi).
+- Laporan memakai snapshot HPP per penjualan (`sales.hpp_per_unit`). Transaksi lama tanpa snapshot tetap memakai HPP produk/custom saat ini.
 - Auth multi-user: tabel `users` (username, password bcrypt, role `admin`/`staff`), session cookie HMAC stateless berisi `{id, role}` (30 hari, httpOnly) — tidak ada session store, jadi ubah role/hapus user tidak langsung mencabut token yang sudah terbit sampai kedaluwarsa. Semua `/api/*` diproteksi `server/middleware/auth.js`; semua halaman diproteksi `middleware/auth.global.js` (redirect ke `/login`).
 - RBAC 2 role: **Admin** akses penuh. **Staff** hanya boleh create/edit/delete di Pengeluaran & Penjualan; Material/Mesin/Packaging/Produk (+ file 3D)/Pengaturan/User read-only baginya — ditegakkan di server (`requireAdmin()` di tiap endpoint mutasi) dan disembunyikan/dinonaktifkan di UI (`isAdmin` computed per halaman). Endpoint User (`/api/users/*`) menolak menghapus/mendemote admin terakhir dan menolak hapus akun sendiri.
 - File 3D per produk (.stl/.obj/.3mf/.glb/.gltf, maks 100 MB): isi file di MinIO (`server/utils/minio.js`), metadata di tabel `product_files`. Download/preview di-stream lewat `/api/files/:id` agar tetap di belakang auth (browser tidak akses MinIO langsung). Preview Three.js di `components/ModelViewer.vue` (client-only); `.gltf` dengan resource eksternal (bin/tekstur terpisah) tidak didukung preview — pakai `.glb`.

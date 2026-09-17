@@ -1,3 +1,4 @@
+import { createGeneratorWorkerClient } from './generatorWorkerClient.js'
 // API generate lightbox — offload ke Web Worker agar UI tidak freeze.
 
 import { generateLightboxCore } from './lightboxCore.js'
@@ -19,7 +20,7 @@ import {
 
   exportMime,
 
-  partsTo3mfBuffer,
+  printGroupsTo3mfBuffer,
 
   partsToColoredStlBuffer,
 
@@ -33,35 +34,9 @@ import {
 
 
 
-let worker = null
-
-let workerReady = null
-
-
-
-function getWorker() {
-
-  if (typeof Worker === 'undefined') return null
-
-  if (!worker) {
-
-    worker = new Worker(new URL('../workers/lightbox.worker.js', import.meta.url), { type: 'module' })
-
-    workerReady = new Promise((resolve, reject) => {
-
-      worker.onerror = (e) => reject(e.error || new Error('Worker error'))
-
-      resolve()
-
-    })
-
-  }
-
-  return worker
-
-}
-
-
+const workerClient = createGeneratorWorkerClient(
+  () => new Worker(new URL('../workers/lightbox.worker.js', import.meta.url), { type: 'module' })
+)
 
 function mapPreviewPart(p, geos) {
 
@@ -240,6 +215,9 @@ function buildLiveResult(raw) {
   return {
 
     slug: raw.slug,
+    getPlate3mfBlob() {
+      return new Blob([printGroupsTo3mfBuffer([{ name: 'Front & Side', parts: faceExportParts }, { name: 'Back', parts: bodyExportParts }, { name: 'Stand', parts: standExportParts }], raw.slug)], { type: 'model/3mf' })
+    },
 
     designMode: raw.designMode,
 
@@ -505,8 +483,7 @@ function buildLiveResult(raw) {
 
         face3mfCache = new Blob(
 
-          [partsTo3mfBuffer(faceExportParts, `${raw.slug}_front`, { assembly: true })],
-
+          [printGroupsTo3mfBuffer([{ name: 'Front & Side', parts: faceExportParts }], `${raw.slug}_front_side`)],
           { type: 'model/3mf' }
 
         )
@@ -531,8 +508,7 @@ function buildLiveResult(raw) {
 
         body3mfCache = new Blob(
 
-          [partsTo3mfBuffer(bodyExportParts, `${raw.slug}_body`, { assembly: false })],
-
+          [printGroupsTo3mfBuffer([{ name: 'Back', parts: bodyExportParts }], `${raw.slug}_back`)],
           { type: 'model/3mf' }
 
         )
@@ -557,7 +533,7 @@ function buildLiveResult(raw) {
 
         stand3mfCache = new Blob(
 
-          [partsTo3mfBuffer(standExportParts, `${raw.slug}_stand_${raw.dimensions?.standModelId || 'model'}`, { assembly: true })],
+          [printGroupsTo3mfBuffer([{ name: 'Stand', parts: standExportParts }], `${raw.slug}_stand_${raw.dimensions?.standModelId || 'model'}`)],
 
           { type: 'model/3mf' }
 
@@ -593,7 +569,7 @@ function buildLiveResult(raw) {
 
         assembly3mfCache = new Blob(
 
-          [partsTo3mfBuffer(assemblyExportParts, raw.slug, { assembly: true })],
+          [printGroupsTo3mfBuffer([{ name: 'Front & Side', parts: faceExportParts }, { name: 'Back', parts: bodyExportParts }, { name: 'Stand', parts: standExportParts }], raw.slug)],
 
           { type: 'model/3mf' }
 
@@ -699,49 +675,11 @@ function buildLiveResult(raw) {
 
 
 
-function generateViaWorker(opts) {
-
-  const w = getWorker()
-
-  const id = Math.random().toString(36).slice(2)
-
-  return workerReady.then(
-
-    () =>
-
-      new Promise((resolve, reject) => {
-
-        prepareWorkerOpts(opts)
-
-          .then((prepared) => {
-
-            const handler = (event) => {
-
-              if (event.data?.id !== id) return
-
-              w.removeEventListener('message', handler)
-
-              if (event.data.error) reject(new Error(event.data.error))
-
-              else resolve(buildLiveResult(event.data.result))
-
-            }
-
-            w.addEventListener('message', handler)
-
-            w.postMessage({ id, opts: prepared })
-
-          })
-
-          .catch(reject)
-
-      })
-
-  )
-
+async function generateViaWorker(opts) {
+  const prepared = await prepareWorkerOpts(opts)
+  const raw = await workerClient.run(prepared)
+  return buildLiveResult(raw)
 }
-
-
 
 export async function generateLightbox(userOpts = {}) {
 

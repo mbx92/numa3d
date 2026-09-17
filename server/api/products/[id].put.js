@@ -18,6 +18,9 @@ export default defineEventHandler(async (event) => {
   if (body.stockQuantity !== undefined && body.stockQuantity !== '') {
     patch.stockQuantity = Math.max(Math.round(Number(body.stockQuantity) || 0), 0)
   }
+  if (body.listPrice !== undefined && body.listPrice !== '') {
+    patch.listPrice = Math.max(Math.round(Number(body.listPrice) || 0), 0)
+  }
   const rows = await db
     .update(schema.products)
     .set(patch)

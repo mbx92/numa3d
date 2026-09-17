@@ -1,6 +1,6 @@
 // Resolve layer desain lightbox dari image / teks / SVG.
 import * as THREE from 'three'
-import { parse, Path } from 'opentype.js'
+import { parse, Path } from './opentypeLib.js'
 import { opentypePathToShapes } from './opentypeToShapes.js'
 import { computeBoundsFromShapes } from './keychainTypographyCore.js'
 import {
@@ -37,7 +37,10 @@ async function loadFont(fontUrl) {
         const font = parse(buffer)
         if (!font?.charToGlyph) throw new Error('Parse font gagal')
         return font
-      })()
+      })().catch((error) => {
+        fontCache.delete(url)
+        throw error
+      })
     )
   }
   return fontCache.get(url)

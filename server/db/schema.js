@@ -11,6 +11,7 @@ import {
   boolean,
   jsonb
 } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'staff'])
 export const materialTypeEnum = pgEnum('material_type', ['filament', 'resin', 'part'])
@@ -69,10 +70,16 @@ export const users = pgTable('users', {
 })
 
 // Semua nilai uang disimpan sebagai integer rupiah (tanpa desimal).
+export const filamentTypes = pgTable('filament_types', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull()
+}, (table) => ({ nameUnique: uniqueIndex('filament_types_name_unique').on(sql`lower(${table.name})`) }))
+
 export const materials = pgTable('materials', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   type: materialTypeEnum('type').notNull().default('filament'),
+  filamentTypeId: integer('filament_type_id').references(() => filamentTypes.id, { onDelete: 'restrict' }),
   unit: text('unit').notNull().default('gram'), // gram | ml
   pricePerUnit: integer('price_per_unit').notNull().default(0),
   stockQuantity: real('stock_quantity').notNull().default(0),
@@ -121,6 +128,8 @@ export const products = pgTable('products', {
   }),
   // Stok barang jadi. Bertambah saat produksi selesai, berkurang saat penjualan.
   stockQuantity: integer('stock_quantity').notNull().default(0),
+  // Harga jual yang ditetapkan. 0 = pakai saran HPP ÷ (1 − margin), dibulatkan.
+  listPrice: integer('list_price').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
 
@@ -232,6 +241,9 @@ export const customOrders = pgTable('custom_orders', {
   packagingQuantityUsed: real('packaging_quantity_used').notNull().default(0),
   machineId: integer('machine_id').references(() => machines.id, { onDelete: 'set null' }),
   printTimeMinutes: integer('print_time_minutes').notNull().default(0),
+  failureRatePercent: real('failure_rate_percent').notNull().default(5),
+  laborMinutes: integer('labor_minutes').notNull().default(0),
+  laborRatePerHour: integer('labor_rate_per_hour').notNull().default(0),
   notes: text('notes'),
   status: customOrderStatusEnum('status').notNull().default('open'),
   createdAt: timestamp('created_at').notNull().defaultNow()
@@ -258,12 +270,14 @@ export const sales = pgTable(
     customOrderId: integer('custom_order_id').references(() => customOrders.id, { onDelete: 'set null' }),
     quantity: integer('quantity').notNull().default(1),
     salePricePerUnit: integer('sale_price_per_unit').notNull().default(0),
+    // HPP per unit saat transaksi. null = penjualan lama, laporan memakai HPP live.
+    hppPerUnit: integer('hpp_per_unit'),
     channel: salesChannelEnum('channel').notNull().default('direct'),
     marketplaceFeePercent: real('marketplace_fee_percent'),
     notes: text('notes'),
     invoiceNumber: text('invoice_number'),
     customerName: text('customer_name'),
-    paymentStatus: salePaymentStatusEnum('payment_status').notNull().default('paid'),
+    paymentStatus: salePaymentStatusEnum('payment_status').notNull().default('unpaid'),
     paymentMethod: text('payment_method'),
     paidAt: date('paid_at'),
     discountAmount: integer('discount_amount').notNull().default(0),
@@ -322,6 +336,8 @@ export const appSettings = pgTable('app_settings', {
   electricityRatePerKwh: integer('electricity_rate_per_kwh').notNull().default(1445),
   machineUsageHoursPerMonth: integer('machine_usage_hours_per_month').notNull().default(100),
   defaultMarginPercent: real('default_margin_percent').notNull().default(40),
+  // Pembulatan harga saran: 100 | 500 | 1000.
+  priceRoundStep: integer('price_round_step').notNull().default(500),
   invoiceBusinessName: text('invoice_business_name').notNull().default('Numa3D'),
   invoiceAddress: text('invoice_address'),
   invoicePhone: text('invoice_phone'),

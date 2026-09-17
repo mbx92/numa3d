@@ -9,6 +9,8 @@ const emit = defineEmits(['complete'])
 
 const toast = useToast()
 
+const TEXT_PLACEHOLDER = 'Contoh: NAMA 07'
+
 const steps = ['Teks', 'Warna', 'Font & kait', 'Ukuran']
 const step = ref(0)
 
@@ -188,7 +190,7 @@ function submit() {
 
         <!-- Step 2: Warna (4) -->
         <template v-else-if="step === 1">
-          <p class="text-xs text-ink-500">Maksimal 4 warna — cukup untuk cetak multi-material.</p>
+          <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
           <p v-if="accentLabel" class="text-[11px] text-ink-500">
             Huruf aksen: <strong>{{ accentLabel }}</strong>
           </p>

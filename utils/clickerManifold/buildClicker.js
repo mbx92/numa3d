@@ -10,6 +10,7 @@
 //   body   = well + border (bezel wall)
 //
 // Z = 0 is the switch plate top. Socket cuts downward; stem rises to +Z.
+import { connectPolygonRings } from '../connectedFootprint.js'
 
 // Round offset arc resolution — higher = smoother cavity walls (print cost ↑ slightly).
 const ROUND_SEGMENTS = 64
@@ -59,18 +60,39 @@ function resolveRgb(val, fallback = [128, 128, 128]) {
   return fallback
 }
 
+function normalizeKeychainEntry(raw, params = {}) {
+  if (!raw || raw.enabled === false) return null
+  return {
+    enabled: true,
+    style: (raw.style ?? params.keyringStyle) === 'hole' ? 'hole' : 'loop',
+    holeDiameterMm: raw.holeDiameterMm ?? params.keyringHoleMm ?? 5.2,
+    outerDiameterMm: raw.outerDiameterMm ?? params.keyringTabMm ?? 12,
+    angleDeg: raw.angleDeg ?? params.keyringAngleDeg ?? 270,
+    offsetMm: raw.offsetMm ?? params.keyringOffsetMm ?? 0
+  }
+}
+
 function normalizeParams(params = {}) {
-  const keychain =
+  const fallbackKeychain =
     params.keychain ??
     (params.keyringEnabled
       ? {
           enabled: true,
+          style: params.keyringStyle === 'hole' ? 'hole' : 'loop',
           holeDiameterMm: params.keyringHoleMm ?? 5.2,
-          outerDiameterMm: params.keyringTabMm ?? 10,
+          outerDiameterMm: params.keyringTabMm ?? 12,
           angleDeg: params.keyringAngleDeg ?? 270,
           offsetMm: params.keyringOffsetMm ?? 0
         }
       : null)
+  const keychains = (Array.isArray(params.keychains) ? params.keychains : [])
+    .map((entry) => normalizeKeychainEntry(entry, params))
+    .filter(Boolean)
+  if (!keychains.length && fallbackKeychain) {
+    const one = normalizeKeychainEntry(fallbackKeychain, params)
+    if (one) keychains.push(one)
+  }
+  const keychain = keychains[0] || null
 
   return {
     imageMargin: params.imageMargin ?? params.imageMarginMm ?? 1.2,
@@ -79,7 +101,7 @@ function normalizeParams(params = {}) {
     baseShape: params.baseShape ?? 'outline',
     borderWidth: params.borderWidth ?? params.borderWidthMm ?? 2.6,
     topThickness: params.topThickness ?? params.topThicknessMm ?? 1.5,
-    imageDepth: params.imageDepth ?? params.imageDepthMm ?? 0.8,
+    imageDepth: params.imageDepth ?? params.imageDepthMm ?? 2,
     travel: params.travel ?? params.travelMm ?? 4.0,
     capProud: params.capProud ?? params.capProudMm ?? 4.0,
     floorThickness: params.floorThickness ?? params.floorThicknessMm ?? 1.6,
@@ -93,6 +115,7 @@ function normalizeParams(params = {}) {
     imageOffset: params.imageOffset ?? { x: 0, y: 0 },
     switches: params.switches,
     keychain,
+    keychains,
     colorBleed: params.colorBleed ?? 0,
     outlineSmoothingRadius: params.outlineSmoothingRadius ?? 4.0,
     meshSolid: params.meshSolid ?? null,
@@ -347,7 +370,7 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   let imageScale = Math.max(2, p.capWidthMm - 2 * border)
   let imgW = nW * imageScale
   let imgH = nH * imageScale
-  if (isOutline && Math.min(imgW, imgH) + 2 * border < minCap) {
+  if (isOutline && params.shapeMode !== 'svg' && Math.min(imgW, imgH) + 2 * border < minCap) {
     imageScale *= (minCap - 2 * border) / Math.min(imgW, imgH)
     imgW = nW * imageScale
     imgH = nH * imageScale
@@ -411,50 +434,6 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
     return track(new CrossSection([pts], 'NonZero'))
   }
 
-  const makeStar = (r, points = 5) => {
-    const innerR = r * 0.56
-    const pts = []
-    for (let i = 0; i < points * 2; i++) {
-      const angle = (Math.PI / points) * i - Math.PI / 2
-      const radius = i % 2 === 0 ? r : innerR
-      pts.push([Math.cos(angle) * radius, Math.sin(angle) * radius])
-    }
-    const sharp = track(new CrossSection([pts], 'NonZero'))
-    const rr = r * 0.13
-    const a = track(sharp.offset(-rr, 'Round', 2.0, 64))
-    const b = track(a.offset(2 * rr, 'Round', 2.0, 64))
-    return track(b.offset(-rr, 'Round', 2.0, 64))
-  }
-
-  const makeHeart = (r) => {
-    const h = 1 / Math.SQRT2
-    const lobeR = 0.5
-    const lobeX = h / 2
-    const lobeY = 1.5 * h
-    const maxX = lobeX + lobeR
-    const cy = (lobeY + lobeR) / 2
-    const scale = r / Math.max(maxX, cy)
-    const seg = 128
-    const circleRing = (ox) => {
-      const ring = []
-      for (let i = 0; i < seg; i++) {
-        const a = (Math.PI * 2 * i) / seg
-        ring.push([(ox + lobeR * Math.cos(a)) * scale, (lobeY - cy + lobeR * Math.sin(a)) * scale])
-      }
-      return ring
-    }
-    const diamondRing = [
-      [0, (0 - cy) * scale],
-      [h * scale, (h - cy) * scale],
-      [0, (2 * h - cy) * scale],
-      [-h * scale, (h - cy) * scale]
-    ]
-    const diamond = track(new CrossSection([diamondRing], 'NonZero'))
-    const lobeL = track(new CrossSection([circleRing(-lobeX)], 'NonZero'))
-    const lobeR2 = track(new CrossSection([circleRing(lobeX)], 'NonZero'))
-    return track(track(diamond.add(lobeL)).add(lobeR2))
-  }
-
   const makeEgg = (r) => {
     const steps = 96
     const width = 0.74
@@ -508,10 +487,6 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
           return roundedRect(2 * rr * rectAspect, 2 * rr, 2 * rr * 0.22)
         case 'hexagon':
           return makeHexagon(rr)
-        case 'heart':
-          return makeHeart(rr)
-        case 'star':
-          return makeStar(rr)
         case 'egg':
           return makeEgg(rr)
         case 'circle':
@@ -584,6 +559,21 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
     warnings.push('Switches were pulled together to fit the cap. Increase Size for more room.')
   }
 
+  if (params.shapeMode === 'svg' && isOutline) {
+    const originalPlate = plate
+    // Thin/concave logos still need a continuous seat over the switch. Add
+    // support before deriving the well so cap and base keep the same clearance.
+    for (const sw of applied) {
+      const seat = track(track(roundedRect(switchClear, switchClear, 2.5).rotate(sw.rotation)).translate([sw.x, sw.y]))
+      plate = track(plate.add(seat))
+    }
+    const connected = connectPolygonRings(plate.toPolygons(), Math.max(2.8, border * 2))
+    plate = track(new CrossSection(connected, 'NonZero'))
+    if (sectionArea(track(plate.subtract(originalPlate))) > 0.05) {
+      warnings.push('Backing SVG disambungkan dan diperkuat di sekitar switch agar lid menjadi satu bagian utuh.')
+    }
+  }
+
   // --- Stem fit ---
   let stemSized = stem
   const stemFit = p.stemFitPct ?? 0
@@ -601,6 +591,9 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   const stemAts = applied.map((sw) => placeSolidAt(stemSized, sw))
 
   // --- Well / body footprints ---
+  // Union switch-clearance columns only when they stick out of the (grown) plate.
+  // Shape-mode tiles are sized to contain switchClear, so skipping avoids square bulges
+  // and tiny numerical overhangs that warp organic silhouettes.
   const socketColumnBase = roundedRect(switchClear, switchClear, 2.5)
   const capFp = grow(plate, tol)
   let wellFp = capFp
@@ -611,7 +604,10 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
         sw.y
       ])
     )
-    wellFp = track(wellFp.add(col))
+    const overhang = track(col.subtract(capFp))
+    if (!sectionIsEmpty(overhang) && sectionArea(overhang) > 0.05) {
+      wellFp = track(wellFp.add(col))
+    }
   }
 
   const bulgeArea = sectionArea(track(wellFp.subtract(capFp)))
@@ -629,7 +625,7 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
   const cavityFloorZ = socketBB.max[2]
   const slabBottomZ = stemBB.max[2]
   const backing = Math.max(0.8, p.topThickness)
-  const imageDepth = Math.max(0.2, p.imageDepth)
+  const imageDepth = Math.max(0.4, Math.min(4, p.imageDepth))
   const slabTopZ = slabBottomZ + backing + imageDepth
   const imageBottomZ = slabBottomZ + backing
   const travel = Math.max(0, p.travel)
@@ -722,11 +718,12 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
         .translate([mt.translateX, mt.translateY, slabBottomZ + mt.translateZ])
     )
   } else {
-    const cap = extrudeAt(plate, backing + imageDepth, slabBottomZ)
+    const cap = extrudeAt(plate, backing, slabBottomZ)
     base = cap
   }
 
-  // Simplified inlay: skip multicolor carving; optional single-region extrude
+  // Teks/SVG timbul di atas backing (bukan pocket rata), supaya kelihatan di preview.
+  const reliefOverlap = 0.12
   if (!useMeshAsTop && !useMeshSplit && !useDualMesh && regions.length === 1) {
     const r = regions[0]
     const validRings = placeRings(r.rings || []).filter((ring) => ring.length >= 3 && getRingArea(ring) > 0.001)
@@ -735,12 +732,12 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
       if (p.colorBleed > 0.001) cs = grow(cs, p.colorBleed)
       const clipped = track(cs.intersect(imageArea))
       if (!sectionIsEmpty(clipped)) {
-        const inlay = extrudeAt(clipped, imageDepth, imageBottomZ)
+        const inlay = extrudeAt(clipped, imageDepth + reliefOverlap, imageBottomZ - reliefOverlap)
         if (!inlay.isEmpty()) {
           const rgb = resolveRgb(r.filamentRgb ?? r.colorRgb, [200, 200, 200])
           parts.push(toPart(inlay, 'cap', 'top', rgb, r.partName ?? 'inlay'))
-          const holePrism = extrudeAt(clipped, slabTopZ - imageBottomZ + 0.02, imageBottomZ - 0.01)
-          base = track(base.subtract(holePrism))
+          const seat = extrudeAt(clipped, reliefOverlap + 0.02, imageBottomZ - reliefOverlap)
+          if (!seat.isEmpty()) base = track(base.subtract(seat))
         }
       }
     }
@@ -857,32 +854,70 @@ export function buildClicker(wasm, socket, stem, regions, outline, params) {
     }
   }
 
-  // Simplified keychain loop
-  const kc = p.keychain
-  if (kc && kc.enabled) {
-    const holeR = Math.max(1.5, (kc.holeDiameterMm ?? 5.2) / 2)
-    const th = Math.max(2.5, Math.min(4.0, (meshBodyTopZ - bodyBottomZ) * 0.35))
+  // Keychain loop(s) — optional hang eyelet(s) on base edge
+  const keychains = (Array.isArray(p.keychains) && p.keychains.length
+    ? p.keychains
+    : (p.keychain && p.keychain.enabled ? [p.keychain] : [])
+  ).filter((kc) => kc && kc.enabled !== false)
+  if (keychains.length) {
+    const th = Math.max(2.8, Math.min(4.5, (meshBodyTopZ - bodyBottomZ) * 0.4))
     const zb = meshBodyTopZ - th
-    const { p: edgeP, dir } = edgePointAt(bodyFootprint, kc.angleDeg ?? 270)
-    const tangent = [-dir[1], dir[0]]
-    const px = edgeP[0] + tangent[0] * (kc.offsetMm ?? 0)
-    const py = edgeP[1] + tangent[1] * (kc.offsetMm ?? 0)
+    for (const kc of keychains) {
+      const holeR = Math.max(1.5, (kc.holeDiameterMm ?? 5.2) / 2)
+      const keyringStyle = kc.style === 'hole' ? 'hole' : 'loop'
+      const { p: edgeP, dir } = edgePointAt(bodyFootprint, kc.angleDeg ?? 270)
+      const tangent = [-dir[1], dir[0]]
+      if (keyringStyle === 'hole') {
+        const b = bodyFootprint.bounds()
+        const inset = Math.max(holeR + 2.0, 4.5)
+        const offset = kc.offsetMm ?? 0
+        let hcx
+        let hcy
+        if (Math.abs(dir[0]) >= Math.abs(dir[1])) {
+          hcx = dir[0] < 0 ? b.min[0] + inset : b.max[0] - inset
+          hcy = b.max[1] - inset + offset
+        } else {
+          hcx = b.min[0] + inset + offset
+          hcy = dir[1] < 0 ? b.min[1] + inset : b.max[1] - inset
+        }
+        const slotOffset = holeR * 0.42
+        const p0 = [hcx - tangent[0] * slotOffset, hcy - tangent[1] * slotOffset]
+        const p1 = [hcx + tangent[0] * slotOffset, hcy + tangent[1] * slotOffset]
+        const endA = track(track(CrossSection.circle(holeR, 48)).translate(p0))
+        const endB = track(track(CrossSection.circle(holeR, 48)).translate(p1))
+        const bridge = bridgeBetween(p0, p1, holeR * 2)
+        const strapHole = track(track(endA.add(endB)).add(bridge))
+        const cutter = extrudeAt(strapHole, meshBodyTopZ - bodyBottomZ + 2, bodyBottomZ - 1)
+        body = track(body.subtract(cutter))
+      } else {
+        const px = edgeP[0] + tangent[0] * (kc.offsetMm ?? 0)
+        const py = edgeP[1] + tangent[1] * (kc.offsetMm ?? 0)
 
-    const loopR = Math.max(3.2, holeR + 1.8, (kc.outerDiameterMm ?? 10) / 2)
-    const overlap = Math.min(loopR * 0.42, Math.max(1.1, loopR - holeR - 0.2))
-    const hcx = px + dir[0] * (loopR - overlap)
-    const hcy = py + dir[1] * (loopR - overlap)
-    const innerP = [px - dir[0] * overlap, py - dir[1] * overlap]
-    const outerP = [hcx + dir[0] * loopR * 0.18, hcy + dir[1] * loopR * 0.18]
-    const loopCircle = track(track(CrossSection.circle(loopR, 80)).translate([hcx, hcy]))
-    const loopBridge = bridgeBetween(innerP, outerP, Math.max(holeR * 2.15, loopR * 0.9))
-    const loopFootprint = track(loopCircle.add(loopBridge))
+        // Larger eyelet: thicker wall around hole + more stick-out past edge
+        const loopR = Math.max(4.2, holeR + 2.5, (kc.outerDiameterMm ?? 12) / 2)
+        const overlap = Math.min(loopR * 0.32, Math.max(1.0, loopR - holeR - 0.4))
+        const hcx = px + dir[0] * (loopR - overlap)
+        const hcy = py + dir[1] * (loopR - overlap)
+        const innerP = [px - dir[0] * overlap, py - dir[1] * overlap]
+        const outerP = [hcx + dir[0] * loopR * 0.32, hcy + dir[1] * loopR * 0.32]
+        const loopCircle = track(track(CrossSection.circle(loopR, 80)).translate([hcx, hcy]))
+        const loopBridge = bridgeBetween(innerP, outerP, Math.max(holeR * 2.4, loopR * 1.05))
+        const loopFootprint = track(loopCircle.add(loopBridge))
 
-    const loop = extrudeAt(loopFootprint, th, zb)
-    body = track(body.add(loop))
+        const loop = extrudeAt(loopFootprint, th, zb)
+        body = track(body.add(loop))
 
-    const hole = extrudeAt(track(track(CrossSection.circle(holeR, 48)).translate([hcx, hcy])), th + 2, zb - 1)
-    body = track(body.subtract(hole))
+        const hole = extrudeAt(track(track(CrossSection.circle(holeR, 48)).translate([hcx, hcy])), th + 2, zb - 1)
+        body = track(body.subtract(hole))
+      }
+    }
+    if (keychains.length === 1) {
+      warnings.push(keychains[0].style === 'hole'
+        ? 'Lubang tali ditambahkan di base ujung.'
+        : 'Loop keyring ditambahkan di base.')
+    } else {
+      warnings.push(`Gantungan: ${keychains.length} loop/lubang di base.`)
+    }
   }
 
   body = track(body.subtract(well))

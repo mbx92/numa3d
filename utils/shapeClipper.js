@@ -82,7 +82,11 @@ function runClip(type, subjects, clips = []) {
 export function unionTextBodies(shapes) {
   const subjects = []
   for (const shape of shapes) {
-    subjects.push(...shapeToPaths(shape).outers)
+    for (const path of shapeToPaths(shape).outers) {
+      // Separate solids must add even when an imported SVG reflects a path.
+      if (!ClipperLib.Clipper.Orientation(path)) path.reverse()
+      subjects.push(path)
+    }
   }
   if (!subjects.length) return []
   const solution = runClip(ClipperLib.ClipType.ctUnion, subjects)

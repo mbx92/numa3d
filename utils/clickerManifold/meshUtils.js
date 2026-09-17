@@ -101,9 +101,11 @@ export function adaptiveRingSegments(shapes, minSegs = 48, maxSegs = 128, mmPerS
 
 function pushShapeRings(shape, segs, rings) {
   const outer = shape.getPoints(segs)
+  if (THREE.ShapeUtils.isClockWise(outer)) outer.reverse()
   if (outer.length >= 3) rings.push(outer.map((p) => [p.x, p.y]))
   for (const hole of shape.holes || []) {
     const pts = hole.getPoints(segs)
+    if (!THREE.ShapeUtils.isClockWise(pts)) pts.reverse()
     if (pts.length >= 3) rings.push(pts.map((p) => [p.x, p.y]))
   }
 }

@@ -1,12 +1,15 @@
 import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { getHppForProduct } from '../../utils/productHpp.js'
+import { getSettings } from '../../utils/settings.js'
+import { decorateProductPricing } from '../../utils/productPricing.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   const db = useDb()
   const rows = await db.select().from(schema.products).where(eq(schema.products.id, id))
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
+  const settings = await getSettings()
   const hpp = await getHppForProduct(id)
   const images = await db
     .select()
@@ -15,8 +18,8 @@ export default defineEventHandler(async (event) => {
     .orderBy(schema.productImages.sortOrder, schema.productImages.id)
   return {
     ...rows[0],
+    ...decorateProductPricing(rows[0], hpp, settings),
     images,
-    hpp: hpp.total,
     breakdown: hpp.breakdown,
     materialLines: hpp.materialLines,
     packagingLines: hpp.packagingLines,

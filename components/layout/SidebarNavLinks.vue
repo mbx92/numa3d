@@ -1,4 +1,5 @@
 <script setup>
+import { ArrowTopRightOnSquareIcon } from '@heroicons/vue/24/outline'
 import { navSections, isNavActive } from '~/utils/nav.js'
 
 defineProps({
@@ -6,6 +7,7 @@ defineProps({
 })
 
 const route = useRoute()
+const { openToolInNewTab, toolLinkAttrs } = useStandaloneDisplay()
 </script>
 
 <template>
@@ -21,6 +23,7 @@ const route = useRoute()
       v-for="item in section.items"
       :key="item.to"
       :to="item.to"
+      v-bind="item.newTab ? toolLinkAttrs : {}"
       class="flex items-center gap-2.5 px-4 py-2.5 text-sm border-l-2 border-transparent text-ink-300 hover:text-white hover:bg-ink-800 transition-colors"
       :class="[
         compact ? 'py-3' : '',
@@ -29,6 +32,10 @@ const route = useRoute()
     >
       <component :is="item.icon" class="w-5 h-5 shrink-0" />
       <span class="truncate">{{ item.label }}</span>
+      <ArrowTopRightOnSquareIcon
+        v-if="item.newTab && openToolInNewTab"
+        class="w-3.5 h-3.5 ml-auto shrink-0 opacity-50"
+      />
     </NuxtLink>
   </template>
 </template>

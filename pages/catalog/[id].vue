@@ -106,6 +106,8 @@ async function removeFromSeries(p) {
           </div>
           <p v-if="p.description" class="text-xs text-ink-400 line-clamp-2">{{ p.description }}</p>
           <p class="text-xs font-mono text-ink-500">Stok {{ formatNumber(p.stockQuantity) }}</p>
+          <p v-if="p.sellingPrice" class="text-sm font-mono font-semibold">{{ formatIDR(p.sellingPrice) }}</p>
+          <p v-else-if="p.hasRecipe" class="text-xs text-ink-400">HPP {{ formatIDR(p.hpp) }} · belum ada harga jual</p>
           <button
             v-if="isAdmin"
             type="button"

@@ -17,6 +17,7 @@ const form = ref({
   invoicePhone: '',
   invoiceFooter: '',
   invoiceShareTtlDays: 7,
+  priceRoundStep: 500,
   uiLayoutModes: { ...DEFAULT_UI_LAYOUT_MODES },
   ...settings.value
 })
@@ -133,7 +134,7 @@ watch(
     <h1 class="text-xl font-bold">Pengaturan</h1>
     <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan.</p>
 
-    <div class="flex gap-1 overflow-x-auto border-b border-ink-200 -mb-px">
+    <div class="tab-bar -mb-px">
       <button
         v-for="t in tabs"
         :key="t.id"
@@ -285,7 +286,18 @@ watch(
             required
             :disabled="!isAdmin"
           />
-          <p class="text-xs text-ink-500 mt-1">Prefill harga jual saran di produk dan penjualan.</p>
+          <p class="text-xs text-ink-500 mt-1">
+            Margin atas harga jual, bukan markup HPP. Harga saran = HPP ÷ (1 − margin%), lalu dibulatkan.
+          </p>
+        </div>
+        <div>
+          <label class="label">Pembulatan harga saran</label>
+          <select v-model.number="form.priceRoundStep" class="input" :disabled="!isAdmin">
+            <option :value="100">Ke atas Rp 100</option>
+            <option :value="500">Ke atas Rp 500</option>
+            <option :value="1000">Ke atas Rp 1.000</option>
+          </select>
+          <p class="text-xs text-ink-500 mt-1">Dipakai katalog, tombol harga saran, dan custom order.</p>
         </div>
       </template>
 

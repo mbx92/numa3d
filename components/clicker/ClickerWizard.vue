@@ -17,6 +17,12 @@ const draft = reactive({
   label: CLICKER_DEFAULTS.label,
   shapeMode: CLICKER_DEFAULTS.shapeMode,
   baseShape: CLICKER_DEFAULTS.baseShape,
+  perLetterShapes: CLICKER_DEFAULTS.perLetterShapes,
+  letterShapes: [...(CLICKER_DEFAULTS.letterShapes || [])],
+  flexiEnabled: CLICKER_DEFAULTS.flexiEnabled,
+  flexiConnectionStyle: CLICKER_DEFAULTS.flexiConnectionStyle,
+  flexiClearanceMm: CLICKER_DEFAULTS.flexiClearanceMm,
+  flexiStrapHoleMm: CLICKER_DEFAULTS.flexiStrapHoleMm,
   text: CLICKER_DEFAULTS.text,
   fontUrl: CLICKER_DEFAULTS.fontUrl,
   svgContent: '',
@@ -26,9 +32,13 @@ const draft = reactive({
   meshReliefHeightMm: CLICKER_DEFAULTS.meshReliefHeightMm,
   maxSizeMm: CLICKER_DEFAULTS.maxSizeMm,
   displayMode: CLICKER_DEFAULTS.displayMode,
+  snapFitEnabled: CLICKER_DEFAULTS.snapFitEnabled,
   keyringEnabled: CLICKER_DEFAULTS.keyringEnabled,
+  keyringStyle: CLICKER_DEFAULTS.keyringStyle,
+  keyringHoleMm: CLICKER_DEFAULTS.keyringHoleMm,
   keyringAngleDeg: CLICKER_DEFAULTS.keyringAngleDeg,
   switchPresetId: CLICKER_DEFAULTS.switchPresetId,
+  switchPreviewModelId: CLICKER_DEFAULTS.switchPreviewModelId,
   fitToleranceMm: CLICKER_DEFAULTS.fitToleranceMm,
   slipToleranceMm: CLICKER_DEFAULTS.slipToleranceMm,
   stemFitPct: CLICKER_DEFAULTS.stemFitPct,
@@ -41,6 +51,7 @@ const draft = reactive({
   topRimMm: CLICKER_DEFAULTS.topRimMm,
   wallThicknessMm: CLICKER_DEFAULTS.wallThicknessMm,
   lidHeightMm: CLICKER_DEFAULTS.lidHeightMm,
+  imageDepthMm: CLICKER_DEFAULTS.imageDepthMm,
   colors: { ...CLICKER_DEFAULTS.colors }
 })
 
@@ -123,6 +134,12 @@ function submit() {
     label: String(draft.label).trim(),
     shapeMode: draft.shapeMode,
     baseShape: draft.baseShape,
+    perLetterShapes: !!draft.perLetterShapes,
+    letterShapes: Array.isArray(draft.letterShapes) ? [...draft.letterShapes] : [],
+    flexiEnabled: !!draft.flexiEnabled,
+    flexiConnectionStyle: draft.flexiConnectionStyle,
+    flexiClearanceMm: Number(draft.flexiClearanceMm),
+    flexiStrapHoleMm: Number(draft.flexiStrapHoleMm),
     text: String(draft.text || '').trim(),
     fontUrl: draft.fontUrl,
     svgContent: String(draft.svgContent || ''),
@@ -132,9 +149,13 @@ function submit() {
     meshReliefHeightMm: Number(draft.meshReliefHeightMm),
     maxSizeMm: Number(draft.maxSizeMm),
     displayMode: draft.displayMode,
+    snapFitEnabled: !!draft.snapFitEnabled,
     keyringEnabled: !!draft.keyringEnabled,
+    keyringStyle: draft.keyringStyle,
+    keyringHoleMm: Number(draft.keyringHoleMm),
     keyringAngleDeg: Number(draft.keyringAngleDeg),
     switchPresetId: draft.switchPresetId,
+    switchPreviewModelId: draft.switchPreviewModelId,
     fitToleranceMm: Number(draft.fitToleranceMm),
     slipToleranceMm: Number(draft.slipToleranceMm),
     stemFitPct: Number(draft.stemFitPct),
@@ -147,6 +168,7 @@ function submit() {
     topRimMm: Number(draft.topRimMm),
     wallThicknessMm: Number(draft.wallThicknessMm),
     lidHeightMm: Number(draft.lidHeightMm),
+    imageDepthMm: Number(draft.imageDepthMm),
     colors: { ...draft.colors }
   })
 }
@@ -189,6 +211,12 @@ function submit() {
           <ClickerDesignPicker
             v-model:shape-mode="draft.shapeMode"
             v-model:base-shape="draft.baseShape"
+            v-model:per-letter-shapes="draft.perLetterShapes"
+            v-model:letter-shapes="draft.letterShapes"
+            v-model:flexi-enabled="draft.flexiEnabled"
+            v-model:flexi-connection-style="draft.flexiConnectionStyle"
+            v-model:flexi-clearance-mm="draft.flexiClearanceMm"
+            v-model:flexi-strap-hole-mm="draft.flexiStrapHoleMm"
             v-model:text="draft.text"
             v-model:font-url="draft.fontUrl"
             v-model:svg-content="draft.svgContent"
@@ -198,13 +226,16 @@ function submit() {
             v-model:mesh-relief-height-mm="draft.meshReliefHeightMm"
             v-model:max-size-mm="draft.maxSizeMm"
             v-model:display-mode="draft.displayMode"
+            v-model:snap-fit-enabled="draft.snapFitEnabled"
             v-model:keyring-enabled="draft.keyringEnabled"
+            v-model:keyring-style="draft.keyringStyle"
+            v-model:keyring-hole-mm="draft.keyringHoleMm"
             v-model:keyring-angle-deg="draft.keyringAngleDeg"
           />
         </template>
 
         <template v-else-if="step === 1">
-          <p class="text-xs text-ink-500">2 warna — base + lid terpisah (cocok AMS/multi-material).</p>
+          <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
           <ToolColorBar
             v-model:mode="colorMode"
             v-model:colors="draft.colors"
@@ -217,6 +248,7 @@ function submit() {
         <template v-else-if="step === 2">
           <ClickerSwitchPicker
             v-model="draft.switchPresetId"
+            v-model:switch-preview-model-id="draft.switchPreviewModelId"
             v-model:stem-fit-pct="draft.stemFitPct"
             v-model:socket-fit-pct="draft.socketFitPct"
             v-model:slip-tolerance-mm="draft.slipToleranceMm"
@@ -254,6 +286,11 @@ function submit() {
           <label class="block space-y-1.5">
             <span class="text-xs font-medium text-ink-700">Tinggi lid</span>
             <input v-model.number="draft.lidHeightMm" type="number" min="6" max="20" step="0.5" class="input-num w-full" />
+          </label>
+          <label v-if="draft.shapeMode !== 'mesh'" class="block space-y-1.5">
+            <span class="text-xs font-medium text-ink-700">Ketebalan teks/SVG</span>
+            <input v-model.number="draft.imageDepthMm" type="number" min="0.4" max="4" step="0.1" class="input-num w-full" />
+            <span class="text-[10px] text-ink-400">Lapisan timbul pada lid, default 2 mm</span>
           </label>
           <div class="grid grid-cols-3 gap-3">
             <label class="block space-y-1.5">

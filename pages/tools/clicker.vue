@@ -12,16 +12,17 @@ import {
   PencilSquareIcon
 } from '@heroicons/vue/24/outline'
 import { CLICKER_DEFAULTS } from '~/utils/clickerPresets.js'
-import { EXPORT_FORMATS, exportFilename, exportMime } from '~/utils/keychainExport.js'
+import { EXPORT_FORMATS, exportMime } from '~/utils/keychainExport.js'
 import { generateClicker } from '~/utils/clickerGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
+import { resolveGeneratorPartExport } from '~/utils/generatorPartExport.js'
 import { getSwitchPreset } from '~/utils/clickerPresets.js'
 import { useUiLayout } from '~/composables/useUiLayout.js'
 import { useToolColorMode } from '~/composables/useToolColorMode.js'
 import ToolColorBar from '~/components/ToolColorBar.vue'
 import ToolPanelShell from '~/components/ToolPanelShell.vue'
 import PreviewViewLegend from '~/components/PreviewViewLegend.vue'
-import { buildPartLegend } from '~/utils/previewPartLabels.js'
+import { buildPartLegend, visiblePreviewParts } from '~/utils/previewPartLabels.js'
 
 definePageMeta({
   layout: 'tool',
@@ -51,6 +52,7 @@ const form = reactive({
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const toast = useToast()
 const exportFormat = ref('3mf')
+const { includePrintProfile, printExportOptions } = useSlicerProfile('clicker')
 const activePreset = computed(() => getSwitchPreset(form.switchPresetId))
 
 const activeToolPanel = ref('design')
@@ -89,26 +91,46 @@ const selectedPartId = ref('')
 const explodeFactor = ref(0)
 const autoExplode = ref(false)
 const showPreviewGrid = ref(true)
+const showSwitchPreview = ref(true)
 const assemblyResetToken = ref(0)
 const simulatingClick = ref(false)
 const basePreviewParts = ref([])
 const lidPreviewParts = ref([])
 const assemblyPreviewParts = ref([])
 
+const switchVisible = computed(
+  () => showSwitchPreview.value && form.switchPreviewModelId !== 'hidden'
+)
+
 const activePreviewParts = computed(() => {
-  if (activePreview.value === 'base') return basePreviewParts.value
-  if (activePreview.value === 'lid') return lidPreviewParts.value
-  return assemblyPreviewParts.value
+  const parts = activePreview.value === 'base'
+    ? basePreviewParts.value
+    : activePreview.value === 'lid'
+      ? lidPreviewParts.value
+      : assemblyPreviewParts.value
+  if (activePreview.value !== 'assembly') return parts
+  return visiblePreviewParts(parts, { showSwitch: switchVisible.value })
 })
 
 const previewTabs = computed(() => [
-  { id: 'assembly', label: 'Perakitan', colors: [form.colors.base, form.colors.lid] },
+  { id: 'assembly', label: 'Perakitan', colors: [form.colors.base, form.colors.lid, form.colors.text] },
   { id: 'base', label: 'Base', color: form.colors.base },
-  { id: 'lid', label: 'Lid', color: form.colors.lid }
+  { id: 'lid', label: 'Lid', colors: [form.colors.lid, form.colors.text] }
 ])
 
-const assemblyPartLegend = computed(() => buildPartLegend(assemblyPreviewParts.value))
+const assemblyPartLegend = computed(() =>
+  buildPartLegend(visiblePreviewParts(assemblyPreviewParts.value, { showSwitch: switchVisible.value }))
+)
 const isAssemblyView = computed(() => activePreview.value === 'assembly')
+
+watch(() => form.switchPreviewModelId, (id) => {
+  showSwitchPreview.value = id !== 'hidden'
+})
+
+function onShowSwitchPreview(value) {
+  showSwitchPreview.value = value
+  if (value && form.switchPreviewModelId === 'hidden') form.switchPreviewModelId = 'simple'
+}
 
 function resetAssemblyPreview() {
   explodeFactor.value = 0
@@ -135,6 +157,8 @@ const activePreviewFilename = computed(() => {
 
 let disposePrev = null
 let generateToken = 0
+const generationState = useGeneratorState(form, result, generateModel)
+const { runGenerate, ensureFreshResult, isFresh: isResultFresh } = generationState
 
 function clearPreviews() {
   basePreviewParts.value = []
@@ -143,19 +167,24 @@ function clearPreviews() {
 }
 
 onUnmounted(() => {
+  generateToken++
+  result.value = null
   clearPreviews()
   disposePrev?.()
 })
 
-async function runGenerate() {
+async function generateModel() {
   const token = ++generateToken
   generating.value = true
+  result.value = null
   const prevDispose = disposePrev
   disposePrev = null
   clearPreviews()
   previewKey.value += 1
   await nextTick()
   prevDispose?.()
+  if (token !== generateToken) return
+  const revision = generationState.revision.value
   try {
     const out = await generateClicker({ ...form, colors: { ...form.colors } })
     if (token !== generateToken) {
@@ -164,6 +193,7 @@ async function runGenerate() {
     }
     disposePrev = () => out.dispose()
     result.value = out
+    generationState.markGenerated(revision)
     previewKey.value += 1
     basePreviewParts.value = out.basePreviewParts.map((p) => ({
       geometry: p.geometry,
@@ -175,14 +205,24 @@ async function runGenerate() {
       geometry: p.geometry,
       color: p.color,
       line: p.line,
-      role: p.role
+      role: p.role,
+      name: p.name
     }))
     assemblyPreviewParts.value = out.assemblyPreviewParts.map((p) => ({
       geometry: p.geometry,
+      modelUrl: p.modelUrl,
+      modelNodeNames: p.modelNodeNames,
+      modelFitMm: p.modelFitMm,
+      modelTopZ: p.modelTopZ,
+      modelMinZ: p.modelMinZ,
+      modelAxis: p.modelAxis,
+      position: p.position,
+      rotationZ: p.rotationZ,
       color: p.color,
       line: p.line,
       role: p.role,
-      name: p.name
+      name: p.name,
+      opacity: p.opacity
     }))
     selectedPartId.value = ''
     explodeFactor.value = 0
@@ -196,69 +236,26 @@ async function runGenerate() {
   }
 }
 
-async function resolvePartExport(part) {
-  if (!result.value) return
-  const slug = result.value.slug
-  const fmt = exportFormat.value
-  let blob
-  let filename
-
-  if (part === 'base') {
-    if (fmt === '3mf') {
-      blob = result.value.getBase3mfBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else if (fmt === 'glb') {
-      blob = await result.value.getBaseGlbBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else if (fmt === 'stl-parts') {
-      blob = result.value.getBaseMultiStlBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else if (fmt === 'stl-color') {
-      blob = result.value.getBaseColoredStlBlob()
-      filename = exportFilename(slug, 'base', fmt)
-    } else {
-      blob = result.value.getBaseBlob()
-      filename = result.value.baseFilename
-    }
-  } else if (part === 'lid' || part === 'accent') {
-    if (fmt === '3mf') {
-      blob = result.value.getLid3mfBlob?.() || result.value.getAccent3mfBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else if (fmt === 'glb') {
-      blob = await (result.value.getLidGlbBlob?.() || result.value.getAccentGlbBlob())
-      filename = exportFilename(slug, 'text', fmt)
-    } else if (fmt === 'stl-parts') {
-      blob = result.value.getLidMultiStlBlob?.() || result.value.getAccentMultiStlBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else if (fmt === 'stl-color') {
-      blob = result.value.getLidColoredStlBlob?.() || result.value.getAccentColoredStlBlob()
-      filename = exportFilename(slug, 'text', fmt)
-    } else {
-      blob = result.value.getLidBlob?.() || result.value.getAccentBlob()
-      filename = result.value.lidFilename || result.value.accentFilename
-    }
-  }
-  return { blob, filename }
-}
-
 async function downloadPart(part) {
-  const resolved = await resolvePartExport(part)
-  const blob = resolved?.blob
-  const filename = resolved?.filename
-  if (!blob) {
-    toast.error('Part lid tidak tersedia')
-    return
+  try {
+    if (!(await ensureFreshResult())) return
+    const fmt = exportFormat.value
+    const { blob, filename } = await resolveGeneratorPartExport(result.value, part, fmt, printExportOptions.value)
+    if (!blob) throw new Error('Part tidak tersedia')
+    downloadBlob(blob, filename)
+    const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
+    const partLabel = part === 'base' ? 'base' : 'lid'
+    toast.success(`Unduh ${partLabel} (${fmtLabel})`)
+  } catch (error) {
+    toast.error(error?.message || 'Export gagal')
   }
-  downloadBlob(blob, filename)
-  const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
-  toast.success(`Unduh ${part === 'base' ? 'base' : 'lid'} (${fmtLabel})`)
 }
 
 function uploadBlob(blob, filename) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const fd = new FormData()
-    fd.append('file', new File([blob], filename, { type: exportMime(exportFormat.value) }))
+    fd.append('file', new File([blob], filename, { type: blob.type || exportMime(exportFormat.value) }))
     xhr.open('POST', '/api/library-files')
     xhr.withCredentials = true
     xhr.onload = () => {
@@ -271,21 +268,29 @@ function uploadBlob(blob, filename) {
       if (xhr.status >= 200 && xhr.status < 300) resolve(body)
       else reject(new Error(body?.statusMessage || 'Upload gagal'))
     }
+    xhr.timeout = 120000
+    xhr.ontimeout = () => reject(new Error('Upload melewati batas waktu'))
+    xhr.onabort = () => reject(new Error('Upload dibatalkan'))
     xhr.onerror = () => reject(new Error('Upload gagal'))
     xhr.send(fd)
   })
 }
 
 async function saveToGallery() {
-  if (!result.value || !isAdmin.value) return
+  if (saving.value || !isAdmin.value) return
   saving.value = true
   try {
-    const base = await resolvePartExport('base')
-    const lid = await resolvePartExport('lid')
-    if (!base?.blob) throw new Error('Part base tidak tersedia')
-    await uploadBlob(base.blob, base.filename)
-    if (lid?.blob) await uploadBlob(lid.blob, lid.filename)
-    const fmtLabel = exportFormats.find((f) => f.id === exportFormat.value)?.label || exportFormat.value
+    if (!(await ensureFreshResult())) return
+    const model = result.value
+    const fmt = exportFormat.value
+    const files = await Promise.all(['base', 'lid'].map((part) =>
+      resolveGeneratorPartExport(model, part, fmt, printExportOptions.value)
+    ))
+    if (!files[0]?.blob) throw new Error('Part utama tidak tersedia')
+    for (const file of files) {
+      if (file.blob) await uploadBlob(file.blob, file.filename)
+    }
+    const fmtLabel = exportFormats.find((f) => f.id === fmt)?.label || fmt
     toast.success(`Model disimpan ke Galeri 3D (${fmtLabel})`)
   } catch (e) {
     toast.error(e?.message || 'Gagal menyimpan ke galeri')
@@ -302,6 +307,9 @@ function onWizardComplete(payload) {
 }
 
 function restartWizard() {
+  generationState.invalidate()
+  generateToken++
+  generating.value = false
   wizardDone.value = false
   result.value = null
   simulatingClick.value = false
@@ -314,6 +322,8 @@ function restartWizard() {
 watch(canSimulateClick, (ok) => {
   if (!ok) simulatingClick.value = false
 })
+const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFreshResult, () => printExportOptions.value)
+
 </script>
 
 <template>
@@ -341,6 +351,12 @@ watch(canSimulateClick, (ok) => {
             <ClickerDesignPicker
               v-model:shape-mode="form.shapeMode"
               v-model:base-shape="form.baseShape"
+              v-model:per-letter-shapes="form.perLetterShapes"
+              v-model:letter-shapes="form.letterShapes"
+              v-model:flexi-enabled="form.flexiEnabled"
+              v-model:flexi-connection-style="form.flexiConnectionStyle"
+              v-model:flexi-clearance-mm="form.flexiClearanceMm"
+              v-model:flexi-strap-hole-mm="form.flexiStrapHoleMm"
               v-model:text="form.text"
               v-model:font-url="form.fontUrl"
               v-model:svg-content="form.svgContent"
@@ -350,7 +366,10 @@ watch(canSimulateClick, (ok) => {
               v-model:mesh-relief-height-mm="form.meshReliefHeightMm"
               v-model:max-size-mm="form.maxSizeMm"
               v-model:display-mode="form.displayMode"
+              v-model:snap-fit-enabled="form.snapFitEnabled"
               v-model:keyring-enabled="form.keyringEnabled"
+              v-model:keyring-style="form.keyringStyle"
+              v-model:keyring-hole-mm="form.keyringHoleMm"
               v-model:keyring-angle-deg="form.keyringAngleDeg"
             />
           </template>
@@ -358,6 +377,7 @@ watch(canSimulateClick, (ok) => {
           <template v-else-if="activeToolPanel === 'switch'">
             <ClickerSwitchPicker
               v-model="form.switchPresetId"
+              v-model:switch-preview-model-id="form.switchPreviewModelId"
               v-model:stem-fit-pct="form.stemFitPct"
               v-model:socket-fit-pct="form.socketFitPct"
               v-model:slip-tolerance-mm="form.slipToleranceMm"
@@ -374,6 +394,13 @@ watch(canSimulateClick, (ok) => {
             <p v-else class="text-[10px] text-ink-400">Base otomatis dari bentuk lid ({{ form.maxSizeMm }} mm max).</p>
             <KeychainCompactField label="Tinggi lid">
               <input v-model.number="form.lidHeightMm" type="number" min="6" max="20" step="0.5" class="input-num w-full text-sm" />
+            </KeychainCompactField>
+            <KeychainCompactField
+              v-if="form.shapeMode !== 'mesh'"
+              label="Ketebalan teks/SVG"
+              hint="Lapisan timbul pada lid"
+            >
+              <input v-model.number="form.imageDepthMm" type="number" min="0.4" max="4" step="0.1" class="input-num w-full text-sm" />
             </KeychainCompactField>
             <div class="grid grid-cols-3 gap-2">
               <KeychainCompactField label="Lebar">
@@ -408,7 +435,7 @@ watch(canSimulateClick, (ok) => {
           </template>
 
           <template v-else-if="activeToolPanel === 'colors'">
-            <p class="text-xs text-ink-500">Hex manual atau pilih dari material di database.</p>
+            <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
             <ToolColorBar
               v-model:mode="colorMode"
               v-model:colors="form.colors"
@@ -437,6 +464,8 @@ watch(canSimulateClick, (ok) => {
                   <option v-for="f in exportFormats" :key="f.id" :value="f.id">{{ f.label }}</option>
                 </select>
               </KeychainCompactField>
+              <SlicerProfileSettings v-if="exportFormat === '3mf'" v-model="includePrintProfile" tool="clicker" />
+              <PrintPlateExport v-if="exportFormat === '3mf'" :busy="exportingPlate" @download="downloadPlate" />
               <div class="space-y-2">
                 <button type="button" class="btn-secondary w-full text-sm" @click="downloadPart('base')">
                   <ArrowDownTrayIcon class="w-4 h-4" /> Base
@@ -455,6 +484,16 @@ watch(canSimulateClick, (ok) => {
                   {{ saving ? 'Menyimpan…' : 'Galeri' }}
                 </button>
               </div>
+              <GeneratorSliceHpp
+                :result="isResultFresh ? result : null"
+                tool="clicker"
+                :model-name="form.label || `Clicker ${result?.slug || ''}`"
+                :print-options="printExportOptions"
+                :color-fields="COLOR_FIELDS"
+                :material-ids="colorMaterialIds"
+                :colors="form.colors"
+                :color-mode="colorMode"
+              />
             </template>
             <p v-else class="text-xs text-ink-500 text-center py-8">Generate model dulu untuk export.</p>
           </template>
@@ -495,6 +534,7 @@ watch(canSimulateClick, (ok) => {
                 :auto-explode="autoExplode"
                 click-role="lid"
                 :click-travel-mm="clickTravelMm"
+                z-up-model
                 class="absolute inset-0 h-full w-full"
               />
               <PreviewViewLegend
@@ -503,11 +543,14 @@ watch(canSimulateClick, (ok) => {
                 v-model:explode-factor="explodeFactor"
                 v-model:auto-explode="autoExplode"
                 v-model:show-grid="showPreviewGrid"
+                :show-switch="switchVisible"
+                :show-switch-control="isAssemblyView"
                 :view-tabs="previewTabs"
                 :part-legend="assemblyPartLegend"
                 :show-assembly-controls="isAssemblyView"
                 :filename="result ? activePreviewFilename : ''"
                 :disabled="!result"
+                @update:show-switch="onShowSwitchPreview"
                 @reset-positions="resetAssemblyPreview"
               >
                 <template #footer>

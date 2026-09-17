@@ -1,5 +1,6 @@
-/** Mode warna global tools: hex manual atau pilih dari material DB. */
+/** Warna tools hanya dari material stok. HEX preview mengikuti swatch material. */
 export function useToolColorMode() {
-  const mode = useState('toolColorMode', () => 'hex')
+  const mode = useState('toolColorMode', () => 'material')
+  if (mode.value !== 'material') mode.value = 'material'
   return { mode }
 }

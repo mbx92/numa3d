@@ -4,9 +4,9 @@ import { ArrowDownTrayIcon, ShareIcon, XMarkIcon } from '@heroicons/vue/24/outli
 const STORAGE_KEY = 'numa3d-pwa-prompt-dismissed'
 const dismissed = ref(true)
 const isIos = ref(false)
-const isStandalone = ref(false)
 
 const { $pwa } = useNuxtApp()
+const { isStandalone } = useStandaloneDisplay()
 
 const canNativeInstall = computed(() => Boolean($pwa?.showInstallPrompt) && !dismissed.value)
 const showIosHint = computed(() => isIos.value && !isStandalone.value && !dismissed.value)
@@ -30,9 +30,6 @@ function reloadApp() {
 onMounted(() => {
   const ua = navigator.userAgent || ''
   isIos.value = /iphone|ipad|ipod/i.test(ua)
-  isStandalone.value =
-    window.matchMedia('(display-mode: standalone)').matches ||
-    window.navigator.standalone === true
   dismissed.value = localStorage.getItem(STORAGE_KEY) === '1'
 })
 </script>
