@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { extractFontUrl, variantToCssSpec, listInstalledFonts, resolveFontPath } from '../server/utils/fonts.js'
+import { extractFontUrl, variantToCssSpec, listBundledFonts, resolveFontPath, fontObjectKey } from '../server/utils/fonts.js'
 
 test('extractFontUrl prefers TTF over WOFF2', () => {
   const css = `
@@ -37,9 +37,15 @@ test('variantToCssSpec maps regular and italic keys', () => {
   assert.deepEqual(variantToCssSpec('italic'), { italic: 1, weight: 400 })
 })
 
-test('listInstalledFonts includes bundled Roboto and resolveFontPath finds it', () => {
-  const fonts = listInstalledFonts()
+test('listBundledFonts includes bundled Roboto and resolveFontPath finds it', () => {
+  const fonts = listBundledFonts()
   assert.ok(fonts.some((f) => f.filename === 'Roboto-Bold.woff'))
   assert.match(resolveFontPath('Roboto-Bold.woff') || '', /Roboto-Bold\.woff$/)
   assert.equal(resolveFontPath('../secret.ttf'), null)
+})
+
+test('fontObjectKey only accepts safe font filenames', () => {
+  assert.equal(fontObjectKey('Roboto-Bold.woff'), 'fonts/Roboto-Bold.woff')
+  assert.equal(fontObjectKey('../secret.ttf'), null)
+  assert.equal(fontObjectKey('not-a-font.txt'), null)
 })

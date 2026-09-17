@@ -50,21 +50,26 @@ export default defineEventHandler(async (event) => {
     'Content-Type': contentType
   })
 
-  const rows = await db
-    .insert(schema.customOrderFiles)
-    .values({
-      customOrderId,
-      filename: file.filename,
-      objectKey,
-      sizeBytes: file.data.length,
-      contentType
+  try {
+    const rows = await db
+      .insert(schema.customOrderFiles)
+      .values({
+        customOrderId,
+        filename: file.filename,
+        objectKey,
+        sizeBytes: file.data.length,
+        contentType
+      })
+      .returning()
+    await logAudit(event, {
+      action: 'create',
+      entity: 'custom_order_file',
+      entityId: rows[0].id,
+      summary: `Upload file "${rows[0].filename}" ke pesanan custom id ${customOrderId}`
     })
-    .returning()
-  await logAudit(event, {
-    action: 'create',
-    entity: 'custom_order_file',
-    entityId: rows[0].id,
-    summary: `Upload file "${rows[0].filename}" ke pesanan custom id ${customOrderId}`
-  })
-  return rows[0]
+    return rows[0]
+  } catch (e) {
+    await useMinio().removeObject(minioBucket(), objectKey).catch(() => {})
+    throw e
+  }
 })

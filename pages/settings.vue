@@ -106,13 +106,20 @@ const minioStatusLabel = computed(() => {
   if (!minioStatus.value) return 'Memeriksa…'
   if (!minioStatus.value.reachable) return 'Tidak terhubung'
   if (!minioStatus.value.bucketExists) return 'Terhubung — bucket belum dibuat (otomatis saat upload pertama)'
+  if (minioStatus.value.usageError) return 'Terhubung — volume tidak dapat dibaca'
   return 'Terhubung & siap'
 })
 function formatBytes(bytes) {
   const n = Number(bytes) || 0
-  if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB'
-  if (n >= 1024) return (n / 1024).toFixed(0) + ' KB'
-  return n + ' B'
+  if (n < 1024) return n + ' B'
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let value = n
+  let unit = -1
+  do {
+    value /= 1024
+    unit += 1
+  } while (value >= 1024 && unit < units.length - 1)
+  return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)} ${units[unit]}`
 }
 
 const {
@@ -316,7 +323,7 @@ watch(
     <div v-else class="space-y-4">
       <div class="panel">
         <div class="panel-header">
-          <span class="panel-title">MinIO (file 3D)</span>
+          <span class="panel-title">MinIO Storage</span>
           <button class="btn-secondary" :disabled="minioFetchStatus === 'pending'" @click="refreshMinio">
             <ArrowPathIcon class="w-3.5 h-3.5" />Cek ulang
           </button>
@@ -343,11 +350,29 @@ watch(
               <dd class="font-mono">{{ minioStatus?.latencyMs ?? '-' }} ms</dd>
             </div>
             <div>
-              <dt class="text-xs uppercase text-ink-500">File tersimpan</dt>
+              <dt class="text-xs uppercase text-ink-500">Volume bucket</dt>
               <dd class="font-mono">{{ minioStatus?.fileCount ?? 0 }} file · {{ formatBytes(minioStatus?.totalBytes) }}</dd>
             </div>
           </dl>
           <p v-if="minioStatus?.error" class="text-sm text-red-600">{{ minioStatus.error }}</p>
+          <p v-if="minioStatus?.usageError" class="text-sm text-amber-600">{{ minioStatus.usageError }}</p>
+
+          <div v-if="minioStatus?.bucketExists && !minioStatus?.usageError" class="border-t border-ink-100 pt-3">
+            <p class="text-xs uppercase text-ink-500 mb-2">Ukuran per folder</p>
+            <div v-if="minioStatus?.folders?.length" class="divide-y divide-ink-100 rounded-panel border border-ink-200">
+              <div
+                v-for="folder in minioStatus.folders"
+                :key="folder.name"
+                class="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+              >
+                <span class="font-mono truncate">{{ folder.prefix || '(root)' }}</span>
+                <span class="font-mono text-xs text-ink-500 whitespace-nowrap">
+                  {{ folder.fileCount }} file · {{ formatBytes(folder.totalBytes) }}
+                </span>
+              </div>
+            </div>
+            <p v-else class="text-sm text-ink-500">Bucket masih kosong.</p>
+          </div>
           <p class="text-xs text-ink-400">Kredensial diatur lewat environment (`MINIO_*`).</p>
         </div>
       </div>

@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   if (!filename) throw createError({ statusCode: 400, statusMessage: 'Nama file wajib diisi' })
 
   try {
-    const result = deleteInstalledFont(filename)
+    const result = await deleteInstalledFont(filename)
     await logAudit(event, {
       action: 'delete',
       entity: 'font',

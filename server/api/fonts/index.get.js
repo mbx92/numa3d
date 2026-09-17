@@ -1,3 +1,3 @@
 import { listInstalledFonts } from '../../utils/fonts.js'
 
-export default defineEventHandler(() => listInstalledFonts())
+export default defineEventHandler(async () => listInstalledFonts())

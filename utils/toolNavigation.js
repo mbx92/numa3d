@@ -2,7 +2,6 @@ const betaToolPaths = [
   '/tools/code-studio',
   '/tools/mesh-clicker',
   '/tools/lightbox',
-  '/tools/font-downloader',
   '/tools/png-to-svg'
 ]
 

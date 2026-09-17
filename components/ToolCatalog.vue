@@ -88,7 +88,7 @@ const visibleTools = computed(() => tools.filter((tool) => isBetaToolPath(tool.t
     <div>
       <h1 class="text-xl font-bold">{{ beta ? 'Tools Beta' : 'Tools' }}</h1>
       <p class="text-sm text-ink-500 mt-1">
-        {{ beta ? 'Tool yang masih dalam pengembangan dan penyempurnaan.' : 'QR Plate, Keychain, dan Clicker untuk desain model 3D.' }}
+        {{ beta ? 'Tool yang masih dalam pengembangan dan penyempurnaan.' : 'Generator 3D dan utilitas pendukung yang siap digunakan.' }}
       </p>
       <nav class="flex gap-2 mt-3" aria-label="Kategori tools">
         <NuxtLink to="/tools" :class="beta ? 'btn-secondary' : 'btn-primary'" :aria-current="beta ? undefined : 'page'">Tools</NuxtLink>

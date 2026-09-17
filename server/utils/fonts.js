@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, basename } from 'node:path'
+import { ensureBucket, minioBucket, useMinio } from './minio.js'
 
 const FONT_EXT = new Set(['.ttf', '.otf', '.woff', '.woff2'])
+const FONT_OBJECT_PREFIX = 'fonts/'
 const WEIGHT_NAMES = {
   100: 'Thin',
   200: 'ExtraLight',
@@ -68,13 +70,6 @@ export function fontFileUrl(filename) {
   return `/fonts/${encodeURIComponent(filename)}`
 }
 
-/** Writable dir for downloaded fonts. Bundled fonts stay in public/fonts. */
-export function fontsDir() {
-  const dir = process.env.FONTS_DIR || join(process.cwd(), 'data', 'fonts')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  return dir
-}
-
 function listFontsIn(dir) {
   if (!existsSync(dir)) return []
   return readdirSync(dir)
@@ -90,22 +85,79 @@ function listFontsIn(dir) {
     })
 }
 
-export function listInstalledFonts() {
+export function listBundledFonts() {
   const byName = new Map()
-  for (const dir of [...bundledFontsDirs(), fontsDir()]) {
+  for (const dir of bundledFontsDirs()) {
     for (const font of listFontsIn(dir)) byName.set(font.filename, font)
   }
+  return [...byName.values()].sort((a, b) => a.filename.localeCompare(b.filename))
+}
+
+function listMinioFonts() {
+  return new Promise((resolve, reject) => {
+    const fonts = []
+    const stream = useMinio().listObjectsV2(minioBucket(), FONT_OBJECT_PREFIX, true)
+    stream.on('data', (object) => {
+      const key = String(object?.name || '')
+      const filename = key.slice(FONT_OBJECT_PREFIX.length)
+      if (!key.startsWith(FONT_OBJECT_PREFIX) || filename.includes('/') || !isFontFilename(filename)) return
+      fonts.push({
+        filename,
+        url: fontFileUrl(filename),
+        size: Number(object.size || 0),
+        modifiedAt: object.lastModified instanceof Date
+          ? object.lastModified.toISOString()
+          : new Date(object.lastModified || 0).toISOString()
+      })
+    })
+    stream.on('error', reject)
+    stream.on('end', () => resolve(fonts))
+  })
+}
+
+export async function listInstalledFonts() {
+  await ensureBucket()
+  const byName = new Map(listBundledFonts().map((font) => [font.filename, font]))
+  for (const font of await listMinioFonts()) byName.set(font.filename, font)
   return [...byName.values()].sort((a, b) => a.filename.localeCompare(b.filename))
 }
 
 export function resolveFontPath(filename) {
   const safe = basename(String(filename || ''))
   if (!safe || safe !== filename || !isFontFilename(safe)) return null
-  for (const dir of [fontsDir(), ...bundledFontsDirs()]) {
+  for (const dir of bundledFontsDirs()) {
     const full = join(dir, safe)
     if (existsSync(full)) return full
   }
   return null
+}
+
+export function fontObjectKey(filename) {
+  const safe = basename(String(filename || ''))
+  if (!safe || safe !== filename || !isFontFilename(safe)) return null
+  return `${FONT_OBJECT_PREFIX}${safe}`
+}
+
+export function isMinioNotFound(error) {
+  return ['NoSuchKey', 'NoSuchObject', 'NotFound', 'NoSuchBucket'].includes(error?.code)
+    || error?.statusCode === 404
+}
+
+async function streamToBuffer(stream) {
+  const chunks = []
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks)
+}
+
+export async function getDownloadedFont(filename) {
+  const objectKey = fontObjectKey(filename)
+  if (!objectKey) return null
+  try {
+    return await useMinio().getObject(minioBucket(), objectKey)
+  } catch (error) {
+    if (isMinioNotFound(error)) return null
+    throw error
+  }
 }
 
 export function variantLabel(key) {
@@ -279,42 +331,43 @@ export async function fetchGoogleFontFile({ family, variant }) {
   throw lastError || new Error('Gagal mengunduh font dari Google')
 }
 
-function mirrorDownloadedFont(filename, buffer) {
-  const dir = join(process.cwd(), '.output', 'public', 'fonts')
-  try {
-    if (!existsSync(dir)) return
-    writeFileSync(join(dir, filename), buffer)
-  } catch { /* production image may be read-only */ }
-}
-
 export async function downloadGoogleFont({ family, variant }) {
   const { buffer, filename, label } = await fetchGoogleFontFile({ family, variant })
-  const dest = join(fontsDir(), filename)
+  const objectKey = fontObjectKey(filename)
+  await ensureBucket()
 
-  if (existsSync(dest)) {
-    const existing = readFileSync(dest)
+  const existingStream = await getDownloadedFont(filename)
+  if (existingStream) {
+    const existing = await streamToBuffer(existingStream)
     if (createHash('sha256').update(existing).digest('hex') === createHash('sha256').update(buffer).digest('hex')) {
       return { filename, url: fontFileUrl(filename), size: buffer.length, skipped: true, label }
     }
   }
 
-  writeFileSync(dest, buffer)
-  mirrorDownloadedFont(filename, buffer)
+  const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase()
+  const contentTypes = {
+    '.ttf': 'font/ttf',
+    '.otf': 'font/otf',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2'
+  }
+  await useMinio().putObject(minioBucket(), objectKey, buffer, buffer.length, {
+    'Content-Type': contentTypes[ext] || 'application/octet-stream'
+  })
   return { filename, url: fontFileUrl(filename), size: buffer.length, skipped: false, label }
 }
 
-export function deleteInstalledFont(filename) {
-  const safe = basename(String(filename || ''))
-  if (!safe || safe !== filename || !isFontFilename(safe)) throw new Error('Nama file tidak valid')
+export async function deleteInstalledFont(filename) {
+  const objectKey = fontObjectKey(filename)
+  if (!objectKey) throw new Error('Nama file tidak valid')
 
-  const downloaded = join(fontsDir(), safe)
-  if (!existsSync(downloaded)) {
-    if (resolveFontPath(safe)) throw new Error('Font bawaan tidak bisa dihapus')
-    throw new Error('File font tidak ditemukan')
+  const downloaded = await getDownloadedFont(filename)
+  if (downloaded) {
+    downloaded.destroy()
+    await useMinio().removeObject(minioBucket(), objectKey)
+    return { ok: true, filename }
   }
 
-  unlinkSync(downloaded)
-  const mirror = join(process.cwd(), '.output', 'public', 'fonts', safe)
-  try { if (existsSync(mirror)) unlinkSync(mirror) } catch { /* ignore */ }
-  return { ok: true, filename: safe }
+  if (resolveFontPath(filename)) throw new Error('Font bawaan tidak bisa dihapus')
+  throw new Error('File font tidak ditemukan')
 }

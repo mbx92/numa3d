@@ -49,21 +49,26 @@ export default defineEventHandler(async (event) => {
     'Content-Type': contentType
   })
 
-  const rows = await db
-    .insert(schema.productFiles)
-    .values({
-      productId,
-      filename: file.filename,
-      objectKey,
-      sizeBytes: file.data.length,
-      contentType
+  try {
+    const rows = await db
+      .insert(schema.productFiles)
+      .values({
+        productId,
+        filename: file.filename,
+        objectKey,
+        sizeBytes: file.data.length,
+        contentType
+      })
+      .returning()
+    await logAudit(event, {
+      action: 'create',
+      entity: 'product_file',
+      entityId: rows[0].id,
+      summary: `Upload file 3D "${rows[0].filename}" ke produk id ${productId}`
     })
-    .returning()
-  await logAudit(event, {
-    action: 'create',
-    entity: 'product_file',
-    entityId: rows[0].id,
-    summary: `Upload file 3D "${rows[0].filename}" ke produk id ${productId}`
-  })
-  return rows[0]
+    return rows[0]
+  } catch (e) {
+    await useMinio().removeObject(minioBucket(), objectKey).catch(() => {})
+    throw e
+  }
 })
