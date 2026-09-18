@@ -51,7 +51,7 @@ Hasil `completed.result` memuat `totalGrams`, `printTimeSeconds`, `filamentGrams
 
 Server web hanya menyimpan job di PostgreSQL dan file masukan di MinIO. Service `slicer-worker` mengambil job secara atomik, lalu memanggil [CLI slicing OrcaSlicer](https://www.orcaslicer.com/wiki/cli/cli_actions). OrcaSlicer 2.4.2 dan profil Anycubic sudah dibangun ke image worker; tidak perlu instalasi atau bind mount dari host.
 
-Untuk deployment Compose/Coolify, jalankan kedua service dari `docker-compose.yml`: `app` melayani web/API dan menjalankan migrasi, sedangkan `slicer-worker` baru aktif setelah health check aplikasi berhasil. Worker lokal dapat dijalankan terpisah dengan `npm run slicer:worker`; nilai `DATABASE_URL`, MinIO, dan path Orca mengikuti `.env`.
+Untuk deployment Compose/Coolify, jalankan kedua service dari `docker-compose.yml`: `app` melayani web/API dan menjalankan migrasi, sedangkan `slicer-worker` baru aktif setelah health check `GET /health` aplikasi berhasil. Worker punya health check sendiri (binary Orca + Postgres). Coolify Compose memakai healthcheck di file itu, bukan menu Healthcheck di dashboard. Worker lokal dapat dijalankan terpisah dengan `npm run slicer:worker`; nilai `DATABASE_URL`, MinIO, dan path Orca mengikuti `.env`.
 
 `GET /api/slicer/status` memeriksa heartbeat worker aktif. `GET /api/slicer/jobs` menyediakan daftar antrean, sedangkan `POST /api/slicer/jobs/:id/cancel` dan `POST /api/slicer/jobs/:id/retry` digunakan halaman `/slicer-queue`. Staff hanya melihat job miliknya; admin melihat seluruh antrean dan dapat menghapus job selesai.
 

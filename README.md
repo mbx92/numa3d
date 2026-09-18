@@ -137,8 +137,9 @@ MINIO_USE_SSL=true
 Salah umum: `MINIO_ENDPOINT=https://s3.example.com` (skema tidak boleh) atau `MINIO_PORT=9000` ke domain publik yang hanya expose 443.
 
 4. Domain HTTPS dipasang ke service **app** (port 3000). Compose mem-publish `3000:3000`. Di Coolify, set **Ports Exposes** / domain ke port 3000 pada service **app**. MinIO tidak perlu dipublikasikan — file di-proxy lewat `/api/files`.
-5. Deploy. Entry point menjalankan migrasi lalu `node .output/server/index.mjs`.
-6. Login dengan `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Setelah itu kelola user di menu User.
+5. Healthcheck Compose (bukan halaman Healthcheck di dashboard Coolify): `app` memanggil `GET /health` (alias `/api/health`) setelah migrasi; `slicer-worker` memeriksa binary Orca dan `SELECT 1` ke Postgres. Traefik hanya mengirim trafik ke container `app` yang healthy.
+6. Deploy. Entry point menjalankan migrasi lalu `node .output/server/index.mjs`.
+7. Login dengan `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Setelah itu kelola user di menu User.
 
 PWA: setelah HTTPS aktif, Chrome/Android menampilkan prompt **Pasang Numa3D**. Safari iOS: Share → Add to Home Screen.
 

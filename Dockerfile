@@ -15,7 +15,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
-RUN apk add --no-cache wget
+RUN apk add --no-cache curl
 COPY --from=app-deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY --from=builder /app/.output ./.output
@@ -24,8 +24,8 @@ COPY --from=builder /app/scripts/migrate.js ./scripts/migrate.js
 COPY --from=builder /app/scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
 RUN sed -i 's/\r$//' scripts/docker-entrypoint.sh && chmod +x scripts/docker-entrypoint.sh
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD curl --fail --silent http://127.0.0.1:3000/health || exit 1
 ENTRYPOINT ["scripts/docker-entrypoint.sh"]
 
 # Orca menyediakan AppImage Ubuntu 24.04. Ekstrak saat build supaya runtime
@@ -74,7 +74,9 @@ COPY --from=orca /opt/orca /opt/orca
 COPY server/db/schema.js ./server/db/schema.js
 COPY server/utils/orcaSlicer.js server/utils/minio.js ./server/utils/
 COPY utils/slicerProjectSettings.js utils/slicerHpp.js utils/kobraXHq016Process.js utils/hpp.js ./utils/
-COPY scripts/slicer-worker.js ./scripts/slicer-worker.js
+COPY scripts/slicer-worker.js scripts/slicer-healthcheck.js ./scripts/
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD node scripts/slicer-healthcheck.js
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "scripts/slicer-worker.js"]
 
