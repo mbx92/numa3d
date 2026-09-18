@@ -18,8 +18,10 @@ export default defineEventHandler(async (event) => {
       date: schema.productions.date,
       productId: schema.productions.productId,
       customOrderId: schema.productions.customOrderId,
+      orderItemId: schema.productions.orderItemId,
+      orderId: schema.orderItems.orderId,
       productName: sql`coalesce(${schema.products.name}, ${schema.customOrders.title})`.as('productName'),
-      customerName: schema.customOrders.customerName,
+      customerName: sql`coalesce(${schema.customOrders.customerName}, ${schema.orders.customerName})`.as('customerName'),
       productImageKey: schema.products.imageKey,
       productStock: schema.products.stockQuantity,
       machineId: schema.productions.machineId,
@@ -39,6 +41,8 @@ export default defineEventHandler(async (event) => {
     .from(schema.productions)
     .leftJoin(schema.products, eq(schema.productions.productId, schema.products.id))
     .leftJoin(schema.customOrders, eq(schema.productions.customOrderId, schema.customOrders.id))
+    .leftJoin(schema.orderItems, eq(schema.productions.orderItemId, schema.orderItems.id))
+    .leftJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
     .leftJoin(schema.machines, eq(schema.productions.machineId, schema.machines.id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(schema.productions.date), desc(schema.productions.id))
@@ -63,7 +67,13 @@ export default defineEventHandler(async (event) => {
       ? r.printMinutesPerUnit || 0
       : printMap.get(r.productId) || 0
     const durationMinutes = r.durationMinutes || printMinutesPerUnit * (r.quantityPlanned || 0)
-    return { ...r, printMinutesPerUnit, durationMinutes, isCustom: !!r.customOrderId }
+    return {
+      ...r,
+      printMinutesPerUnit,
+      durationMinutes,
+      isCustom: !!r.customOrderId,
+      isOrder: !!r.orderItemId
+    }
   })
   const retried = new Set(mapped.filter((r) => r.retryOfId).map((r) => r.retryOfId))
   return mapped.map((r) => ({ ...r, retried: retried.has(r.id) }))

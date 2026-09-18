@@ -15,6 +15,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node scripts/seed.js",
     "db:seed:ops": "node scripts/seed-ops.js",
+    "slicer:worker": "node scripts/slicer-worker.js",
     "start": "node .output/server/index.mjs"
   },
   "dependencies": {

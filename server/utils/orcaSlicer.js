@@ -110,23 +110,35 @@ async function loadPreset(root, type, name, seen = new Set()) {
   return full
 }
 
-function runOrca(executable, args, cwd) {
+function runOrca(executable, args, cwd, signal) {
   return new Promise((resolveRun, reject) => {
+    if (signal?.aborted) return reject(Object.assign(new Error('Slicing dibatalkan'), { name: 'AbortError' }))
     const child = spawn(executable, args, { cwd, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] })
-    let log = '', timedOut = false
+    let log = '', timedOut = false, aborted = false, settled = false
     const timer = setTimeout(() => { timedOut = true; child.kill() }, 180000)
-    for (const stream of [child.stdout, child.stderr]) stream.on('data', (chunk) => { log = (log + chunk.toString()).slice(-12000) })
-    child.on('error', (error) => { clearTimeout(timer); reject(error) })
-    child.on('close', (code) => {
+    const abort = () => { aborted = true; child.kill('SIGTERM') }
+    signal?.addEventListener('abort', abort, { once: true })
+    const finish = (callback) => {
+      if (settled) return
+      settled = true
       clearTimeout(timer)
-      if (timedOut) return reject(new Error('Slicing melebihi batas 3 menit'))
-      if (code !== 0) return reject(new Error(`OrcaSlicer gagal melakukan slicing (kode ${code}). ${log.slice(-800)}`))
-      resolveRun()
+      signal?.removeEventListener('abort', abort)
+      callback()
+    }
+    for (const stream of [child.stdout, child.stderr]) stream.on('data', (chunk) => { log = (log + chunk.toString()).slice(-12000) })
+    child.on('error', (error) => finish(() => reject(error)))
+    child.on('close', (code) => {
+      finish(() => {
+        if (aborted) return reject(Object.assign(new Error('Slicing dibatalkan'), { name: 'AbortError' }))
+        if (timedOut) return reject(new Error('Slicing melebihi batas 3 menit'))
+        if (code !== 0) return reject(new Error(`OrcaSlicer gagal melakukan slicing (kode ${code}). ${log.slice(-800)}`))
+        resolveRun()
+      })
     })
   })
 }
 
-export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, executable, profilesPath } = {}) {
+export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, executable, profilesPath, signal } = {}) {
   if (active) throw Object.assign(new Error('OrcaSlicer sedang memproses model lain. Coba lagi setelah selesai.'), { statusCode: 409 })
   const install = resolveOrcaInstall({ executable, profilesPath })
   executable = install.executable
@@ -162,7 +174,7 @@ export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, ex
       '--load-settings', `${machinePath};${processPath}`, '--load-filaments', input.settings.filament_colour.map(() => filamentPath).join(';'),
       '--curr-bed-type', 'Textured PEI Plate', ...(input.settings.filament_colour.length > 1 ? ['--enable-prime-tower'] : []),
       '--arrange', '0', '--orient', '0', '--slice', '0', '--export-3mf', 'sliced.3mf', join(directory, 'input.3mf')]
-    await runOrca(executable, args, directory)
+    await runOrca(executable, args, directory, signal)
     const gcode = await readFile(join(directory, 'plate_1.gcode'), 'utf8')
     const stats = parseOrcaGcodeStats(gcode)
     if (stats.filamentGrams.length !== input.settings.filament_colour.length) throw new Error('Slot filament hasil slicing tidak cocok dengan model')

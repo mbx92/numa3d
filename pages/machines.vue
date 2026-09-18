@@ -54,6 +54,9 @@ function openAdd() {
     purchasePrice: 0,
     purchaseDate: '',
     depreciationMonths: 36,
+    bedWidthMm: 220,
+    bedDepthMm: 220,
+    buildHeightMm: 250,
     notes: '',
     ...emptyTuya()
   }
@@ -324,6 +327,10 @@ onUnmounted(() => {
             <dd class="font-mono font-medium mt-0.5">{{ formatIDR(m.purchasePrice) }}</dd>
           </div>
           <div class="rounded-panel bg-ink-50 px-2.5 py-2">
+            <dt class="text-[10px] uppercase tracking-wide text-ink-500">Area cetak</dt>
+            <dd class="font-mono font-medium mt-0.5">{{ m.bedWidthMm }} × {{ m.bedDepthMm }} × {{ m.buildHeightMm }} mm</dd>
+          </div>
+          <div class="rounded-panel bg-ink-50 px-2.5 py-2">
             <dt class="text-[10px] uppercase tracking-wide text-ink-500">Listrik / jam</dt>
             <dd class="font-mono font-medium mt-0.5">{{ formatIDR(hourlyElectricity(m)) }}</dd>
           </div>
@@ -362,6 +369,7 @@ onUnmounted(() => {
             <th class="w-14"></th>
             <th>Nama</th>
             <th class="text-right">Daya HPP</th>
+            <th class="text-right">Area Cetak</th>
             <th class="text-right">Live plug</th>
             <th class="text-right">Harga Beli</th>
             <th class="text-right">Listrik / jam</th>
@@ -385,6 +393,7 @@ onUnmounted(() => {
               <div v-if="m.notes" class="text-xs text-ink-400 font-normal mt-0.5">{{ m.notes }}</div>
             </td>
             <td class="num">{{ m.powerWatt }} W</td>
+            <td class="num whitespace-nowrap">{{ m.bedWidthMm }} × {{ m.bedDepthMm }} × {{ m.buildHeightMm }} mm</td>
             <td class="num">
               <span v-if="m.tuyaConfigured && displayWatt(m) != null" class="inline-flex items-center justify-end gap-1 text-teal-700">
                 <BoltIcon class="w-3.5 h-3.5" />{{ displayWatt(m) }} W
@@ -406,7 +415,7 @@ onUnmounted(() => {
             </td>
           </tr>
           <tr v-if="!total">
-            <td colspan="8" class="text-center text-ink-500 py-6">
+            <td colspan="9" class="text-center text-ink-500 py-6">
               {{ search ? 'Tidak ada mesin yang cocok.' : 'Belum ada mesin.' }}
             </td>
           </tr>
@@ -460,6 +469,15 @@ onUnmounted(() => {
             <label class="label">Masa Depresiasi (bulan)</label>
             <input v-model.number="form.depreciationMonths" type="number" min="1" class="input-num" required />
           </div>
+        </div>
+        <div>
+          <label class="label">Area cetak (mm)</label>
+          <div class="grid grid-cols-3 gap-2">
+            <div><input v-model.number="form.bedWidthMm" type="number" min="1" class="input-num" required /><p class="text-[10px] text-ink-400 mt-1">Lebar X</p></div>
+            <div><input v-model.number="form.bedDepthMm" type="number" min="1" class="input-num" required /><p class="text-[10px] text-ink-400 mt-1">Dalam Y</p></div>
+            <div><input v-model.number="form.buildHeightMm" type="number" min="1" class="input-num" required /><p class="text-[10px] text-ink-400 mt-1">Tinggi Z</p></div>
+          </div>
+          <p class="text-xs text-ink-500 mt-1">Dipakai untuk bed dan pemeriksaan ukuran model pada preview cetak.</p>
         </div>
         <div>
           <label class="label">Catatan</label>

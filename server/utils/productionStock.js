@@ -1,4 +1,5 @@
 import { eq, sql } from 'drizzle-orm'
+import { adjustOrderReservation } from './orders.js'
 
 function ints(job) {
   const good = Math.max(Math.round(Number(job.quantityGood) || 0), 0)
@@ -8,7 +9,8 @@ function ints(job) {
     failed,
     printed: good + failed,
     productId: job.productId ? Number(job.productId) : null,
-    customOrderId: job.customOrderId ? Number(job.customOrderId) : null
+    customOrderId: job.customOrderId ? Number(job.customOrderId) : null,
+    orderItemId: job.orderItemId ? Number(job.orderItemId) : null
   }
 }
 
@@ -86,7 +88,7 @@ async function applyCustomCompletion(tx, schema, job, sign) {
 }
 
 export async function applyProductionCompletion(tx, schema, job) {
-  const { good, printed, productId, customOrderId } = ints(job)
+  const { good, printed, productId, customOrderId, orderItemId } = ints(job)
   if (customOrderId) {
     await applyCustomCompletion(tx, schema, job, 1)
     return
@@ -130,10 +132,11 @@ export async function applyProductionCompletion(tx, schema, job) {
     if (!qty || !p.packagingId) continue
     await bumpStock(tx, schema.packaging, p.packagingId, -qty)
   }
+  if (orderItemId && good > 0) await adjustOrderReservation(tx, schema, orderItemId, good)
 }
 
 export async function reverseProductionCompletion(tx, schema, job) {
-  const { good, printed, productId, customOrderId } = ints(job)
+  const { good, printed, productId, customOrderId, orderItemId } = ints(job)
   if (customOrderId) {
     await applyCustomCompletion(tx, schema, job, -1)
     return
@@ -170,6 +173,7 @@ export async function reverseProductionCompletion(tx, schema, job) {
     if (!qty || !p.packagingId) continue
     await bumpStock(tx, schema.packaging, p.packagingId, qty)
   }
+  if (orderItemId && good > 0) await adjustOrderReservation(tx, schema, orderItemId, -good)
 }
 
 export function parseProductionBody(body) {

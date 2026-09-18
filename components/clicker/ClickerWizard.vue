@@ -169,7 +169,8 @@ function submit() {
     wallThicknessMm: Number(draft.wallThicknessMm),
     lidHeightMm: Number(draft.lidHeightMm),
     imageDepthMm: Number(draft.imageDepthMm),
-    colors: { ...draft.colors }
+    colors: { ...draft.colors },
+    materialIds: { ...colorMaterialIds.value }
   })
 }
 </script>

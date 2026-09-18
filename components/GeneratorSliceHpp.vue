@@ -1,5 +1,5 @@
 <script setup>
-import { CheckIcon } from '@heroicons/vue/24/outline'
+import { CheckIcon, ClipboardDocumentListIcon } from '@heroicons/vue/24/outline'
 import { computeHpp } from '~/utils/hpp.js'
 import { slicerToEstimateLines } from '~/utils/meshHppEstimate.js'
 import { generatorProductRecipes } from '~/utils/generatorProduct.js'
@@ -27,14 +27,19 @@ const productName = ref('')
 const savedProduct = shallowRef(null)
 let slicedModelBlob = null
 let saveRequestId = null
-const machineId = ref('')
+const machineId = useState('generatorMachineId', () => '')
 const sliced = shallowRef(null)
+const activeJob = shallowRef(null)
 const busy = ref(false)
 const saving = ref(false)
 const error = ref('')
 let requestVersion = 0
+watch(machines, (rows) => {
+  if (!machineId.value && rows?.length) machineId.value = rows[0].id
+}, { immediate: true })
 watch(() => [props.result, props.printOptions.processPreset], () => {
   sliced.value = null
+  activeJob.value = null
   slicedModelBlob = null
   savedProduct.value = null
   saveRequestId = null
@@ -57,6 +62,14 @@ const estimate = computed(() => sliced.value
     switchMaterialId: props.switchMaterialId
   })
   : { lines: [], skipped: [] })
+const missingMaterialFields = computed(() => {
+  const byId = new Map((materials.value || []).map((material) => [Number(material.id), material]))
+  return props.colorFields.filter((field) => {
+    const material = byId.get(Number(props.materialIds[field.key]))
+    return !material || (field.materialType && material.type !== field.materialType)
+  })
+})
+const materialsReady = computed(() => !props.colorFields.length || !missingMaterialFields.value.length)
 const completeMaterials = computed(() => estimate.value.lines.length > 0 && !estimate.value.skipped.length && estimate.value.lines.every((line) => line.material))
 const hppPreview = computed(() => {
   if (!completeMaterials.value) return null
@@ -69,6 +82,12 @@ const hppPreview = computed(() => {
 
 async function slice() {
   if (busy.value || saving.value || !props.result) return
+  if (!materialsReady.value) {
+    error.value = (materials.value || []).length
+      ? `Pilih material untuk ${missingMaterialFields.value.map((field) => field.label || field.key).join(', ')} sebelum slicing.`
+      : 'Belum ada material yang sesuai. Tambahkan material terlebih dahulu sebelum slicing.'
+    return
+  }
   busy.value = true
   error.value = ''
   sliced.value = null
@@ -86,11 +105,23 @@ async function slice() {
     body.append('file', blob, 'model.3mf')
     body.append('tool', props.tool)
     body.append('includeProfile', String(options.processPreset !== null))
-    const response = await $fetch('/api/slicer/slice', { method: 'POST', body, timeout: 200000, retry: 0 })
-    if (version === requestVersion) {
-      sliced.value = response
+    let job = await $fetch('/api/slicer/jobs', { method: 'POST', body, retry: 0 })
+    if (version === requestVersion) activeJob.value = job
+    while (version === requestVersion && ['queued', 'processing'].includes(job.status)) {
+      job = await $fetch(`/api/slicer/jobs/${job.id}`, { retry: 0 })
+      if (version !== requestVersion) return
+      activeJob.value = job
+      if (['queued', 'processing'].includes(job.status)) await new Promise((resolve) => setTimeout(resolve, 1500))
+    }
+    if (version !== requestVersion) return
+    if (job.status === 'completed' && job.result) {
+      sliced.value = job.result
       slicedModelBlob = blob
       saveRequestId = crypto.randomUUID()
+    } else if (job.status === 'cancelled') {
+      throw new Error('Slicing dibatalkan')
+    } else {
+      throw new Error(job.error || 'Worker gagal melakukan slicing')
     }
   } catch (e) {
     if (version === requestVersion) error.value = e.data?.statusMessage || e.message || 'Slicing gagal'
@@ -126,10 +157,17 @@ async function saveNewProduct() {
     <p class="text-[10px]" :class="slicerStatus?.ready ? 'text-emerald-700' : 'text-amber-700'">
       {{ slicerStatus?.message || 'Memeriksa OrcaSlicer di server…' }}
     </p>
-    <button type="button" class="btn-primary w-full text-sm" :disabled="busy || saving || !result || slicerStatus?.ready === false" @click="slice">
-      {{ busy ? 'OrcaSlicer sedang memproses…' : 'Slice gram & waktu' }}
+    <button type="button" class="btn-primary w-full text-sm" :disabled="busy || saving || !result || !materialsReady" @click="slice">
+      {{ busy ? (activeJob?.stage || (activeJob?.status === 'queued' ? 'Menunggu worker…' : 'OrcaSlicer sedang memproses…')) : 'Slice gram & waktu' }}
     </button>
+    <p v-if="slicerStatus?.ready === false" class="text-[10px] text-amber-700">Job tetap dapat ditambahkan dan akan diproses saat worker kembali aktif.</p>
+    <NuxtLink v-if="activeJob" :to="`/slicer-queue?job=${activeJob.id}`" class="block text-[10px] text-accent-700 hover:underline">
+      Lihat antrean slicing #{{ activeJob.id }}
+    </NuxtLink>
     <p v-if="!result" class="text-xs text-ink-500">Generate model dulu sebelum slicing.</p>
+    <p v-else-if="!materialsReady" class="text-xs text-amber-700">
+      Pilih material untuk {{ missingMaterialFields.map((field) => field.label || field.key).join(', ') }} sebelum slicing.
+    </p>
     <p v-if="error" role="alert" class="text-xs text-red-600">{{ error }}</p>
     <div v-if="sliced" class="space-y-2 text-xs">
       <p class="font-medium">{{ formatNumber(sliced.totalGrams, 2) }} g filament · {{ duration }}</p>
@@ -180,7 +218,12 @@ async function saveNewProduct() {
         {{ saving ? 'Menyimpan…' : savedProduct ? 'Produk sudah tersimpan' : 'Simpan sebagai produk baru' }}
       </button>
       <p v-else class="text-[10px] text-ink-400">Hanya admin yang bisa membuat produk.</p>
-      <NuxtLink v-if="savedProduct" :to="`/products/${savedProduct.id}`" class="inline-block text-accent-600 hover:underline">Buka produk {{ savedProduct.name }}</NuxtLink>
+      <div v-if="savedProduct" class="flex flex-wrap gap-2">
+        <NuxtLink :to="`/products/${savedProduct.id}`" class="btn-secondary">Buka produk</NuxtLink>
+        <NuxtLink :to="`/orders?new=1&productId=${savedProduct.id}`" class="btn-primary">
+          <ClipboardDocumentListIcon class="w-4 h-4" />Buat order
+        </NuxtLink>
+      </div>
       <p class="text-ink-500">Estimasi OrcaSlicer {{ sliced.slicerVersion }}. Bukan perintah ke printer.</p>
     </div>
   </section>

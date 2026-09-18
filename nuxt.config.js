@@ -115,8 +115,9 @@ export default defineNuxtConfig({
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
-      navigateFallback: '/',
-      navigateFallbackDenylist: [/^\/api\//, /^\/i\//, /^\/fonts\//, /^\/manifest\.webmanifest$/],
+      // Aplikasi memakai SSR; tidak ada index.html atau `/` statis di precache.
+      // Null mencegah Workbox membuat createHandlerBoundToURL('/') yang gagal.
+      navigateFallback: null,
       runtimeCaching: [
         {
           urlPattern: /\/api\/fonts\//,

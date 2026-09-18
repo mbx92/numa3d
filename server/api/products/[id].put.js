@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
+import { availableProductStock } from '../../utils/orders.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -21,12 +22,18 @@ export default defineEventHandler(async (event) => {
   if (body.listPrice !== undefined && body.listPrice !== '') {
     patch.listPrice = Math.max(Math.round(Number(body.listPrice) || 0), 0)
   }
-  const rows = await db
-    .update(schema.products)
-    .set(patch)
-
-    .where(eq(schema.products.id, id))
-    .returning()
+  const rows = await db.transaction(async (tx) => {
+    if (patch.stockQuantity !== undefined) {
+      const stock = await availableProductStock(tx, schema, id)
+      if (patch.stockQuantity < stock.reserved) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: `Stok tidak boleh kurang dari ${stock.reserved} unit yang sudah direservasi order`
+        })
+      }
+    }
+    return tx.update(schema.products).set(patch).where(eq(schema.products.id, id)).returning()
+  })
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
   await logAudit(event, { action: 'update', entity: 'product', entityId: id, summary: `Ubah info produk "${rows[0].name}"` })
   return rows[0]

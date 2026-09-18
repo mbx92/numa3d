@@ -6,7 +6,8 @@ import {
   CubeIcon,
   CubeTransparentIcon,
   WrenchScrewdriverIcon,
-  BeakerIcon,
+  ClipboardDocumentListIcon,
+  QueueListIcon,
   PrinterIcon,
   PuzzlePieceIcon,
   BuildingStorefrontIcon,
@@ -17,7 +18,6 @@ import {
   WalletIcon,
   Cog6ToothIcon
 } from '@heroicons/vue/24/outline'
-import { isBetaToolPath } from './toolNavigation.js'
 
 /** @type {{ label: string | null, items: { to: string, label: string, icon: import('vue').Component, newTab?: boolean }[] }[]} */
 export const navSections = [
@@ -43,8 +43,9 @@ export const navSections = [
   {
     label: 'Operasi',
     items: [
-      { to: '/tools', label: 'Tools', icon: WrenchScrewdriverIcon, newTab: true },
-      { to: '/tools/beta', label: 'Tools Beta', icon: BeakerIcon, newTab: true },
+      { to: '/tools', label: 'Tools', icon: WrenchScrewdriverIcon },
+      { to: '/orders', label: 'Order', icon: ClipboardDocumentListIcon },
+      { to: '/slicer-queue', label: 'Antrian Slicer', icon: QueueListIcon },
       { to: '/production', label: 'Produksi', icon: PrinterIcon },
       { to: '/custom-orders', label: 'Custom', icon: PuzzlePieceIcon }
     ]
@@ -72,8 +73,6 @@ export const navSections = [
 ]
 
 export function isNavActive(routePath, to) {
-  if (to === '/tools/beta') return isBetaToolPath(routePath)
-  if (to === '/tools' && isBetaToolPath(routePath)) return false
   if (to === '/') return routePath === '/'
   return routePath === to || routePath.startsWith(`${to}/`)
 }

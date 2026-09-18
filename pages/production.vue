@@ -89,6 +89,8 @@ function openEdit(j) {
     date: j.date,
     productId: j.productId || '',
     customOrderId: j.customOrderId || null,
+    orderItemId: j.orderItemId || null,
+    orderId: j.orderId || null,
     machineId: j.machineId || '',
     quantityPlanned: j.quantityPlanned,
     quantityGood: j.quantityGood,
@@ -164,7 +166,7 @@ function jobPayload(j, extra = {}) {
 }
 
 function jobTitle(j) {
-  return j.isCustom ? `${j.productName} · ${j.customerName}` : j.productName
+  return j.isCustom || j.isOrder ? `${j.productName} · ${j.customerName}` : j.productName
 }
 
 async function save() {
@@ -402,6 +404,7 @@ async function remove(j) {
           <div class="min-w-0 flex-1">
             <div class="flex items-start justify-between gap-2">
               <NuxtLink v-if="j.customOrderId" :to="`/custom-orders/${j.customOrderId}`" class="font-medium break-words hover:underline">{{ jobTitle(j) }}</NuxtLink>
+              <NuxtLink v-else-if="j.orderId" :to="`/orders/${j.orderId}`" class="font-medium break-words hover:underline">{{ jobTitle(j) }}</NuxtLink>
               <span v-else class="font-medium break-words">{{ jobTitle(j) }}</span>
               <span class="badge shrink-0" :class="statusBadge[j.status]">{{ statusLabel[j.status] }}</span>
             </div>
@@ -410,6 +413,7 @@ async function remove(j) {
               <template v-if="j.status === 'done'"> · jadi {{ j.quantityGood }} · gagal {{ j.quantityFailed }}</template>
             </div>
             <div v-if="j.isCustom" class="text-xs text-ink-400">custom · tidak masuk stok</div>
+            <div v-else-if="j.isOrder" class="text-xs text-ink-400">order #{{ j.orderId }} · stok direservasi</div>
             <div v-else-if="j.machineName" class="text-xs text-ink-400">{{ j.machineName }}</div>
             <div v-if="jobProgress(j)" class="mt-2 space-y-1">
               <div class="flex justify-between gap-2 text-[11px]" :class="jobProgress(j).over ? 'text-amber-700' : 'text-ink-500'">
@@ -478,9 +482,10 @@ async function remove(j) {
               <td>
                 <div class="font-medium">
                   <NuxtLink v-if="j.customOrderId" :to="`/custom-orders/${j.customOrderId}`" class="hover:underline">{{ jobTitle(j) }}</NuxtLink>
+                  <NuxtLink v-else-if="j.orderId" :to="`/orders/${j.orderId}`" class="hover:underline">{{ jobTitle(j) }}</NuxtLink>
                   <span v-else>{{ j.productName }}</span>
                 </div>
-                <div class="text-xs text-ink-400">{{ j.isCustom ? 'custom' : `stok ${formatNumber(j.productStock)}` }}</div>
+                <div class="text-xs text-ink-400">{{ j.isCustom ? 'custom' : j.isOrder ? `order #${j.orderId}` : `stok ${formatNumber(j.productStock)}` }}</div>
               </td>
               <td class="text-ink-500">{{ j.machineName || '—' }}</td>
               <td class="num">{{ j.quantityPlanned }}</td>
@@ -562,8 +567,9 @@ async function remove(j) {
           </div>
         </div>
         <div>
-          <label class="label">{{ form.customOrderId ? 'Pesanan custom' : 'Produk' }}</label>
+          <label class="label">{{ form.customOrderId ? 'Pesanan custom' : form.orderItemId ? 'Order produk' : 'Produk' }}</label>
           <p v-if="form.customOrderId" class="input bg-ink-50">Custom — lihat halaman pesanan</p>
+          <p v-else-if="form.orderItemId" class="input bg-ink-50">Order #{{ form.orderId }} — produk dikunci oleh order</p>
           <select v-else v-model="form.productId" class="input" required>
             <option v-for="p in products" :key="p.id" :value="p.id">
               {{ p.name }} · stok {{ formatNumber(p.stockQuantity) }}{{ p.hasRecipe ? '' : ' (belum recipe)' }}

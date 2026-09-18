@@ -146,7 +146,8 @@ function submit() {
     cableHoleSide: draft.cableHoleSide,
     hangingHoleMm: Number(draft.hangingHoleMm),
     hangingHoleOffsetMm: Number(draft.hangingHoleOffsetMm),
-    colors: { ...draft.colors }
+    colors: { ...draft.colors },
+    materialIds: { ...colorMaterialIds.value }
   })
 }
 </script>

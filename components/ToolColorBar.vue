@@ -1,5 +1,6 @@
 <script setup>
 import { DEFAULT_MATERIAL_COLOR, TOOL_MONO_COLOR, parseMaterialColor } from '~/utils/materialColor.js'
+import { fillMissingToolMaterials } from '~/utils/toolMaterialDefaults.js'
 import MaterialColorPicker from '~/components/MaterialColorPicker.vue'
 
 const props = defineProps({
@@ -15,6 +16,28 @@ const props = defineProps({
 const emit = defineEmits(['update:colors', 'update:mode', 'update:materialIds', 'change'])
 
 const { materials, hexFromMaterial } = useToolMaterials()
+
+let applyingDefaults = false
+watch(
+  [materials, () => props.fields, () => props.materialIds],
+  async () => {
+    if (applyingDefaults || !materials.value.length) return
+    const next = fillMissingToolMaterials({
+      fields: props.fields,
+      materialIds: props.materialIds,
+      colors: props.colors,
+      materials: materials.value
+    })
+    if (!next.changed) return
+    applyingDefaults = true
+    emit('update:materialIds', next.materialIds)
+    emit('update:colors', next.colors)
+    emit('change')
+    await nextTick()
+    applyingDefaults = false
+  },
+  { immediate: true, deep: true }
+)
 
 watch(() => props.mode, (mode) => {
   if (mode !== 'material') emit('update:mode', 'material')

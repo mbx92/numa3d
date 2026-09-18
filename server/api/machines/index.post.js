@@ -18,6 +18,9 @@ export default defineEventHandler(async (event) => {
         purchasePrice: Math.round(Number(body.purchasePrice) || 0),
         purchaseDate: body.purchaseDate || null,
         depreciationMonths: Math.round(Number(body.depreciationMonths) || 36),
+        bedWidthMm: Math.max(Math.round(Number(body.bedWidthMm) || 220), 1),
+        bedDepthMm: Math.max(Math.round(Number(body.bedDepthMm) || 220), 1),
+        buildHeightMm: Math.max(Math.round(Number(body.buildHeightMm) || 250), 1),
         notes: body.notes || null,
         ...tuyaFieldsFromBody(body, null)
       })

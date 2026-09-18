@@ -8,6 +8,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
+import { modelFitsBuildVolume, printFileUsesZUp } from '~/utils/printBed.js'
 import {
   ArrowsPointingOutIcon,
   ArrowsPointingInIcon,
@@ -22,7 +23,8 @@ const props = defineProps({
   src: { type: String, required: true },
   filename: { type: String, required: true },
   compact: { type: Boolean, default: false },
-  defaultColor: { type: String, default: '' }
+  defaultColor: { type: String, default: '' },
+  printBed: { type: Object, default: null }
 })
 
 const container = ref(null)
@@ -37,10 +39,18 @@ const parts = ref([])
 const dims = ref({ x: 0, y: 0, z: 0 })
 const canUndo = ref(false)
 const canRedo = ref(false)
+const bedFit = ref(true)
 const editorOpen = computed(() => !props.compact || expanded.value)
+const activeBed = computed(() => {
+  const width = Number(props.printBed?.width)
+  const depth = Number(props.printBed?.depth)
+  const height = Number(props.printBed?.height)
+  if (![width, depth, height].every((value) => Number.isFinite(value) && value > 0)) return null
+  return { width, depth, height, name: String(props.printBed?.name || 'Mesin') }
+})
 
 let renderer, scene, camera, orbit, transform, animId, resizeObserver
-let rootGroup, boxHelper, pointerStart, xformBefore
+let rootGroup, orientationGroup, boxHelper, defaultGrid, bedGroup, pointerStart, xformBefore
 const history = []
 let historyIndex = -1
 const HISTORY_MAX = 80
@@ -228,11 +238,75 @@ function updateDims() {
   const box = new THREE.Box3().setFromObject(target)
   const s = box.getSize(new THREE.Vector3())
   dims.value = { x: s.x, y: s.y, z: s.z }
+  const modelBox = rootGroup ? new THREE.Box3().setFromObject(rootGroup) : box
+  bedFit.value = modelFitsBuildVolume(
+    {
+      min: { x: modelBox.min.x, y: modelBox.min.y, z: modelBox.min.z },
+      max: { x: modelBox.max.x, y: modelBox.max.y, z: modelBox.max.z }
+    },
+    activeBed.value
+  )
   if (boxHelper) {
     const show = selectedId.value !== 'all' && target?.isMesh
     boxHelper.visible = !!show
     if (show) boxHelper.setFromObject(target)
   }
+}
+
+function disposeObject(object) {
+  object?.traverse((child) => {
+    child.geometry?.dispose()
+    if (Array.isArray(child.material)) child.material.forEach((material) => material.dispose())
+    else child.material?.dispose()
+  })
+}
+
+function updatePrintBed() {
+  if (!scene) return
+  if (bedGroup) {
+    scene.remove(bedGroup)
+    disposeObject(bedGroup)
+    bedGroup = null
+  }
+  if (defaultGrid) defaultGrid.visible = !activeBed.value
+  const bed = activeBed.value
+  if (!bed) {
+    bedFit.value = true
+    return
+  }
+
+  bedGroup = new THREE.Group()
+  bedGroup.name = 'PrintBed'
+  const plate = new THREE.Mesh(
+    new THREE.BoxGeometry(bed.width, 0.8, bed.depth),
+    new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9, metalness: 0.05 })
+  )
+  plate.position.y = -0.45
+  bedGroup.add(plate)
+
+  const halfWidth = bed.width / 2
+  const halfDepth = bed.depth / 2
+  const step = Math.max(Math.ceil(Math.max(bed.width, bed.depth) / 26 / 5) * 5, 5)
+  const lines = []
+  for (let x = Math.ceil(-halfWidth / step) * step; x <= halfWidth; x += step) {
+    lines.push(x, 0.02, -halfDepth, x, 0.02, halfDepth)
+  }
+  for (let z = Math.ceil(-halfDepth / step) * step; z <= halfDepth; z += step) {
+    lines.push(-halfWidth, 0.02, z, halfWidth, 0.02, z)
+  }
+  const gridGeometry = new THREE.BufferGeometry()
+  gridGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3))
+  bedGroup.add(new THREE.LineSegments(gridGeometry, new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.65 })))
+
+  const borderGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-halfWidth, 0.06, -halfDepth),
+    new THREE.Vector3(halfWidth, 0.06, -halfDepth),
+    new THREE.Vector3(halfWidth, 0.06, halfDepth),
+    new THREE.Vector3(-halfWidth, 0.06, halfDepth)
+  ])
+  bedGroup.add(new THREE.LineLoop(borderGeometry, new THREE.LineBasicMaterial({ color: 0x14b8a6 })))
+  scene.add(bedGroup)
+  updateDims()
 }
 
 function formatDim(n) {
@@ -291,6 +365,37 @@ function frameCamera(object) {
   camera.far = maxDim * 100
   camera.updateProjectionMatrix()
   orbit.target.copy(center)
+  orbit.update()
+}
+
+function applyPrintOrientation() {
+  if (!orientationGroup) return
+  orientationGroup.rotation.x = activeBed.value && printFileUsesZUp(props.filename) ? -Math.PI / 2 : 0
+  orientationGroup.updateMatrixWorld(true)
+}
+
+function mountLoadedModel(loaded) {
+  rootGroup = new THREE.Group()
+  orientationGroup = new THREE.Group()
+  orientationGroup.name = 'PrintOrientation'
+  orientationGroup.add(loaded)
+  rootGroup.add(orientationGroup)
+  applyPrintOrientation()
+  scene.add(rootGroup)
+  groundAndFrame(rootGroup)
+}
+
+function framePrintBed() {
+  const bed = activeBed.value
+  if (!bed || !camera || !orbit) return
+  const maxDim = Math.max(bed.width, bed.depth, dims.value.y, 1)
+  const distance = Math.max(bed.width, bed.depth) * 1.15
+  const targetHeight = Math.min(Math.max(dims.value.y * 0.35, 0), bed.height * 0.2)
+  camera.position.set(distance * 0.72, Math.max(distance * 0.72, dims.value.y * 1.25), distance)
+  camera.near = Math.max(maxDim / 1000, 0.1)
+  camera.far = maxDim * 100
+  camera.updateProjectionMatrix()
+  orbit.target.set(0, targetHeight, 0)
   orbit.update()
 }
 
@@ -433,7 +538,8 @@ function downloadStl(scope) {
 }
 
 function frameView() {
-  if (rootGroup) frameCamera(rootGroup)
+  if (activeBed.value) framePrintBed()
+  else if (rootGroup) frameCamera(rootGroup)
 }
 
 function onPointerDown(e) {
@@ -504,6 +610,20 @@ watch(expanded, () => {
 watch(snap, applySnap)
 
 watch(
+  () => props.printBed,
+  () => {
+    if (rootGroup) {
+      applyPrintOrientation()
+      groundAndFrame(rootGroup)
+      updateDims()
+    }
+    updatePrintBed()
+    if (activeBed.value) framePrintBed()
+  },
+  { deep: true }
+)
+
+watch(
   () => [props.src, props.filename, props.defaultColor],
   async () => {
     if (!renderer || !scene || !container.value) return
@@ -518,20 +638,19 @@ watch(
           else obj.material?.dispose()
         })
         rootGroup = null
+        orientationGroup = null
       }
       history.length = 0
       historyIndex = -1
       syncHistoryUi()
       const loaded = await loadModel()
-      rootGroup = new THREE.Group()
-      rootGroup.add(loaded)
-      scene.add(rootGroup)
-      groundAndFrame(rootGroup)
+      mountLoadedModel(loaded)
       refreshParts()
       color.value = props.defaultColor || firstColor(rootGroup)
       if (props.defaultColor) tintObject(rootGroup, props.defaultColor)
       updateDims()
       attachGizmo()
+      if (activeBed.value) framePrintBed()
     } catch (e) {
       error.value = e.message || 'Gagal memuat model'
     } finally {
@@ -592,14 +711,11 @@ onMounted(async () => {
 
   try {
     const loaded = await loadModel()
-    rootGroup = new THREE.Group()
-    rootGroup.add(loaded)
-    scene.add(rootGroup)
-    groundAndFrame(rootGroup)
+    mountLoadedModel(loaded)
     updateDims()
     const maxDim = Math.max(dims.value.x, dims.value.y, dims.value.z, 1)
-    const grid = new THREE.GridHelper(Math.max(maxDim * 3, 1), 30, 0x999999, 0xdddddd)
-    scene.add(grid)
+    defaultGrid = new THREE.GridHelper(Math.max(maxDim * 3, 1), 30, 0x999999, 0xdddddd)
+    scene.add(defaultGrid)
     boxHelper = new THREE.BoxHelper(rootGroup, 0x0f766e)
     boxHelper.visible = false
     scene.add(boxHelper)
@@ -607,6 +723,8 @@ onMounted(async () => {
     color.value = props.defaultColor || firstColor(rootGroup)
     if (props.defaultColor) tintObject(rootGroup, props.defaultColor)
     updateDims()
+    updatePrintBed()
+    if (activeBed.value) framePrintBed()
     renderer.domElement.addEventListener('pointerdown', onPointerDown)
     renderer.domElement.addEventListener('pointerup', onPointerUp)
   } catch (e) {
@@ -767,6 +885,10 @@ onUnmounted(() => {
           <div class="text-ink-400">
             {{ selectedId === 'all' ? 'Semua part' : 'Part terpilih' }}
             · klik model untuk pilih · drag gizmo untuk ubah · Ctrl+Z undo
+          </div>
+          <div v-if="activeBed" :class="bedFit ? 'text-teal-700' : 'text-red-600'">
+            Bed {{ activeBed.name }} · {{ formatDim(activeBed.width) }} × {{ formatDim(activeBed.depth) }} × {{ formatDim(activeBed.height) }} mm
+            · {{ bedFit ? 'model muat' : 'model keluar area cetak' }}
           </div>
         </div>
       </div>

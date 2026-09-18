@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../../../db/index.js'
 import { logAudit } from '../../../utils/audit.js'
 import { stampProductionTiming, printMinutesPerUnitForProduct } from '../../../utils/productionStock.js'
+import { syncOrderStatus } from '../../../utils/orders.js'
 
 function todayLocal() {
   const d = new Date()
@@ -38,11 +39,22 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Pesanan custom ini tidak bisa diproduksi ulang' })
       }
     }
+    if (job.orderItemId) {
+      const [order] = await tx
+        .select({ status: schema.orders.status })
+        .from(schema.orderItems)
+        .innerJoin(schema.orders, eq(schema.orders.id, schema.orderItems.orderId))
+        .where(eq(schema.orderItems.id, job.orderItemId))
+      if (order?.status === 'completed' || order?.status === 'cancelled') {
+        throw createError({ statusCode: 400, statusMessage: 'Order ini tidak bisa diproduksi ulang' })
+      }
+    }
     const note = [`Ulang ${failed} unit gagal dari produksi #${job.id}`, job.notes].filter(Boolean).join(' — ')
     const values = await stampProductionTiming(tx, schema, {
       date: todayLocal(),
       productId: job.productId,
       customOrderId: job.customOrderId,
+      orderItemId: job.orderItemId,
       machineId: job.machineId,
       quantityPlanned: failed,
       quantityGood: 0,
@@ -65,6 +77,7 @@ export default defineEventHandler(async (event) => {
       }
     }
     const [row] = await tx.insert(schema.productions).values(values).returning()
+    if (row.orderItemId) await syncOrderStatus(tx, schema, row.orderItemId)
     return row
   })
   await logAudit(event, {

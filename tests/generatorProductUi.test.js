@@ -25,7 +25,11 @@ test('generator saves the sliced model as a new product and prevents duplicate c
   const source = `import { computed, ref, shallowRef, watch } from 'vue';\n${compiled.content}`
   const Component = (await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)).default
   const materials = [{ id: 8, name: 'PLA White', type: 'filament', unit: 'gram', pricePerUnit: 200 }]
-  globalThis.useState = () => ref({ role: 'admin' })
+  const state = new Map()
+  globalThis.useState = (key, init) => {
+    if (!state.has(key)) state.set(key, ref(key === 'authUser' ? { role: 'admin' } : init?.()))
+    return state.get(key)
+  }
   const failures = []
   globalThis.useToast = () => ({ success() {}, error(message) { failures.push(message) } })
   globalThis.useFetch = async (url) => ({ data: ref({ '/api/materials': materials, '/api/machines': [], '/api/settings': {}, '/api/slicer/status': { ready: true, message: 'Ready' } }[url]) })
@@ -34,9 +38,12 @@ test('generator saves the sliced model as a new product and prevents duplicate c
   let saveCalls = 0
   let releaseSave
   globalThis.$fetch = async (url, options) => {
-    if (url === '/api/slicer/slice') {
+    if (url === '/api/slicer/jobs') {
       sliceFile = await options.body.get('file').text()
-      return { totalGrams: 4.65, printTimeSeconds: 1594, filamentGrams: [4.65], colors: ['#ffffff'], profile: 'Kobra X', slicerVersion: 'test' }
+      return { id: 9, status: 'queued', stage: 'Menunggu worker' }
+    }
+    if (url === '/api/slicer/jobs/9') {
+      return { id: 9, status: 'completed', stage: 'Selesai', result: { totalGrams: 4.65, printTimeSeconds: 1594, filamentGrams: [4.65], colors: ['#ffffff'], profile: 'Kobra X', slicerVersion: 'test' } }
     }
     assert.equal(url, '/api/products/from-generator')
     saveCalls++
@@ -85,7 +92,7 @@ test('generator saves the sliced model as a new product and prevents duplicate c
     releaseSave()
     await settle()
     assert.equal(button('Produk sudah tersimpan').disabled, true)
-    assert.equal(host.querySelector('a').getAttribute('href'), '/products/71')
+    assert.equal(host.querySelector('a[href^="/products/"]').getAttribute('href'), '/products/71')
     model.value = { slug: 'new', get3mfBlob: async () => new Blob(['new']) }
     await settle()
     assert.equal(host.querySelector('a'), null)

@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { machineBuildVolume, modelFitsBuildVolume } from '~/utils/printBed.js'
 
 const props = defineProps({
   parts: { type: Array, required: true }, // [{ geometry, color, line?, role?, name?, modelUrl? }]
@@ -26,9 +27,19 @@ const emit = defineEmits(['update:selectedPartId', 'select-part'])
 const container = ref(null)
 const loading = ref(true)
 const error = ref('')
+const previewMachines = ref([])
+const previewMachineId = useState('generatorMachineId', () => '')
+const bedFit = ref(true)
+const previewMachine = computed(() =>
+  previewMachines.value.find((machine) => Number(machine.id) === Number(previewMachineId.value)) || null
+)
+const printBed = computed(() => {
+  if (!previewMachine.value) return null
+  return { ...machineBuildVolume(previewMachine.value), name: previewMachine.value.name }
+})
 
 let renderer, scene, camera, orbit, transform, resizeObserver, intersectionObserver
-let rootGroup, clickGroup, gridHelper, animId
+let rootGroup, clickGroup, gridHelper, bedGroup, animId
 let partGroupMap = new Map()
 let explodeDistance = 18
 let autoExplodeValue = 0
@@ -256,11 +267,24 @@ function getBox(object) {
   return new THREE.Box3().setFromObject(object)
 }
 
-function centerAtOrigin(group) {
+function placeOnPrintBed(group) {
   const box = getBox(group)
   const center = box.getCenter(new THREE.Vector3())
-  group.position.sub(center)
+  group.position.x -= center.x
+  group.position.y -= box.min.y
+  group.position.z -= center.z
   group.updateMatrixWorld(true)
+}
+
+function previewBox() {
+  if (!rootGroup) return null
+  const box = getBox(rootGroup)
+  const bed = printBed.value
+  if (bed) {
+    box.expandByPoint(new THREE.Vector3(-bed.width / 2, -0.5, -bed.depth / 2))
+    box.expandByPoint(new THREE.Vector3(bed.width / 2, 0, bed.depth / 2))
+  }
+  return box
 }
 
 function fitCameraToBox(box) {
@@ -268,6 +292,7 @@ function fitCameraToBox(box) {
   if (!el || !camera || !orbit) return
 
   const size = box.getSize(new THREE.Vector3())
+  const center = box.getCenter(new THREE.Vector3())
   const maxDim = Math.max(size.x, size.y, size.z, 0.001)
   const aspect = Math.max(el.clientWidth, 1) / Math.max(el.clientHeight, 1)
   const fovRad = (camera.fov * Math.PI) / 180
@@ -275,13 +300,94 @@ function fitCameraToBox(box) {
   const fitW = fitH / aspect
   const distance = Math.max(fitH, fitW) * 1.35
 
-  camera.position.set(distance * 0.72, distance * 0.58, distance * 0.95)
+  camera.position.set(center.x + distance * 0.72, center.y + distance * 0.58, center.z + distance * 0.95)
   camera.near = Math.max(distance / 300, 0.01)
   camera.far = distance * 300
   camera.updateProjectionMatrix()
 
-  orbit.target.set(0, 0, 0)
+  orbit.target.copy(center)
   orbit.update()
+}
+
+function disposeObject(object) {
+  object?.traverse((child) => {
+    child.geometry?.dispose()
+    if (Array.isArray(child.material)) child.material.forEach((material) => material?.dispose())
+    else child.material?.dispose()
+  })
+}
+
+function updateBedFit() {
+  if (!rootGroup || !printBed.value) {
+    bedFit.value = true
+    return
+  }
+  const box = getBox(rootGroup)
+  bedFit.value = modelFitsBuildVolume(
+    { min: { x: box.min.x, y: box.min.y, z: box.min.z }, max: { x: box.max.x, y: box.max.y, z: box.max.z } },
+    printBed.value
+  )
+}
+
+function updatePrintBed() {
+  if (!scene) return
+  if (bedGroup) {
+    scene.remove(bedGroup)
+    disposeObject(bedGroup)
+    bedGroup = null
+  }
+  const bed = printBed.value
+  if (!bed) {
+    if (gridHelper) gridHelper.visible = props.showGrid
+    updateBedFit()
+    return
+  }
+
+  if (gridHelper) gridHelper.visible = false
+  bedGroup = new THREE.Group()
+  const plate = new THREE.Mesh(
+    new THREE.BoxGeometry(bed.width, 0.8, bed.depth),
+    new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9, metalness: 0.05 })
+  )
+  plate.position.y = -0.45
+  bedGroup.add(plate)
+
+  const halfWidth = bed.width / 2
+  const halfDepth = bed.depth / 2
+  if (props.showGrid) {
+    const step = Math.max(Math.ceil(Math.max(bed.width, bed.depth) / 26 / 5) * 5, 5)
+    const lines = []
+    for (let x = Math.ceil(-halfWidth / step) * step; x <= halfWidth; x += step) {
+      lines.push(x, 0.02, -halfDepth, x, 0.02, halfDepth)
+    }
+    for (let z = Math.ceil(-halfDepth / step) * step; z <= halfDepth; z += step) {
+      lines.push(-halfWidth, 0.02, z, halfWidth, 0.02, z)
+    }
+    const gridGeometry = new THREE.BufferGeometry()
+    gridGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3))
+    bedGroup.add(new THREE.LineSegments(gridGeometry, new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.65 })))
+  }
+
+  const borderGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-halfWidth, 0.06, -halfDepth),
+    new THREE.Vector3(halfWidth, 0.06, -halfDepth),
+    new THREE.Vector3(halfWidth, 0.06, halfDepth),
+    new THREE.Vector3(-halfWidth, 0.06, halfDepth)
+  ])
+  bedGroup.add(new THREE.LineLoop(borderGeometry, new THREE.LineBasicMaterial({ color: 0x14b8a6 })))
+  scene.add(bedGroup)
+  updateBedFit()
+}
+
+async function loadPreviewMachines() {
+  try {
+    previewMachines.value = await $fetch('/api/machines')
+    const saved = String(previewMachineId.value || localStorage.getItem('numa3d-generator-preview-machine') || '')
+    const selected = previewMachines.value.find((machine) => String(machine.id) === saved)
+    previewMachineId.value = selected?.id || previewMachines.value[0]?.id || ''
+  } catch {
+    previewMachines.value = []
+  }
 }
 
 function clearScene() {
@@ -334,7 +440,7 @@ function updateGridPosition() {
 }
 
 function ensureGridHelper() {
-  if (!scene || !props.showGrid) return
+  if (!scene || !props.showGrid || printBed.value) return
   if (!gridHelper) {
     gridHelper = new THREE.GridHelper(80, 16, 0xb8bec8, 0xd5dae2)
     setGridMaterial(gridHelper)
@@ -568,10 +674,11 @@ async function mountParts(serial) {
 
   if (props.interactiveAssembly) computeExplodeVectors()
 
-  centerAtOrigin(rootGroup)
+  placeOnPrintBed(rootGroup)
   scene.add(rootGroup)
 
-  const box = getBox(rootGroup)
+  updatePrintBed()
+  const box = previewBox() || getBox(rootGroup)
   if (props.showGrid) ensureGridHelper()
   fitCameraToBox(box)
   updateClickMotion()
@@ -590,7 +697,7 @@ function resize() {
   camera.updateProjectionMatrix()
   renderer.setSize(w, h, false)
   if (rootGroup) {
-    const box = getBox(rootGroup)
+    const box = previewBox() || getBox(rootGroup)
     fitCameraToBox(box)
   }
   render()
@@ -735,6 +842,7 @@ watch(
   () => {
     if (!renderer) return
     if (!props.interactiveClick) manualPressed = false
+    updatePrintBed()
     if (props.showGrid) ensureGridHelper()
     else if (gridHelper) gridHelper.visible = false
     attachTransform()
@@ -753,7 +861,18 @@ watch(
   }
 )
 
-onMounted(init)
+watch(previewMachineId, (id) => {
+  if (import.meta.client && id) localStorage.setItem('numa3d-generator-preview-machine', String(id))
+  if (!renderer) return
+  updatePrintBed()
+  if (rootGroup) fitCameraToBox(previewBox() || getBox(rootGroup))
+  render()
+})
+
+onMounted(() => {
+  init()
+  loadPreviewMachines()
+})
 
 onUnmounted(() => {
   mountSerial += 1
@@ -776,6 +895,11 @@ onUnmounted(() => {
     disposeGrid(gridHelper)
     gridHelper = null
   }
+  if (bedGroup) {
+    scene?.remove(bedGroup)
+    disposeObject(bedGroup)
+    bedGroup = null
+  }
   if (renderer) {
     try {
       renderer.forceContextLoss()
@@ -794,6 +918,16 @@ onUnmounted(() => {
 <template>
   <div class="relative w-full h-full min-h-0 bg-ink-50 overflow-hidden">
     <div ref="container" class="absolute inset-0" />
+    <div v-if="previewMachines.length" class="absolute top-2 right-2 z-10 max-w-[min(18rem,calc(100%-1rem))]">
+      <select v-model="previewMachineId" class="input !py-1.5 !w-auto max-w-full text-xs bg-white/90 shadow-sm">
+        <option v-for="machine in previewMachines" :key="machine.id" :value="machine.id">
+          {{ machine.name }} · {{ machine.bedWidthMm }} × {{ machine.bedDepthMm }} × {{ machine.buildHeightMm }} mm
+        </option>
+      </select>
+    </div>
+    <div v-if="printBed" class="absolute left-2 bottom-2 z-10 rounded bg-white/85 px-2 py-1 text-[10px] shadow-sm" :class="bedFit ? 'text-teal-700' : 'text-red-600'">
+      Bed {{ printBed.width }} × {{ printBed.depth }} × {{ printBed.height }} mm · {{ bedFit ? 'model muat' : 'model keluar area cetak' }}
+    </div>
     <div v-if="loading" class="absolute inset-0 flex items-center justify-center text-sm text-ink-500">Memuat...</div>
     <div v-if="error" class="absolute inset-0 flex items-center justify-center text-sm text-red-600 p-3 text-center">{{ error }}</div>
   </div>

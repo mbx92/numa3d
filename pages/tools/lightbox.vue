@@ -355,8 +355,10 @@ async function saveToGallery() {
 }
 
 function onWizardComplete(payload) {
-  Object.assign(form, payload)
-  form.colors = { ...payload.colors }
+  const { materialIds, ...settings } = payload
+  Object.assign(form, settings)
+  form.colors = { ...settings.colors }
+  colorMaterialIds.value = { ...(materialIds || {}) }
   wizardDone.value = true
   runGenerate()
 }

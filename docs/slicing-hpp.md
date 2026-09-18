@@ -40,30 +40,22 @@ Panel estimasi volume lama dan pilihan memperbarui recipe produk lama sudah diha
 
 ## API
 
-`POST /api/slicer/slice`, wajib login, `multipart/form-data`:
+`POST /api/slicer/jobs`, wajib login, `multipart/form-data`:
 
 - `file`: 3MF yang diekspor langsung dari generator, maksimal 40 MB.
 - `tool`: `keychain`, `clicker`, atau `qr-plate`.
 - `includeProfile`: `true` atau `false`; mengikuti pilihan Sertakan profil di UI. Jika false, slicing lokal memakai proses standar Kobra X 0,16 mm High Quality dan PLA.
-- `costs`: JSON opsional. Jika dikirim, respons menyertakan `hpp` dari asumsi itu; UI produksi tidak memakainya.
+- Respons awal adalah job berstatus `queued`. Klien membaca `GET /api/slicer/jobs/:id` sampai status menjadi `completed`, `failed`, atau `cancelled`.
 
-Respons memuat `totalGrams`, `printTimeSeconds`, `filamentGrams`, `colors`, `filamentChanges`, `primeTower`, `slicerVersion`, dan `profile`. Total gram memakai angka total dari Orca, karena penjumlahan slot yang masing-masing dibulatkan bisa berbeda 0,01 g. Durasi mesin dihitung sekali untuk seluruh plate. Gram dan menit recipe memakai angka ini, termasuk purge/prime tower.
+Hasil `completed.result` memuat `totalGrams`, `printTimeSeconds`, `filamentGrams`, `colors`, `filamentChanges`, `primeTower`, `slicerVersion`, dan `profile`. Total gram memakai angka total dari Orca, karena penjumlahan slot yang masing-masing dibulatkan bisa berbeda 0,01 g. Durasi mesin dihitung sekali untuk seluruh plate. Gram dan menit recipe memakai angka ini, termasuk purge/prime tower.
 
-Server memanggil [CLI slicing OrcaSlicer](https://www.orcaslicer.com/wiki/cli/cli_actions); ini bukan HTTP API bawaan aplikasi desktop. Path default:
+Server web hanya menyimpan job di PostgreSQL dan file masukan di MinIO. Service `slicer-worker` mengambil job secara atomik, lalu memanggil [CLI slicing OrcaSlicer](https://www.orcaslicer.com/wiki/cli/cli_actions). OrcaSlicer 2.4.2 dan profil Anycubic sudah dibangun ke image worker; tidak perlu instalasi atau bind mount dari host.
 
-```text
-# Windows
-ORCA_SLICER_PATH=C:/Program Files/OrcaSlicer/orca-slicer.exe
-ORCA_PROFILES_PATH=C:/Program Files/OrcaSlicer/resources/profiles/Anycubic
+Untuk deployment Compose/Coolify, jalankan kedua service dari `docker-compose.yml`: `app` melayani web/API dan menjalankan migrasi, sedangkan `slicer-worker` baru aktif setelah health check aplikasi berhasil. Worker lokal dapat dijalankan terpisah dengan `npm run slicer:worker`; nilai `DATABASE_URL`, MinIO, dan path Orca mengikuti `.env`.
 
-# macOS
-ORCA_SLICER_PATH=/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer
-ORCA_PROFILES_PATH=/Applications/OrcaSlicer.app/Contents/Resources/profiles/Anycubic
-```
+`GET /api/slicer/status` memeriksa heartbeat worker aktif. `GET /api/slicer/jobs` menyediakan daftar antrean, sedangkan `POST /api/slicer/jobs/:id/cancel` dan `POST /api/slicer/jobs/:id/retry` digunakan halaman `/slicer-queue`. Staff hanya melihat job miliknya; admin melihat seluruh antrean dan dapat menghapus job selesai.
 
-Variabel bersifat opsional pada lokasi standar Windows dan macOS. `GET /api/slicer/status` (wajib login) memeriksa binary dan profil Kobra X di server, bukan di HP/browser. Deployment cloud tidak otomatis mengakses OrcaSlicer di PC pengguna.
-
-Satu pekerjaan diproses sekaligus, batas 3 menit, maksimal 4 warna untuk konfigurasi awal. Direktori kerja dibuat sementara dan dibersihkan. API mengganti pengaturan unggahan dengan profil generator dan hanya menerima struktur mesh/objek generator; pengaturan post-processing dari unggahan tidak dijalankan. Profil instalasi OrcaSlicer tidak diubah. Nilai vendor retraction saat potong bernilai nol yang ditolak CLI dihilangkan hanya dari salinan profil mesin sementara. API menghasilkan estimasi; tidak mengirim perintah ke printer.
+Setiap worker memproses satu pekerjaan sekaligus, batas 3 menit, maksimal 4 warna untuk konfigurasi awal. Beberapa replica worker aman karena job diklaim memakai `FOR UPDATE SKIP LOCKED`. Heartbeat mendeteksi worker mati dan mengembalikan job tertinggal ke antrean. Direktori kerja dibuat sementara dan dibersihkan. Worker mengganti pengaturan unggahan dengan profil generator dan hanya menerima struktur mesh/objek generator; pengaturan post-processing dari unggahan tidak dijalankan. API menghasilkan estimasi; tidak mengirim perintah ke printer.
 
 ## Verifikasi
 

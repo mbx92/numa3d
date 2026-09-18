@@ -39,6 +39,21 @@ export const customOrderStatusEnum = pgEnum('custom_order_status', [
   'delivered',
   'cancelled'
 ])
+export const orderStatusEnum = pgEnum('order_status', [
+  'draft',
+  'confirmed',
+  'in_production',
+  'ready',
+  'completed',
+  'cancelled'
+])
+export const slicerJobStatusEnum = pgEnum('slicer_job_status', [
+  'queued',
+  'processing',
+  'completed',
+  'failed',
+  'cancelled'
+])
 
 export const suppliers = pgTable('suppliers', {
   id: serial('id').primaryKey(),
@@ -59,7 +74,7 @@ export const productSeries = pgTable('product_series', {
 })
 
 // Pengguna sistem. Admin: akses penuh. Staff: hanya boleh mencatat
-// Pengeluaran, Penjualan & Produksi, sisanya (Material/Mesin/Packaging/Produk/
+// Pengeluaran, Order, Penjualan & Produksi, sisanya (Material/Mesin/Packaging/Produk/
 // Pengaturan/User) read-only — ditegakkan di server/utils/rbac.js.
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -97,6 +112,9 @@ export const machines = pgTable('machines', {
   purchasePrice: integer('purchase_price').notNull().default(0),
   purchaseDate: date('purchase_date'),
   depreciationMonths: integer('depreciation_months').notNull().default(36),
+  bedWidthMm: integer('bed_width_mm').notNull().default(220),
+  bedDepthMm: integer('bed_depth_mm').notNull().default(220),
+  buildHeightMm: integer('build_height_mm').notNull().default(250),
   notes: text('notes'),
   // Pengeluaran otomatis dari harga beli. Kas keluar sekali di sini, bukan dipotong lagi di modal.
   expenseId: integer('expense_id').references(() => expenses.id, { onDelete: 'set null' }),
@@ -225,6 +243,68 @@ export const productPackaging = pgTable('product_packaging', {
   quantityUsed: real('quantity_used').notNull().default(1)
 })
 
+// Antrean slicing diproses oleh container worker terpisah. File masukan tetap
+// berada di MinIO agar app dan worker tidak memerlukan shared filesystem.
+export const slicerJobs = pgTable('slicer_jobs', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  filename: text('filename').notNull(),
+  objectKey: text('object_key').notNull().unique(),
+  tool: text('tool').notNull(),
+  includeProfile: boolean('include_profile').notNull().default(true),
+  status: slicerJobStatusEnum('status').notNull().default('queued'),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(3),
+  workerId: text('worker_id'),
+  progress: integer('progress').notNull().default(0),
+  stage: text('stage'),
+  result: jsonb('result'),
+  error: text('error'),
+  cancelRequested: boolean('cancel_requested').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  startedAt: timestamp('started_at'),
+  finishedAt: timestamp('finished_at'),
+  heartbeatAt: timestamp('heartbeat_at')
+})
+
+export const slicerWorkers = pgTable('slicer_workers', {
+  id: text('id').primaryKey(),
+  status: text('status').notNull().default('starting'),
+  version: text('version'),
+  currentJobId: integer('current_job_id'),
+  message: text('message'),
+  startedAt: timestamp('started_at').notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at').notNull().defaultNow()
+})
+
+// Order produk menghubungkan permintaan pelanggan dengan produksi dan penjualan.
+// Versi awal UI memakai satu item per order; tabel item terpisah disiapkan agar
+// struktur dapat berkembang ke order multi-item tanpa mengubah header order.
+export const orders = pgTable('orders', {
+  id: serial('id').primaryKey(),
+  date: date('date').notNull(),
+  customerName: text('customer_name').notNull(),
+  channel: salesChannelEnum('channel').notNull().default('direct'),
+  status: orderStatusEnum('status').notNull().default('draft'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+})
+
+export const orderItems = pgTable('order_items', {
+  id: serial('id').primaryKey(),
+  orderId: integer('order_id')
+    .notNull()
+    .references(() => orders.id, { onDelete: 'cascade' }),
+  productId: integer('product_id')
+    .notNull()
+    .references(() => products.id),
+  quantity: integer('quantity').notNull().default(1),
+  quantityReserved: integer('quantity_reserved').notNull().default(0),
+  pricePerUnit: integer('price_per_unit').notNull().default(0),
+  hppPerUnit: integer('hpp_per_unit'),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+})
+
 export const customOrders = pgTable('custom_orders', {
   id: serial('id').primaryKey(),
   date: date('date').notNull(),
@@ -268,6 +348,7 @@ export const sales = pgTable(
     date: date('date').notNull(),
     productId: integer('product_id').references(() => products.id),
     customOrderId: integer('custom_order_id').references(() => customOrders.id, { onDelete: 'set null' }),
+    orderId: integer('order_id').references(() => orders.id, { onDelete: 'set null' }),
     quantity: integer('quantity').notNull().default(1),
     salePricePerUnit: integer('sale_price_per_unit').notNull().default(0),
     // HPP per unit saat transaksi. null = penjualan lama, laporan memakai HPP live.
@@ -288,6 +369,7 @@ export const sales = pgTable(
   },
   (t) => ({
     customOrderSaleUniq: uniqueIndex('sales_custom_order_id_uidx').on(t.customOrderId),
+    orderSaleUniq: uniqueIndex('sales_order_id_uidx').on(t.orderId),
     invoiceNumberUniq: uniqueIndex('sales_invoice_number_uidx').on(t.invoiceNumber)
   })
 )
@@ -408,6 +490,7 @@ export const productions = pgTable(
   date: date('date').notNull(),
   productId: integer('product_id').references(() => products.id),
   customOrderId: integer('custom_order_id').references(() => customOrders.id, { onDelete: 'cascade' }),
+  orderItemId: integer('order_item_id').references(() => orderItems.id, { onDelete: 'set null' }),
   machineId: integer('machine_id').references(() => machines.id, { onDelete: 'set null' }),
   quantityPlanned: integer('quantity_planned').notNull().default(1),
   quantityGood: integer('quantity_good').notNull().default(0),

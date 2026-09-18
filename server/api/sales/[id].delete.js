@@ -19,6 +19,12 @@ export default defineEventHandler(async (event) => {
         .set({ status: 'ready' })
         .where(eq(schema.customOrders.id, existing.customOrderId))
     }
+    if (existing?.orderId) {
+      await tx
+        .update(schema.orders)
+        .set({ status: 'ready' })
+        .where(eq(schema.orders.id, existing.orderId))
+    }
     await tx.delete(schema.sales).where(eq(schema.sales.id, id))
   })
   await logAudit(event, { action: 'delete', entity: 'sale', entityId: id, summary: `Hapus penjualan id ${id}` })

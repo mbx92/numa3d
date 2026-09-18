@@ -360,6 +360,7 @@ async function remove(s) {
             <div class="font-medium break-words">
               {{ s.productName }}
               <span v-if="s.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">custom</span>
+              <NuxtLink v-if="s.isOrder" :to="`/orders/${s.orderId}`" class="badge bg-blue-100 text-blue-700 ml-1 hover:underline">order #{{ s.orderId }}</NuxtLink>
             </div>
             <div class="text-xs font-mono text-ink-500">{{ formatDate(s.date) }}<span v-if="s.invoiceNumber"> · {{ s.invoiceNumber }}</span></div>
             <div v-if="s.customerName" class="text-xs text-ink-500">{{ s.customerName }}</div>
@@ -435,6 +436,7 @@ async function remove(s) {
               <td class="font-medium">
                 {{ s.productName }}
                 <span v-if="s.isCustom" class="badge bg-ink-100 text-ink-500 ml-1">custom</span>
+                <NuxtLink v-if="s.isOrder" :to="`/orders/${s.orderId}`" class="badge bg-blue-100 text-blue-700 ml-1 hover:underline">order #{{ s.orderId }}</NuxtLink>
                 <div v-if="s.customerName" class="text-xs text-ink-500">{{ s.customerName }}</div>
                 <div v-if="s.notes" class="text-xs text-ink-400">{{ s.notes }}</div>
               </td>
@@ -504,7 +506,7 @@ async function remove(s) {
             <label class="label">Produk</label>
             <select v-model="form.productId" class="input" required>
               <option v-for="p in products" :key="p.id" :value="p.id">
-                {{ p.name }}{{ p.hasRecipe ? ` — HPP ${formatIDR(p.hpp)}` : ' — belum ada recipe' }} · stok {{ formatNumber(p.stockQuantity) }}
+                {{ p.name }}{{ p.hasRecipe ? ` — HPP ${formatIDR(p.hpp)}` : ' — belum ada recipe' }} · bebas {{ formatNumber(p.availableStock) }}
               </option>
             </select>
             <div v-if="selectedProduct" class="flex items-center gap-2 mt-2">
@@ -525,7 +527,7 @@ async function remove(s) {
                 <span v-if="selectedProduct.sellingPrice">
                   · jual {{ formatIDR(selectedProduct.sellingPrice) }}{{ selectedProduct.listPrice ? '' : ' (saran)' }}
                 </span>
-                · stok {{ formatNumber(selectedProduct.stockQuantity) }}
+                · stok bebas {{ formatNumber(selectedProduct.availableStock) }}
               </p>
             </div>
           </div>
@@ -535,10 +537,10 @@ async function remove(s) {
               <label class="label">Qty</label>
               <input v-model.number="form.quantity" type="number" min="1" class="input-num" required />
               <p
-                v-if="selectedProduct && form.quantity > (selectedProduct.stockQuantity || 0)"
+                v-if="selectedProduct && form.quantity > (selectedProduct.availableStock || 0)"
                 class="text-xs text-amber-600 mt-1"
               >
-                Qty melebihi stok ({{ formatNumber(selectedProduct.stockQuantity) }}). Penjualan tetap tercatat, stok bisa minus sampai produksi selesai.
+                Qty melebihi stok bebas ({{ formatNumber(selectedProduct.availableStock) }}). {{ formatNumber(selectedProduct.reservedQuantity) }} unit sedang direservasi order; buat order dan selesaikan produksi terlebih dahulu.
               </p>
             </div>
             <div>

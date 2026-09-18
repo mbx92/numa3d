@@ -12,12 +12,15 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PencilSquareIcon,
+  ClipboardDocumentListIcon,
+  PrinterIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline'
 import { PRODUCT_STATUSES, productStatusLabel, productStatusClass } from '~/utils/productStatus.js'
 import { materialTypeLabel } from '~/utils/materialType.js'
 import { materialSwatchColor } from '~/utils/materialColor.js'
 import { roundPriceUp, suggestedPrice } from '~/utils/hpp.js'
+import { machineBuildVolume } from '~/utils/printBed.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -128,6 +131,19 @@ const uploadProgress = ref('')
 const uploadPercent = ref(0)
 const uploadError = ref('')
 const previewFile = ref(files.value?.[0] || null)
+const previewMode = ref('model')
+const previewMachineId = ref(processForm.value.machineId || machines.value?.[0]?.id || '')
+const previewMachine = computed(() =>
+  (machines.value || []).find((machine) => Number(machine.id) === Number(previewMachineId.value)) || null
+)
+const previewPrintBed = computed(() => {
+  if (previewMode.value !== 'print' || !previewMachine.value) return null
+  return { ...machineBuildVolume(previewMachine.value), name: previewMachine.value.name }
+})
+
+watch(machines, (rows) => {
+  if (!previewMachineId.value && rows?.length) previewMachineId.value = processForm.value.machineId || rows[0].id
+})
 
 const FILE_VIEW_KEY = 'numa3d-product-files-view'
 const filesView = ref('list')
@@ -407,7 +423,11 @@ const tab = computed({
     <div class="flex items-start gap-2 sm:items-center sm:gap-3 flex-wrap">
       <NuxtLink to="/products" class="text-sm text-ink-500 hover:text-accent-600 shrink-0">&larr; Produk</NuxtLink>
       <h1 class="text-lg sm:text-xl font-bold min-w-0 break-words flex-1">{{ product.name }}</h1>
-      <span class="badge shrink-0 font-mono">stok {{ formatNumber(product.stockQuantity) }}</span>
+      <NuxtLink :to="`/orders?new=1&productId=${product.id}`" class="btn-primary shrink-0">
+        <ClipboardDocumentListIcon class="w-4 h-4" />Buat order
+      </NuxtLink>
+      <span class="badge shrink-0 font-mono">stok bebas {{ formatNumber(product.availableStock) }}</span>
+      <span v-if="product.reservedQuantity" class="badge shrink-0 font-mono bg-blue-100 text-blue-700">reservasi {{ formatNumber(product.reservedQuantity) }}</span>
       <span class="badge shrink-0" :class="productStatusClass(product.status)">
         {{ productStatusLabel[product.status] || product.status }}
       </span>
@@ -471,7 +491,7 @@ const tab = computed({
               <div>
                 <label class="label">Stok tersedia</label>
                 <input v-model.number="info.stockQuantity" type="number" min="0" class="input-num" :disabled="!isAdmin" />
-                <p class="text-xs text-ink-400 mt-1">Bertambah dari menu Produksi, berkurang saat penjualan. Bisa diset sebagai stok awal.</p>
+                <p class="text-xs text-ink-400 mt-1">Bertambah dari Produksi, berkurang saat penjualan. Tidak bisa diturunkan melewati stok yang direservasi order.</p>
               </div>
             </div>
             <div>
@@ -733,8 +753,19 @@ const tab = computed({
       </div>
 
       <div class="panel lg:col-span-8 overflow-hidden">
-        <div class="panel-header">
+        <div class="panel-header !flex-wrap gap-2">
           <span class="panel-title truncate min-w-0">{{ previewFile ? previewFile.filename : 'Preview 3D' }}</span>
+          <div class="flex flex-wrap items-center gap-2 ml-auto">
+            <div class="inline-flex rounded-panel border border-ink-200 overflow-hidden">
+              <button type="button" class="px-2.5 py-1.5 text-xs font-medium" :class="previewMode === 'model' ? 'bg-ink-800 text-white' : 'bg-white text-ink-600'" @click="previewMode = 'model'">Model</button>
+              <button type="button" class="px-2.5 py-1.5 text-xs font-medium border-l border-ink-200" :class="previewMode === 'print' ? 'bg-ink-800 text-white' : 'bg-white text-ink-600'" :disabled="!machines?.length" @click="previewMode = 'print'"><PrinterIcon class="w-3.5 h-3.5 inline" /> Cetak</button>
+            </div>
+            <select v-if="previewMode === 'print'" v-model="previewMachineId" class="input !w-auto !py-1.5 text-xs">
+              <option v-for="machine in machines" :key="machine.id" :value="machine.id">
+                {{ machine.name }} · {{ machine.bedWidthMm }} × {{ machine.bedDepthMm }} × {{ machine.buildHeightMm }} mm
+              </option>
+            </select>
+          </div>
         </div>
         <div class="h-[42vh] sm:h-[50vh] lg:h-[70vh]">
           <ClientOnly>
@@ -743,6 +774,7 @@ const tab = computed({
               :key="previewFile.id"
               :src="`/api/files/${previewFile.id}`"
               :filename="previewFile.filename"
+              :print-bed="previewPrintBed"
               class="h-full"
             />
             <div v-else class="w-full h-full flex items-center justify-center text-sm text-ink-500 bg-ink-50 px-4 text-center">

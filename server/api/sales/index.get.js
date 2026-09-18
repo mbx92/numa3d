@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
       date: schema.sales.date,
       productId: schema.sales.productId,
       customOrderId: schema.sales.customOrderId,
+      orderId: schema.sales.orderId,
       productName: sql`coalesce(${schema.products.name}, 'Custom · ' || ${schema.customOrders.customerName})`.as(
         'productName'
       ),
@@ -60,6 +61,7 @@ export default defineEventHandler(async (event) => {
     return {
       ...r,
       isCustom: !!r.customOrderId,
+      isOrder: !!r.orderId,
       netPricePerUnit,
       grossRevenue: money.gross,
       feeAmount: money.fee,

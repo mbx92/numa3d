@@ -1,18 +1,33 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      target: app
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      NUXT_DATABASE_URL: ${DATABASE_URL}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      NUXT_ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      NUXT_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       SESSION_SECRET: ${SESSION_SECRET}
+      NUXT_SESSION_SECRET: ${SESSION_SECRET}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      NUXT_MINIO_END_POINT: ${MINIO_ENDPOINT}
       MINIO_PORT: ${MINIO_PORT:-9000}
+      NUXT_MINIO_PORT: ${MINIO_PORT:-9000}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      NUXT_MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      NUXT_MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      NUXT_MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-numa3d-files}
+      NUXT_MINIO_BUCKET: ${MINIO_BUCKET:-numa3d-files}
+      NUXT_TUYA_API_KEY: ${TUYA_API_KEY:-}
+      NUXT_TUYA_API_SECRET: ${TUYA_API_SECRET:-}
+      NUXT_TUYA_API_REGION: ${TUYA_API_REGION:-in}
     ports:
       - "3017:3000"
     volumes:
@@ -27,8 +42,38 @@ services:
       start_period: 40s
       retries: 3
 
+  slicer-worker:
+    build:
+      context: .
+      target: slicer-worker
+      args:
+        ORCA_VERSION: ${ORCA_VERSION:-2.4.2}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT:-9000}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-numa3d-files}
+      ORCA_VERSION: ${ORCA_VERSION:-2.4.2}
+      ORCA_SLICER_PATH: /opt/orca/AppRun
+      ORCA_PROFILES_PATH: /opt/orca/resources/profiles/Anycubic
+      SLICER_POLL_MS: ${SLICER_POLL_MS:-2000}
+      TMPDIR: /app/data/slicer-tmp
+    volumes:
+      - numa3d-slicer-tmp:/app/data/slicer-tmp
+    networks:
+      - default
+      - coolify
+
 volumes:
   numa3d-fonts:
+  numa3d-slicer-tmp:
 
 networks:
   coolify:

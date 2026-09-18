@@ -28,11 +28,15 @@ const { data: machines } = await useFetch('/api/machines', { server: false, lazy
 const { data: settings } = await useFetch('/api/settings', { server: false, lazy: true })
 
 const productId = ref('')
-const machineId = ref('')
+const machineId = useState('generatorMachineId', () => '')
 const infillPercent = ref(DEFAULT_INFILL_PERCENT)
 const wastePercent = ref(DEFAULT_WASTE_PERCENT)
 const density = ref(DEFAULT_FILAMENT_DENSITY)
 const saving = ref(false)
+
+watch(machines, (rows) => {
+  if (!machineId.value && rows?.length) machineId.value = rows[0].id
+}, { immediate: true })
 
 const assignedCount = computed(() => Object.values(props.materialIds || {}).filter((id) => Number(id) > 0).length)
 const needsMaterial = computed(() => assignedCount.value < 1)

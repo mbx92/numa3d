@@ -81,7 +81,7 @@ Kalau produk punya **harga jual tersimpan** (`list_price` > 0), katalog dan tomb
 
 Margin bersih penjualan = `(harga jual × (1 − fee marketplace%) − HPP) × qty`. Penjualan baru menyimpan snapshot `hpp_per_unit` saat transaksi, jadi laporan tidak berubah kalau harga material/mesin nanti diubah.
 
-QR Plate, Keychain, dan Clicker memiliki **Slice gram & waktu**: API lokal menjalankan OrcaSlicer hanya untuk gram filament dan durasi cetak, lalu angka itu bisa diisi ke recipe produk. HPP produksi memakai harga katalog. Panel menampilkan apakah OrcaSlicer siap di **server** (`GET /api/slicer/status`). [Panduan dan hasil uji](docs/slicing-hpp.md). Estimasi volume mesh × infill tetap ada di bagian terlipat jika Orca tidak tersedia. Tes: `node --test tests/hpp.test.js`.
+QR Plate, Keychain, dan Clicker memiliki **Slice gram & waktu**. Aplikasi memasukkan 3MF ke antrean PostgreSQL/MinIO, lalu service Docker `slicer-worker` menjalankan OrcaSlicer 2.4.2 untuk menghitung gram filament dan durasi cetak. Status, pembatalan, retry, dan hasil tersedia di **Antrian Slicer** (`/slicer-queue`). HPP produksi memakai harga katalog. [Panduan dan hasil uji](docs/slicing-hpp.md).
 
 ## Export plate 3MF untuk OrcaSlicer
 

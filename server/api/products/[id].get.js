@@ -3,6 +3,7 @@ import { useDb, schema } from '../../db/index.js'
 import { getHppForProduct } from '../../utils/productHpp.js'
 import { getSettings } from '../../utils/settings.js'
 import { decorateProductPricing } from '../../utils/productPricing.js'
+import { reservedProductQuantity } from '../../utils/orders.js'
 
 export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -11,6 +12,7 @@ export default defineEventHandler(async (event) => {
   if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Produk tidak ditemukan' })
   const settings = await getSettings()
   const hpp = await getHppForProduct(id)
+  const reservedQuantity = await reservedProductQuantity(db, schema, id)
   const images = await db
     .select()
     .from(schema.productImages)
@@ -19,6 +21,8 @@ export default defineEventHandler(async (event) => {
   return {
     ...rows[0],
     ...decorateProductPricing(rows[0], hpp, settings),
+    reservedQuantity,
+    availableStock: Math.max((Number(rows[0].stockQuantity) || 0) - reservedQuantity, 0),
     images,
     breakdown: hpp.breakdown,
     materialLines: hpp.materialLines,

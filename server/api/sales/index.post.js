@@ -4,6 +4,7 @@ import { logAudit } from '../../utils/audit.js'
 import { allocateInvoiceNumber } from '../../utils/invoice.js'
 import { parseSalePayment } from '../../utils/salePayment.js'
 import { snapshotHppPerUnit } from '../../utils/saleHpp.js'
+import { availableProductStock } from '../../utils/orders.js'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -18,6 +19,13 @@ export default defineEventHandler(async (event) => {
   const hppPerUnit = await snapshotHppPerUnit({ productId })
   const db = useDb()
   const rows = await db.transaction(async (tx) => {
+    const stock = await availableProductStock(tx, schema, productId)
+    if (stock.available < qty) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Stok bebas tidak cukup. Tersedia ${stock.available} unit (${stock.reserved} unit direservasi order).`
+      })
+    }
     const invoiceNumber = await allocateInvoiceNumber(tx, schema, body.date)
     const created = await tx
       .insert(schema.sales)
@@ -25,6 +33,7 @@ export default defineEventHandler(async (event) => {
         date: body.date,
         productId,
         customOrderId: null,
+        orderId: null,
         quantity: qty,
         salePricePerUnit: Math.round(Number(body.salePricePerUnit) || 0),
         hppPerUnit,

@@ -67,6 +67,7 @@ function applyThemePreset(themeId) {
   draft.colors.letter = theme.colors.letter
   draft.colors.accent = theme.colors.accent
   draft.colors.base = theme.colors.baseHighlight || theme.colors.base
+  colorMaterialIds.value = {}
 }
 
 function validateStep() {
@@ -125,6 +126,12 @@ function submit() {
       baseHighlight: draft.colors.base,
       baseBottom: draft.colors.base,
       cavityWall: draft.colors.base
+    },
+    materialIds: {
+      ...colorMaterialIds.value,
+      baseHighlight: colorMaterialIds.value.base,
+      baseBottom: colorMaterialIds.value.base,
+      cavityWall: colorMaterialIds.value.base
     }
   })
 }

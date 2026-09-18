@@ -125,6 +125,7 @@ function applyThemeDefaults(themeId) {
   form.fontUrl = theme.fontUrl
   form.typographyId = theme.typographyId || 'straight'
   form.colors = { ...theme.colors }
+  colorMaterialIds.value = {}
 }
 
 const generating = ref(false)
@@ -319,6 +320,7 @@ function onWizardComplete(payload) {
   form.targetHeightMm = payload.targetHeightMm
   form.accentIndices = [...(payload.accentIndices || [])]
   form.colors = { ...payload.colors }
+  colorMaterialIds.value = { ...(payload.materialIds || {}) }
   wizardDone.value = true
   runGenerate()
 }
