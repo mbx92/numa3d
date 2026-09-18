@@ -114,9 +114,7 @@ async function applyRecipe() {
 <template>
   <div class="space-y-2 pt-2 border-t border-ink-200">
     <p class="text-xs font-medium text-ink-700">HPP ke produk</p>
-    <p class="text-[10px] text-ink-400 leading-relaxed">
-      Estimasi gram dari volume mesh × infill, bukan hasil Orca. Waktu cetak tetap di tab Recipe produk.
-    </p>
+    <InfoTooltip label="Informasi GeneratorHppPanel">Estimasi gram dari volume mesh × infill, bukan hasil Orca. Waktu cetak tetap di tab Recipe produk.</InfoTooltip>
 
     <p v-if="!result" class="text-[11px] text-amber-700">
       Generate ulang setelah mengubah desain untuk memperbarui estimasi HPP.

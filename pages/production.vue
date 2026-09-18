@@ -330,16 +330,18 @@ async function remove(j) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Produksi</h1>
+      <div class="flex items-center gap-1">
+        <h1 class="text-xl font-bold">Produksi</h1>
+        <InfoTooltip label="Informasi Produksi">
+          Progress mengikuti durasi cetak (recipe atau pesanan custom) sejak produksi dimulai. Katalog: unit jadi masuk stok.
+          Custom: unit jadi untuk pelanggan, tidak masuk stok produk.
+          Unit gagal: job tetap selesai (material sudah terpotong); tombol Ulang membuat antrian baru.
+        </InfoTooltip>
+      </div>
       <button class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Catat Produksi</span><span class="sm:hidden">Catat</span>
       </button>
     </div>
-    <p class="text-xs text-ink-500">
-      Progress mengikuti durasi cetak (recipe atau pesanan custom) sejak produksi dimulai. Katalog: unit jadi masuk stok.
-      Custom: unit jadi untuk pelanggan, tidak masuk stok produk.
-      Unit gagal: job tetap selesai (material sudah terpotong); tombol Ulang membuat antrian baru.
-    </p>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
       <div class="panel p-3 sm:p-4">

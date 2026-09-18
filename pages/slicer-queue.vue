@@ -8,7 +8,7 @@ const statusBadge = {
   queued: 'bg-ink-200 text-ink-700', processing: 'bg-amber-100 text-amber-800',
   completed: 'bg-green-100 text-green-700', failed: 'bg-red-100 text-red-700', cancelled: 'bg-ink-100 text-ink-500'
 }
-const toolLabel = { keychain: 'Keychain', clicker: 'Clicker', 'qr-plate': 'QR Plate' }
+const toolLabel = { keychain: 'Keychain', clicker: 'Clicker', 'qr-plate': 'QR Plate', 'custom-order': 'Custom Order (STL / 3MF)' }
 const authUser = useState('authUser')
 const isAdmin = computed(() => authUser.value?.role === 'admin')
 const filter = ref('')
@@ -76,8 +76,11 @@ async function remove(job) {
 <template>
   <div class="space-y-4">
     <div>
-      <h1 class="text-xl font-bold">Antrian Slicer</h1>
-      <p class="text-xs text-ink-500 mt-1">Job generator diproses oleh worker OrcaSlicer terpisah. Halaman diperbarui otomatis setiap 3 detik.</p>
+      <div class="flex items-center gap-1">
+        <h1 class="text-xl font-bold">Antrian Slicer</h1>
+        <InfoTooltip label="Informasi Antrian Slicer">Job generator diproses oleh worker OrcaSlicer terpisah. Halaman diperbarui otomatis setiap 3 detik.</InfoTooltip>
+      </div>
+
     </div>
 
     <div class="panel p-3 flex flex-wrap items-center justify-between gap-3">

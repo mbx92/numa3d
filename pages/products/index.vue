@@ -215,20 +215,26 @@ async function remove(p) {
           <input v-model="form.description" class="input" placeholder="opsional" />
         </div>
         <div>
-          <label class="label">Status</label>
+          <div class="flex items-center gap-1">
+            <label class="label">Status</label>
+            <InfoTooltip label="Informasi Status">Draft untuk kumpulkan data dulu, sebelum diputuskan masuk R&amp;D atau tidak.</InfoTooltip>
+          </div>
           <select v-model="form.status" class="input">
             <option v-for="s in PRODUCT_STATUSES" :key="s" :value="s">{{ statusLabel[s] }}</option>
           </select>
-          <p class="text-xs text-ink-500 mt-1">Draft untuk kumpulkan data dulu, sebelum diputuskan masuk R&amp;D atau tidak.</p>
+
         </div>
         <div>
-          <label class="label">Series katalog</label>
+          <div class="flex items-center gap-1">
+            <label class="label">Series katalog</label>
+            <InfoTooltip label="Informasi Series katalog">Foto produk bisa ditambahkan setelah ini, di halaman detail produk.</InfoTooltip>
+          </div>
           <select v-model="form.seriesId" class="input">
             <option value="">— tanpa series —</option>
             <option v-for="s in seriesList" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
         </div>
-        <p class="text-xs text-ink-500">Foto produk bisa ditambahkan setelah ini, di halaman detail produk.</p>
+
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" class="btn-secondary" @click="showForm = false"><XMarkIcon class="w-4 h-4" />Batal</button>

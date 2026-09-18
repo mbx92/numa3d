@@ -176,15 +176,17 @@ async function remove(p) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Pembelian Supplier</h1>
+      <div class="flex items-center gap-1">
+        <h1 class="text-xl font-bold">Pembelian Supplier</h1>
+        <InfoTooltip label="Informasi pencatatan pembelian">
+          Satu pembelian menambah stok dan membuat pengeluaran sebesar total (barang + ongkir + fee platform).
+          Ongkir dan fee dibagi ke harga satuan stok, jadi HPP memakai harga landed.
+        </InfoTooltip>
+      </div>
       <button class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" aria-hidden="true" /><span class="hidden sm:inline">Catat Pembelian</span><span class="sm:hidden">Catat</span>
       </button>
     </div>
-    <p class="text-xs text-ink-500">
-      Satu pembelian menambah stok dan membuat pengeluaran sebesar total (barang + ongkir + fee platform).
-      Ongkir dan fee dibagi ke harga satuan stok, jadi HPP memakai harga landed.
-    </p>
 
     <div class="panel hidden md:block">
       <div class="overflow-x-auto">
@@ -372,13 +374,13 @@ async function remove(p) {
             <IdrInput v-model="form.shippingFee" input-class="w-full" />
           </div>
           <div>
-            <label class="label">Fee platform</label>
+            <div class="flex items-center gap-1 mb-1">
+              <label class="label !mb-0">Fee platform</label>
+              <InfoTooltip label="Informasi ongkir dan fee platform">Marketplace / ekspedisi. Jumlah ini masuk pengeluaran dan dibagi ke harga satuan barang.</InfoTooltip>
+            </div>
             <IdrInput v-model="form.platformFee" input-class="w-full" />
           </div>
         </div>
-        <p class="text-xs text-ink-400 -mt-1">
-          Marketplace / ekspedisi. Jumlah ini masuk pengeluaran dan dibagi ke harga satuan barang.
-        </p>
 
         <div class="space-y-1 pt-1 border-t border-ink-200 text-sm">
           <div class="flex items-center justify-between text-ink-500">

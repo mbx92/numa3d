@@ -71,13 +71,14 @@ async function remove(t) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Modal</h1>
+      <div class="flex items-center gap-1">
+        <h1 class="text-xl font-bold">Modal</h1>
+        <InfoTooltip v-if="!isAdmin" label="Informasi akses modal">Read-only — hanya admin yang bisa mengubah modal.</InfoTooltip>
+      </div>
       <button v-if="isAdmin" class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Catat Mutasi</span><span class="sm:hidden">Catat</span>
       </button>
     </div>
-
-    <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah modal.</p>
 
     <!-- Ringkasan posisi modal -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
@@ -111,7 +112,16 @@ async function remove(t) {
 
     <!-- Rincian estimasi kas -->
     <div class="panel">
-      <div class="panel-header"><span class="panel-title">Rincian Estimasi Kas</span></div>
+      <div class="panel-header">
+        <div class="flex items-center gap-1">
+          <span class="panel-title">Rincian Estimasi Kas</span>
+          <InfoTooltip label="Informasi estimasi kas">
+            Perkiraan kasar posisi kas: modal bersih + penjualan − pengeluaran.
+            Tambah mesin otomatis tercatat di Pengeluaran — jangan catat beli mesin dua kali.
+            Bukan laporan akuntansi penuh.
+          </InfoTooltip>
+        </div>
+      </div>
       <table class="table-std">
         <tbody>
           <tr>
@@ -138,11 +148,6 @@ async function remove(t) {
           </tr>
         </tbody>
       </table>
-      <div class="p-3 text-xs text-ink-500 border-t border-ink-200">
-        Perkiraan kasar posisi kas: modal bersih + penjualan − pengeluaran.
-        Tambah mesin otomatis tercatat di Pengeluaran — jangan catat beli mesin dua kali.
-        Bukan laporan akuntansi penuh.
-      </div>
     </div>
 
     <!-- Filter -->

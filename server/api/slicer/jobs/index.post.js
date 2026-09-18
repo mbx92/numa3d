@@ -12,12 +12,15 @@ export default defineEventHandler(async (event) => {
   const tool = parts?.find((part) => part.name === 'tool')?.data.toString()
   const includeProfile = parts?.find((part) => part.name === 'includeProfile')?.data.toString() !== 'false'
   try {
+    const rawMaterials = parts?.find((part) => part.name === 'materialIds')?.data.toString()
+    let materialIds
+    try { materialIds = rawMaterials ? JSON.parse(rawMaterials) : [] } catch { throw Object.assign(new Error('Pemetaan material tidak valid'), { statusCode: 400 }) }
     const job = await enqueueSlicerJob({
-      db: useDb(), auth: event.context.auth, file: file?.data, filename: file?.filename, tool, includeProfile,
+      db: useDb(), auth: event.context.auth, file: file?.data, filename: file?.filename, tool, includeProfile, materialIds,
       storage: {
-        async put(key, bytes) {
+        async put(key, bytes, contentType) {
           await ensureBucket()
-          await useMinio().putObject(minioBucket(), key, bytes, bytes.length, { 'Content-Type': 'model/3mf' })
+          await useMinio().putObject(minioBucket(), key, bytes, bytes.length, { 'Content-Type': contentType })
         },
         remove: (key) => useMinio().removeObject(minioBucket(), key)
       }

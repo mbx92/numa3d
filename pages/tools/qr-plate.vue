@@ -272,7 +272,7 @@ onBeforeUnmount(() => {
         @generate="runGenerate"
       >
         <template v-if="activeToolPanel === 'design'">
-          <p class="text-xs text-ink-500">Dibuat di perangkat. Satu QR, atau Wi-Fi plus WhatsApp dari foto JPEG.</p>
+          <InfoTooltip label="Informasi qr-plate">Dibuat di perangkat. Satu QR, atau Wi-Fi plus WhatsApp dari foto JPEG.</InfoTooltip>
           <div class="grid grid-cols-2 gap-2" role="group" aria-label="Jenis pelat">
             <button
               v-for="item in layouts"
@@ -285,7 +285,7 @@ onBeforeUnmount(() => {
             >{{ item.label }}</button>
           </div>
           <template v-if="dual">
-            <p class="text-[10px] text-ink-400">Kiri: QR Wi-Fi. Kanan: unggah JPEG kartu QR WhatsApp.</p>
+            <InfoTooltip label="Informasi qr-plate">Kiri: QR Wi-Fi. Kanan: unggah JPEG kartu QR WhatsApp.</InfoTooltip>
             <KeychainCompactField label="Nama jaringan (SSID)" unit="">
               <input v-model="form.wifiSsid" class="input text-sm" autocomplete="off" maxlength="64" />
             </KeychainCompactField>
@@ -386,7 +386,9 @@ onBeforeUnmount(() => {
           <KeychainCompactField v-if="form.mounting !== 'none'" label="Diameter lubang">
             <input v-model.number="form.holeDiameterMm" type="number" min="3" max="8" step="0.5" class="input-num w-full text-sm" />
           </KeychainCompactField>
-          <p class="text-[10px] text-ink-400">Ruang kosong 4 modul di setiap sisi QR selalu dipertahankan. Radius sudut dibatasi margin agar tidak memotong area QR.</p>
+          <InfoTooltip label="Informasi qr-plate">
+            Ruang kosong 4 modul di setiap sisi QR selalu dipertahankan. Radius sudut dibatasi margin agar tidak memotong area QR.
+          </InfoTooltip>
         </template>
 
         <template v-else-if="activeToolPanel === 'stand'">
@@ -417,7 +419,9 @@ onBeforeUnmount(() => {
                 <input v-model.number="form.standClearanceMm" type="number" min="0.15" max="1" step="0.05" class="input-num w-full text-sm" />
               </KeychainCompactField>
             </div>
-            <p class="text-[10px] text-ink-400">Pelat dan alas dicetak terpisah lalu disisipkan ke slot. Sesuaikan kelonggaran dengan hasil kalibrasi printer.</p>
+            <InfoTooltip label="Informasi qr-plate">
+              Pelat dan alas dicetak terpisah lalu disisipkan ke slot. Sesuaikan kelonggaran dengan hasil kalibrasi printer.
+            </InfoTooltip>
           </template>
         </template>
 
@@ -439,7 +443,7 @@ onBeforeUnmount(() => {
             :show-gap="!!form.businessName.trim()"
             show-stroke
           />
-          <p class="text-[10px] text-ink-400">Logo dan nama usaha muncul di atas QR. Quiet zone QR tetap kosong.</p>
+          <InfoTooltip label="Informasi qr-plate">Logo dan nama usaha muncul di atas QR. Quiet zone QR tetap kosong.</InfoTooltip>
           <p v-if="form.headerLogoSvg" class="text-[10px] text-ink-400">Ketebalan tambahan 0 mempertahankan bentuk SVG.</p>
           <p v-if="dual" class="text-[10px] text-ink-400">Ikon Wi-Fi dan WhatsApp dipasang otomatis di bawah masing-masing QR.</p>
           <div v-else class="grid grid-cols-3 gap-2" role="group" aria-label="Pilihan ikon">
@@ -479,7 +483,7 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="activeToolPanel === 'colors'">
-          <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
+          <InfoTooltip label="Informasi qr-plate">Warna bagian mengikuti material di katalog.</InfoTooltip>
           <ToolColorBar
             v-model:colors="form.colors"
             v-model:mode="colorMode"
@@ -513,7 +517,9 @@ onBeforeUnmount(() => {
                 <CloudArrowUpIcon class="w-4 h-4" /> {{ saving ? 'Menyimpan…' : 'Simpan 3MF ke Galeri' }}
               </button>
             </div>
-            <p class="text-[10px] text-ink-400 leading-relaxed">3MF menyusun pelat datar dan alas sebagai objek cetak terpisah. Impor warna pelat sebagai satu objek multipart.</p>
+            <InfoTooltip label="Informasi qr-plate">
+              3MF menyusun pelat datar dan alas sebagai objek cetak terpisah. Impor warna pelat sebagai satu objek multipart.
+            </InfoTooltip>
             <details class="text-xs text-ink-500">
               <summary class="cursor-pointer text-ink-700">Tentang source OpenSCAD</summary>
               <p class="mt-2 leading-relaxed">File .scad mandiri menyimpan QR, ikon, dan kontur tulisan model ini. Ukuran, permukaan, lubang, serta model alas dapat diubah di OpenSCAD.</p>

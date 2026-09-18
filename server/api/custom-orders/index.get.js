@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte } from 'drizzle-orm'
+import { and, desc, eq, gte, lte, inArray } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 
 export default defineEventHandler(async (event) => {
@@ -54,5 +54,13 @@ export default defineEventHandler(async (event) => {
       ((rank[r.productionStatus] || 0) === (rank[prev.productionStatus] || 0) && (r.productionId || 0) > (prev.productionId || 0))
     if (better) byId.set(r.id, r)
   }
-  return [...byId.values()]
+  const orders = [...byId.values()]
+  if (orders.length) {
+    const usage = await db.select({ orderId: schema.customOrderMaterials.customOrderId, name: schema.materials.name }).from(schema.customOrderMaterials).leftJoin(schema.materials, eq(schema.customOrderMaterials.materialId, schema.materials.id)).where(inArray(schema.customOrderMaterials.customOrderId, orders.map((o) => o.id)))
+    for (const order of orders) {
+      const names = usage.filter((line) => line.orderId === order.id).map((line) => line.name)
+      if (names.length) order.materialName = names.join(', ')
+    }
+  }
+  return orders
 })

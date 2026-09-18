@@ -138,8 +138,10 @@ watch(
 
 <template>
   <div class="space-y-4" :class="tab === 'user' || tab === 'audit' ? 'max-w-5xl' : tab === 'tampilan' ? 'max-w-3xl' : 'max-w-2xl'">
-    <h1 class="text-xl font-bold">Pengaturan</h1>
-    <p v-if="!isAdmin" class="text-xs text-ink-500">Read-only — hanya admin yang bisa mengubah pengaturan.</p>
+    <div class="flex items-center gap-1">
+      <h1 class="text-xl font-bold">Pengaturan</h1>
+      <InfoTooltip v-if="!isAdmin" label="Informasi Pengaturan">Read-only — hanya admin yang bisa mengubah pengaturan.</InfoTooltip>
+    </div>
 
     <div class="tab-bar -mb-px">
       <button
@@ -156,7 +158,7 @@ watch(
 
     <form v-if="formTabs.has(tab)" class="panel p-4 space-y-4" @submit.prevent="save">
       <template v-if="tab === 'umum'">
-        <p class="text-xs text-ink-500">Identitas usaha dipakai di invoice dan tampilan internal.</p>
+        <InfoTooltip label="Informasi settings">Identitas usaha dipakai di invoice dan tampilan internal.</InfoTooltip>
         <div>
           <label class="label">Nama usaha</label>
           <input v-model="form.invoiceBusinessName" class="input" :disabled="!isAdmin" placeholder="Numa3D" />
@@ -172,10 +174,10 @@ watch(
       </template>
 
       <template v-else-if="tab === 'tampilan'">
-        <p class="text-xs text-ink-500">
+        <InfoTooltip label="Informasi settings">
           Atur layout editor generator (Clicker, Keychain, Lightbox) untuk setiap kategori perangkat.
           Mode diterapkan otomatis berdasarkan lebar layar saat ini.
-        </p>
+        </InfoTooltip>
         <div class="rounded-panel border border-accent-200 bg-accent-50/60 px-3 py-2 text-xs text-accent-900">
           Perangkat terdeteksi sekarang:
           <strong>{{ DEVICE_TIER_LABELS[currentViewportTier] }}</strong>
@@ -203,7 +205,7 @@ watch(
                     perangkat ini
                   </span>
                 </div>
-                <p class="text-[11px] text-ink-500">{{ DEVICE_TIER_HINTS[tier] }}</p>
+                <InfoTooltip :label="`Informasi ${DEVICE_TIER_LABELS[tier]}`">{{ DEVICE_TIER_HINTS[tier] }}</InfoTooltip>
               </div>
             </div>
             <div>
@@ -217,20 +219,19 @@ watch(
                   {{ mode.label }}
                 </option>
               </select>
-              <p class="text-[11px] text-ink-500 mt-1">
-                {{ LAYOUT_MODE_OPTIONS[tier]?.find((m) => m.id === form.uiLayoutModes[tier])?.description }}
-              </p>
+              <InfoTooltip label="Informasi mode layout">{{ LAYOUT_MODE_OPTIONS[tier]?.find((m) => m.id === form.uiLayoutModes[tier])?.description }}</InfoTooltip>
             </div>
           </div>
         </div>
       </template>
 
       <template v-else-if="tab === 'invoice'">
-        <p class="text-xs text-ink-500">
-          Kop invoice memakai nama, alamat, dan telepon dari tab Umum.
-        </p>
+        <InfoTooltip label="Informasi settings">Kop invoice memakai nama, alamat, dan telepon dari tab Umum.</InfoTooltip>
         <div>
-          <label class="label">Catatan kaki invoice</label>
+          <div class="flex items-center gap-1">
+            <label class="label">Catatan kaki invoice</label>
+            <InfoTooltip label="Informasi Catatan kaki invoice">Bisa beberapa baris — rekening, QRIS, atau catatan lain. Tampil di bawah total invoice.</InfoTooltip>
+          </div>
           <textarea
             v-model="form.invoiceFooter"
             class="input min-h-[7rem]"
@@ -238,10 +239,15 @@ watch(
             :disabled="!isAdmin"
             placeholder="Terima kasih telah berbelanja.&#10;BCA 1234567890 a.n. Numa3D"
           ></textarea>
-          <p class="text-xs text-ink-500 mt-1">Bisa beberapa baris — rekening, QRIS, atau catatan lain. Tampil di bawah total invoice.</p>
+
         </div>
         <div>
-          <label class="label">Umur tautan bagikan (hari)</label>
+          <div class="flex items-center gap-1">
+            <label class="label">Umur tautan bagikan (hari)</label>
+            <InfoTooltip label="Informasi Umur tautan bagikan (hari)">
+              Tautan publik dari tombol Bagikan berlaku selama ini (1–365 hari). Tautan yang sudah dibuat tidak berubah umurnya.
+            </InfoTooltip>
+          </div>
           <input
             v-model.number="form.invoiceShareTtlDays"
             type="number"
@@ -250,9 +256,7 @@ watch(
             class="input-num"
             :disabled="!isAdmin"
           />
-          <p class="text-xs text-ink-500 mt-1">
-            Tautan publik dari tombol Bagikan berlaku selama ini (1–365 hari). Tautan yang sudah dibuat tidak berubah umurnya.
-          </p>
+
         </div>
         <div class="rounded-panel border border-ink-200 bg-ink-50 p-3 text-sm space-y-1">
           <div class="font-semibold">{{ form.invoiceBusinessName || 'Numa3D' }}</div>
@@ -264,12 +268,20 @@ watch(
 
       <template v-else-if="tab === 'hpp'">
         <div>
-          <label class="label">Tarif listrik (Rp / kWh)</label>
+          <div class="flex items-center gap-1">
+            <label class="label">Tarif listrik (Rp / kWh)</label>
+            <InfoTooltip label="Informasi Tarif listrik (Rp / kWh)">Tarif PLN rumah tangga 1.300–2.200 VA ± Rp 1.445/kWh.</InfoTooltip>
+          </div>
           <IdrInput v-model="form.electricityRatePerKwh" required :disabled="!isAdmin" />
-          <p class="text-xs text-ink-500 mt-1">Tarif PLN rumah tangga 1.300–2.200 VA ± Rp 1.445/kWh.</p>
+
         </div>
         <div>
-          <label class="label">Asumsi pemakaian mesin (jam / bulan)</label>
+          <div class="flex items-center gap-1">
+            <label class="label">Asumsi pemakaian mesin (jam / bulan)</label>
+            <InfoTooltip label="Informasi Asumsi pemakaian mesin (jam / bulan)">
+              Dipakai untuk depresiasi per jam = harga beli ÷ masa depresiasi (bulan) ÷ jam pakai per bulan.
+            </InfoTooltip>
+          </div>
           <input
             v-model.number="form.machineUsageHoursPerMonth"
             type="number"
@@ -278,12 +290,15 @@ watch(
             required
             :disabled="!isAdmin"
           />
-          <p class="text-xs text-ink-500 mt-1">
-            Dipakai untuk depresiasi per jam = harga beli ÷ masa depresiasi (bulan) ÷ jam pakai per bulan.
-          </p>
+
         </div>
         <div>
-          <label class="label">Target margin default (%)</label>
+          <div class="flex items-center gap-1">
+            <label class="label">Target margin default (%)</label>
+            <InfoTooltip label="Informasi Target margin default (%)">
+              Margin atas harga jual, bukan markup HPP. Harga saran = HPP ÷ (1 − margin%), lalu dibulatkan.
+            </InfoTooltip>
+          </div>
           <input
             v-model.number="form.defaultMarginPercent"
             type="number"
@@ -293,18 +308,19 @@ watch(
             required
             :disabled="!isAdmin"
           />
-          <p class="text-xs text-ink-500 mt-1">
-            Margin atas harga jual, bukan markup HPP. Harga saran = HPP ÷ (1 − margin%), lalu dibulatkan.
-          </p>
+
         </div>
         <div>
-          <label class="label">Pembulatan harga saran</label>
+          <div class="flex items-center gap-1">
+            <label class="label">Pembulatan harga saran</label>
+            <InfoTooltip label="Informasi Pembulatan harga saran">Dipakai katalog, tombol harga saran, dan custom order.</InfoTooltip>
+          </div>
           <select v-model.number="form.priceRoundStep" class="input" :disabled="!isAdmin">
             <option :value="100">Ke atas Rp 100</option>
             <option :value="500">Ke atas Rp 500</option>
             <option :value="1000">Ke atas Rp 1.000</option>
           </select>
-          <p class="text-xs text-ink-500 mt-1">Dipakai katalog, tombol harga saran, dan custom order.</p>
+
         </div>
       </template>
 
@@ -373,7 +389,7 @@ watch(
             </div>
             <p v-else class="text-sm text-ink-500">Bucket masih kosong.</p>
           </div>
-          <p class="text-xs text-ink-400">Kredensial diatur lewat environment (`MINIO_*`).</p>
+          <InfoTooltip label="Informasi settings">Kredensial diatur lewat environment (`MINIO_*`).</InfoTooltip>
         </div>
       </div>
 
@@ -409,9 +425,7 @@ watch(
               </div>
             </dl>
             <p v-if="tuyaReady?.error" class="text-sm text-red-600">{{ tuyaReady.error }}</p>
-            <p class="text-xs text-ink-400">
-              `TUYA_API_KEY` / `TUYA_API_SECRET` di environment. Pairing perangkat di halaman Mesin.
-            </p>
+            <InfoTooltip label="Informasi settings">`TUYA_API_KEY` / `TUYA_API_SECRET` di environment. Pairing perangkat di halaman Mesin.</InfoTooltip>
           </template>
           <p v-else class="text-ink-500">Status Tuya hanya terlihat oleh admin.</p>
         </div>

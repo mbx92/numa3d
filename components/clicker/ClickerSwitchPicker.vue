@@ -44,13 +44,16 @@ const activePreviewModel = computed(() => getSwitchPreviewModel(switchPreviewMod
       </dl>
     </div>
 
-    <label class="block space-y-1.5">
-      <span class="text-xs font-medium text-ink-700">Model switch di preview</span>
-      <select v-model="switchPreviewModelId" class="input text-sm">
-        <option v-for="model in previewModels" :key="model.id" :value="model.id">{{ model.name }}</option>
-      </select>
-      <p class="text-[10px] text-ink-400">{{ activePreviewModel.description }}</p>
-    </label>
+    <div class="relative">
+      <label class="block space-y-1.5">
+        <span class="text-xs font-medium text-ink-700 pr-7">Model switch di preview</span>
+        <select v-model="switchPreviewModelId" class="input text-sm">
+          <option v-for="model in previewModels" :key="model.id" :value="model.id">{{ model.name }}</option>
+        </select>
+
+      </label>
+      <InfoTooltip label="Informasi Model switch di preview" class="absolute right-0 top-0">{{ activePreviewModel.description }}</InfoTooltip>
+    </div>
 
     <label class="block space-y-1">
       <span class="text-xs font-medium text-ink-700">Slip-fit lid ↔ well</span>
@@ -60,22 +63,28 @@ const activePreviewModel = computed(() => getSwitchPreviewModel(switchPreviewMod
       </div>
     </label>
 
-    <label class="block space-y-1">
-      <span class="text-xs font-medium text-ink-700">Socket fit (pocket)</span>
-      <div class="flex items-center gap-2">
-        <input v-model.number="socketFitPct" type="range" min="-5" max="5" step="0.5" class="flex-1" />
-        <span class="text-xs font-mono w-12 text-right">{{ socketFitPct }}%</span>
-      </div>
-      <p class="text-[10px] text-ink-400">+ = pocket lebih longgar, − = lebih ketat.</p>
-    </label>
+    <div class="relative">
+      <label class="block space-y-1">
+        <span class="text-xs font-medium text-ink-700 pr-7">Socket fit (pocket)</span>
+        <div class="flex items-center gap-2">
+          <input v-model.number="socketFitPct" type="range" min="-5" max="5" step="0.5" class="flex-1" />
+          <span class="text-xs font-mono w-12 text-right">{{ socketFitPct }}%</span>
+        </div>
 
-    <label class="block space-y-1">
-      <span class="text-xs font-medium text-ink-700">Stem fit (lid)</span>
-      <div class="flex items-center gap-2">
-        <input v-model.number="stemFitPct" type="range" min="-5" max="5" step="0.5" class="flex-1" />
-        <span class="text-xs font-mono w-12 text-right">{{ stemFitPct }}%</span>
-      </div>
-      <p class="text-[10px] text-ink-400">+ = stem socket lebih longgar di switch.</p>
-    </label>
+      </label>
+      <InfoTooltip label="Informasi Socket fit (pocket)" class="absolute right-0 top-0">+ = pocket lebih longgar, − = lebih ketat.</InfoTooltip>
+    </div>
+
+    <div class="relative">
+      <label class="block space-y-1">
+        <span class="text-xs font-medium text-ink-700 pr-7">Stem fit (lid)</span>
+        <div class="flex items-center gap-2">
+          <input v-model.number="stemFitPct" type="range" min="-5" max="5" step="0.5" class="flex-1" />
+          <span class="text-xs font-mono w-12 text-right">{{ stemFitPct }}%</span>
+        </div>
+
+      </label>
+      <InfoTooltip label="Informasi Stem fit (lid)" class="absolute right-0 top-0">+ = stem socket lebih longgar di switch.</InfoTooltip>
+    </div>
   </div>
 </template>

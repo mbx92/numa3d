@@ -64,11 +64,11 @@ function onToggle(index, ch) {
         {{ token.ch === ' ' ? '·' : token.ch }}
       </button>
     </div>
-    <p class="text-[11px] text-ink-500">
+    <InfoTooltip label="Informasi KeychainAccentPicker">
       {{ hint }}
       <span v-if="accentIndices.length" class="text-ink-400">
-        Huruf aksen otomatis lebih besar di model 3D.
+      Huruf aksen otomatis lebih besar di model 3D.
       </span>
-    </p>
+    </InfoTooltip>
   </div>
 </template>

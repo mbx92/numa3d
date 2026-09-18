@@ -252,6 +252,7 @@ export const slicerJobs = pgTable('slicer_jobs', {
   objectKey: text('object_key').notNull().unique(),
   tool: text('tool').notNull(),
   includeProfile: boolean('include_profile').notNull().default(true),
+  inputConfig: jsonb('input_config'),
   status: slicerJobStatusEnum('status').notNull().default('queued'),
   attempts: integer('attempts').notNull().default(0),
   maxAttempts: integer('max_attempts').notNull().default(3),
@@ -317,6 +318,7 @@ export const customOrders = pgTable('custom_orders', {
     .notNull()
     .references(() => materials.id),
   materialQuantityUsed: real('material_quantity_used').notNull().default(0),
+  slicerResult: jsonb('slicer_result'),
   packagingId: integer('packaging_id').references(() => packaging.id, { onDelete: 'set null' }),
   packagingQuantityUsed: real('packaging_quantity_used').notNull().default(0),
   machineId: integer('machine_id').references(() => machines.id, { onDelete: 'set null' }),
@@ -340,6 +342,13 @@ export const customOrderFiles = pgTable('custom_order_files', {
   contentType: text('content_type'),
   createdAt: timestamp('created_at').notNull().defaultNow()
 })
+
+export const customOrderMaterials = pgTable('custom_order_materials', {
+  id: serial('id').primaryKey(),
+  customOrderId: integer('custom_order_id').notNull().references(() => customOrders.id, { onDelete: 'cascade' }),
+  materialId: integer('material_id').notNull().references(() => materials.id, { onDelete: 'restrict' }),
+  quantityUsed: real('quantity_used').notNull()
+}, (table) => ({ orderMaterialUnique: uniqueIndex('custom_order_materials_order_material_unique').on(table.customOrderId, table.materialId) }))
 
 export const sales = pgTable(
   'sales',

@@ -136,8 +136,11 @@ function selectCreatedFilamentType(type) {
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
       <div>
-        <h1 class="text-xl font-bold">Material</h1>
-        <p class="text-sm text-ink-500">Filament, resin, dan komponen rakit (switch, magnet). Bukan box/stiker.</p>
+        <div class="flex items-center gap-1">
+          <h1 class="text-xl font-bold">Material</h1>
+          <InfoTooltip label="Informasi Material">Filament, resin, dan komponen rakit (switch, magnet). Bukan box/stiker.</InfoTooltip>
+        </div>
+
       </div>
       <div v-if="isAdmin" class="flex flex-wrap justify-end gap-2">
         <button class="btn-secondary" @click="showFilamentTypes = true">Jenis filament</button>
@@ -274,9 +277,12 @@ function selectCreatedFilamentType(type) {
     <AppModal v-if="showForm" :title="editing ? 'Edit Material' : 'Tambah Material'" @close="((showForm = false), refresh())">
       <form class="space-y-3" @submit.prevent="save">
         <div>
-          <label class="label">Warna</label>
+          <div class="flex items-center gap-1">
+            <label class="label">Warna</label>
+            <InfoTooltip label="Informasi Warna">Swatch warna untuk membedakan filament, resin, atau komponen di recipe.</InfoTooltip>
+          </div>
           <HexColorPicker v-model="form.color" />
-          <p class="text-xs text-ink-500 mt-1">Swatch warna untuk membedakan filament, resin, atau komponen di recipe.</p>
+
         </div>
         <div>
           <label class="label">Nama</label>

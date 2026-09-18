@@ -164,8 +164,11 @@ onBeforeUnmount(() => {
     <div class="flex flex-wrap items-center gap-3 mb-3">
       <CodeBracketIcon class="w-6 h-6 text-accent-600" />
       <div class="flex-1 min-w-0">
-        <h2 class="font-semibold text-lg">Kode → model 3D</h2>
-        <p class="text-sm text-ink-500">Sintaks JavaScript terbatas · mm · Z-up · satu solid akhir</p>
+        <div class="flex items-center gap-1">
+          <h2 class="font-semibold text-lg">Kode → model 3D</h2>
+          <InfoTooltip label="Informasi Kode → model 3D">Sintaks JavaScript terbatas · mm · Z-up · satu solid akhir</InfoTooltip>
+        </div>
+
       </div>
       <button v-if="generating" class="btn-secondary" type="button" @click="cancel"><StopIcon class="w-4 h-4" /> Batal</button>
       <button class="btn-primary" type="button" :disabled="generating || exporting || saving || !!syntax.error" @click="runGenerate">
@@ -197,7 +200,12 @@ onBeforeUnmount(() => {
         <label for="studio-code" class="sr-only">Kode model</label>
         <textarea id="studio-code" v-model="form.source" class="studio-code" spellcheck="false" autocapitalize="off" autocomplete="off" :maxlength="16000" aria-describedby="code-boundary" @keydown="onEditorKey" @input="onEditorInput" />
         <p v-if="syntax.error" class="p-3 text-sm text-red-700 bg-red-50" role="alert">{{ syntax.error }}</p>
-        <p id="code-boundary" class="p-3 text-sm text-ink-500 border-t border-ink-200">Hanya fungsi pemodelan di bawah yang tersedia. Tidak mendukung import, loop, akses properti, DOM, jaringan, atau JavaScript bebas.</p>
+        <p id="code-boundary" class="sr-only">Hanya fungsi pemodelan di bawah yang tersedia. Tidak mendukung import, loop, akses properti, DOM, jaringan, atau JavaScript bebas.</p>
+        <div class="px-3 py-1">
+          <InfoTooltip label="Informasi fungsi pemodelan">
+            Hanya fungsi pemodelan di bawah yang tersedia. Tidak mendukung import, loop, akses properti, DOM, jaringan, atau JavaScript bebas.
+          </InfoTooltip>
+        </div>
         <details class="p-3 border-t border-ink-200 text-sm">
           <summary class="cursor-pointer font-medium">Referensi fungsi</summary>
           <div class="mt-3 space-y-2 text-ink-600 leading-relaxed">
@@ -263,14 +271,19 @@ onBeforeUnmount(() => {
           <h3 class="font-semibold">Material & ekspor</h3>
           <ToolColorBar v-model:colors="form.colors" v-model:mode="colorMode" v-model:material-ids="materialIds" :fields="colorFields" />
           <div class="flex flex-wrap gap-2">
-            <label class="sr-only" for="studio-format">Format ekspor</label>
+            <div class="flex items-center gap-1">
+              <label class="sr-only" for="studio-format">Format ekspor</label>
+              <InfoTooltip label="Informasi Format ekspor">
+                3MF mempertahankan ukuran dan warna, serta menolak model yang tidak muat plate. Belum termasuk support, brim, atau pengaturan cetak.
+              </InfoTooltip>
+            </div>
             <select id="studio-format" v-model="format" class="input !w-auto">
               <option value="3mf">3MF · plate 260 × 260</option><option value="stl">STL</option><option value="glb">GLB</option>
             </select>
             <button type="button" class="btn-primary" :disabled="generating || exporting || saving || !!syntax.error" @click="downloadModel"><ArrowDownTrayIcon class="w-4 h-4" /> {{ exporting ? 'Mengekspor…' : 'Unduh' }}</button>
             <button v-if="isAdmin" type="button" class="btn-secondary" :disabled="generating || saving || exporting || !!syntax.error" @click="saveToGallery"><CloudArrowUpIcon class="w-4 h-4" /> {{ saving ? 'Menyimpan…' : 'Galeri' }}</button>
           </div>
-          <p class="text-xs text-ink-500">3MF mempertahankan ukuran dan warna, serta menolak model yang tidak muat plate. Belum termasuk support, brim, atau pengaturan cetak.</p>
+
           <GeneratorHppPanel :result="isFresh ? result : null" :color-fields="colorFields" :material-ids="materialIds" :colors="form.colors" :color-mode="colorMode" />
         </section>
       </div>

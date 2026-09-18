@@ -95,10 +95,10 @@ function clearSvg() {
         <span class="text-[10px] text-ink-400">Maks. 1 MB · bidang dan garis SVG (gambar tertanam diabaikan)</span>
         <input type="file" accept=".svg,image/svg+xml" class="sr-only" @change="onFileChange" />
       </label>
-      <p class="text-[10px] text-ink-400">
+      <InfoTooltip label="Informasi KeychainSvgUpload">
         Punya PNG?
         <NuxtLink to="/tools/png-to-svg" v-bind="toolLinkAttrs" class="text-accent-600 hover:underline">PNG → SVG</NuxtLink>
-      </p>
+      </InfoTooltip>
     </div>
 
     <template v-if="svgContent">

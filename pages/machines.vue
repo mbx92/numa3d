@@ -255,7 +255,14 @@ onUnmounted(() => {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Mesin</h1>
+      <div class="flex items-center gap-1">
+        <h1 class="text-xl font-bold">Mesin</h1>
+        <InfoTooltip label="Informasi Mesin">
+          Biaya per jam dihitung dari tarif listrik {{ formatIDR(settings?.electricityRatePerKwh) }}/kWh
+          dan asumsi pemakaian {{ settings?.machineUsageHoursPerMonth }} jam/bulan (ubah di Pengaturan).
+          Daya live dari smart plug Tuya (jika dikaitkan) tidak otomatis mengganti angka HPP.
+        </InfoTooltip>
+      </div>
       <div class="flex gap-2">
         <button class="btn-secondary" title="Refresh daya plug" @click="refreshAllPower">
           <ArrowPathIcon class="w-4 h-4" />
@@ -266,11 +273,6 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <p class="text-xs text-ink-500">
-      Biaya per jam dihitung dari tarif listrik {{ formatIDR(settings?.electricityRatePerKwh) }}/kWh
-      dan asumsi pemakaian {{ settings?.machineUsageHoursPerMonth }} jam/bulan (ubah di Pengaturan).
-      Daya live dari smart plug Tuya (jika dikaitkan) tidak otomatis mengganti angka HPP.
-    </p>
 
     <div class="relative w-full md:max-w-xs">
       <MagnifyingGlassIcon class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
@@ -441,9 +443,7 @@ onUnmounted(() => {
             :upload-url="`/api/machines/${editing.id}/image`"
             @changed="refresh()"
           />
-          <p class="text-xs text-ink-500 pt-1">
-            Foto mesin membantu membedakan printer saat memilih di recipe.
-          </p>
+          <InfoTooltip label="Informasi machines">Foto mesin membantu membedakan printer saat memilih di recipe.</InfoTooltip>
         </div>
         <div>
           <label class="label">Nama</label>
@@ -455,9 +455,12 @@ onUnmounted(() => {
             <input v-model.number="form.powerWatt" type="number" min="0" class="input-num" required />
           </div>
           <div>
-            <label class="label">Harga Beli</label>
+            <div class="flex items-center gap-1">
+              <label class="label">Harga Beli</label>
+              <InfoTooltip label="Informasi Harga Beli">Otomatis tercatat sebagai pengeluaran (kategori Mesin). Jangan catat lagi di halaman Pengeluaran.</InfoTooltip>
+            </div>
             <IdrInput v-model="form.purchasePrice" required />
-            <p class="text-xs text-ink-500 mt-1">Otomatis tercatat sebagai pengeluaran (kategori Mesin). Jangan catat lagi di halaman Pengeluaran.</p>
+
           </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -477,34 +480,39 @@ onUnmounted(() => {
             <div><input v-model.number="form.bedDepthMm" type="number" min="1" class="input-num" required /><p class="text-[10px] text-ink-400 mt-1">Dalam Y</p></div>
             <div><input v-model.number="form.buildHeightMm" type="number" min="1" class="input-num" required /><p class="text-[10px] text-ink-400 mt-1">Tinggi Z</p></div>
           </div>
-          <p class="text-xs text-ink-500 mt-1">Dipakai untuk bed dan pemeriksaan ukuran model pada preview cetak.</p>
+          <InfoTooltip label="Informasi machines">Dipakai untuk bed dan pemeriksaan ukuran model pada preview cetak.</InfoTooltip>
         </div>
         <div>
           <label class="label">Catatan</label>
           <input v-model="form.notes" class="input" placeholder="opsional" />
         </div>
 
-        <label class="flex items-start gap-3 cursor-pointer select-none rounded-panel border border-ink-200 p-3">
+        <div class="relative">
+          <label class="flex items-start gap-3 cursor-pointer select-none rounded-panel border border-ink-200 p-3">
           <input
             v-model="tuyaEnabled"
             type="checkbox"
             class="mt-1 h-4 w-4 shrink-0 rounded border-ink-300 text-accent-500 focus:ring-accent-400"
           />
           <span class="min-w-0">
-            <span class="block text-sm font-medium text-ink-900">Aktifkan smart plug Tuya</span>
-            <span class="block text-xs text-ink-500 mt-0.5">
-              Hubungkan plug untuk baca daya live. Form detail hanya tampil jika diaktifkan.
-            </span>
+            <span class="block text-sm font-medium text-ink-900 pr-7">Aktifkan smart plug Tuya</span>
+
           </span>
-        </label>
+          </label>
+
+          <InfoTooltip label="Informasi smart plug Tuya" class="absolute right-2 top-3">Hubungkan plug untuk baca daya live. Form detail hanya tampil jika diaktifkan.</InfoTooltip>
+        </div>
 
         <div v-if="tuyaEnabled" class="border border-ink-200 rounded-panel p-3 space-y-3">
           <div class="flex items-center justify-between gap-2">
             <div>
-              <div class="label !mb-0">Smart plug Tuya (TinyTuya)</div>
-              <p class="text-xs text-ink-500 mt-0.5">
-                Scan LAN untuk IP + Device ID. Local key lewat Cloud (Access ID di .env) atau tempel manual.
-              </p>
+              <div class="flex items-center gap-1">
+                <div class="label !mb-0">Smart plug Tuya (TinyTuya)</div>
+                <InfoTooltip label="Informasi Smart plug Tuya (TinyTuya)">
+                  Scan LAN untuk IP + Device ID. Local key lewat Cloud (Access ID di .env) atau tempel manual.
+                </InfoTooltip>
+              </div>
+
             </div>
             <div class="flex gap-1">
               <button type="button" class="btn-secondary" :disabled="scanning" @click="scanLan">
@@ -538,7 +546,18 @@ onUnmounted(() => {
               <input v-model="form.tuyaDeviceId" class="input font-mono" placeholder="bfxxxxxxxxxxxxxxxxxxxx" />
             </div>
             <div class="sm:col-span-2">
-              <label class="label">Local Key</label>
+              <div class="flex items-center gap-1">
+                <label class="label">Local Key</label>
+                <InfoTooltip label="Informasi Local Key">
+                  Baca daya memakai TinyTuya (Python), protokol 3.3–3.5. Isi
+                  <code class="font-mono">TUYA_API_KEY</code> /
+                  <code class="font-mono">TUYA_API_SECRET</code> di <code class="font-mono">.env</code>
+                  (Access ID &amp; Secret project IoT, tanpa scan QR). Region default
+                  <code class="font-mono">in</code> — ganti <code class="font-mono">eu</code> atau
+                  <code class="font-mono">us</code> jika daftar cloud kosong. Restart
+                  <code class="font-mono">npm run dev</code> setelah mengubah .env.
+                </InfoTooltip>
+              </div>
               <input
                 v-model="form.tuyaLocalKey"
                 class="input font-mono"
@@ -548,15 +567,7 @@ onUnmounted(() => {
               />
             </div>
           </div>
-          <p class="text-xs text-ink-500">
-            Baca daya memakai TinyTuya (Python), protokol 3.3–3.5. Isi
-            <code class="font-mono">TUYA_API_KEY</code> /
-            <code class="font-mono">TUYA_API_SECRET</code> di <code class="font-mono">.env</code>
-            (Access ID &amp; Secret project IoT, tanpa scan QR). Region default
-            <code class="font-mono">in</code> — ganti <code class="font-mono">eu</code> atau
-            <code class="font-mono">us</code> jika daftar cloud kosong. Restart
-            <code class="font-mono">npm run dev</code> setelah mengubah .env.
-          </p>
+
           <p v-if="tuyaReady && !tuyaReady.ok" class="text-xs text-red-600">{{ tuyaReady.error }}</p>
           <p v-else-if="tuyaReady?.ok" class="text-xs text-teal-700">
             TinyTuya {{ tuyaReady.tinytuya }}

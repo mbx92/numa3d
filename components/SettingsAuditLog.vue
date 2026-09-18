@@ -61,9 +61,7 @@ function formatTime(value) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between flex-wrap gap-2">
-      <p class="text-xs text-ink-500">
-        200 aktivitas terakhir di seluruh sistem — perubahan data dan percobaan login.
-      </p>
+      <InfoTooltip label="Informasi SettingsAuditLog">200 aktivitas terakhir di seluruh sistem — perubahan data dan percobaan login.</InfoTooltip>
       <select v-model="entityFilter" class="input w-full sm:w-44">
         <option value="">Semua kategori</option>
         <option v-for="(label, key) in entityLabel" :key="key" :value="key">{{ label }}</option>

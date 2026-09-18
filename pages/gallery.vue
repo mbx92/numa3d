@@ -211,8 +211,11 @@ async function saveRename() {
   <div class="flex flex-col gap-4 min-h-0 h-[calc(100dvh-5.5rem)] md:h-[calc(100dvh-3rem)]">
     <div class="flex items-center justify-between gap-2 shrink-0">
       <div class="min-w-0">
-        <h1 class="text-xl font-bold">Galeri 3D</h1>
-        <p class="text-sm text-ink-500">Model lepas, tidak terikat produk. .stl .obj .3mf .glb .gltf, maks 100 MB.</p>
+        <div class="flex items-center gap-1">
+          <h1 class="text-xl font-bold">Galeri 3D</h1>
+          <InfoTooltip label="Informasi Galeri 3D">Model lepas, tidak terikat produk. .stl .obj .3mf .glb .gltf, maks 100 MB.</InfoTooltip>
+        </div>
+
       </div>
       <label v-if="isAdmin" class="btn-primary cursor-pointer shrink-0">
         <ArrowUpTrayIcon class="w-4 h-4" />
@@ -440,7 +443,7 @@ async function saveRename() {
             <input v-model="renameName" class="input flex-1" required maxlength="160" />
             <span class="font-mono text-sm text-ink-500 shrink-0">.{{ fileExt(renameTarget.filename).toLowerCase() }}</span>
           </div>
-          <p class="text-xs text-ink-400 mt-1">Ekstensi tidak diubah agar file tetap bisa di-preview.</p>
+          <InfoTooltip label="Informasi gallery">Ekstensi tidak diubah agar file tetap bisa di-preview.</InfoTooltip>
         </div>
         <p v-if="renameError" class="text-sm text-red-600">{{ renameError }}</p>
         <div class="flex justify-end gap-2">

@@ -4,6 +4,8 @@ import { pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate'
+import { validateStl } from './stl.js'
+import { prepareCustom3mf } from './custom3mf.js'
 
 const MAX_BYTES = 40 * 1024 * 1024
 const ARCHIVE_FILES = new Set(['[Content_Types].xml', '_rels/.rels', '3D/3dmodel.model', 'Metadata/model_settings.config', 'Metadata/project_settings.config'])
@@ -54,7 +56,13 @@ export async function orcaSlicerStatus(options) {
   return { ready: true, message: 'OrcaSlicer siap di server ini' }
 }
 
-export async function prepareSlicerInput(bytes, tool, includeProfile = true) {
+export async function prepareSlicerInput(bytes, tool, includeProfile = true, inputConfig = null) {
+  if (tool === 'custom-order') {
+    const format = bytes?.[0] === 0x50 && bytes?.[1] === 0x4b ? '3mf' : 'stl'
+    if (format === '3mf') return prepareCustom3mf(bytes, inputConfig)
+    validateStl(bytes)
+    return { bytes, format, settings: { filament_colour: inputConfig?.colors || ['#FFFFFF'], enable_prime_tower: '0', post_process: [] } }
+  }
   const { TOOL_PRINT_PROFILES, slicerProjectSettings } = await loadSlicerModules()
   const profile = TOOL_PRINT_PROFILES[tool]
   if (!profile) throw new Error('Generator tidak didukung untuk slicing')
@@ -138,7 +146,9 @@ function runOrca(executable, args, cwd, signal) {
   })
 }
 
-export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, executable, profilesPath, signal } = {}) {
+export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, executable, profilesPath, signal, inputConfig = null } = {}) {
+  const custom = tool === 'custom-order'
+  if (custom) includeProfile = false
   if (active) throw Object.assign(new Error('OrcaSlicer sedang memproses model lain. Coba lagi setelah selesai.'), { statusCode: 409 })
   const install = resolveOrcaInstall({ executable, profilesPath })
   executable = install.executable
@@ -146,7 +156,7 @@ export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, ex
   if (!executable) throw new Error('OrcaSlicer belum dikonfigurasi pada server ini')
   try { await access(executable) } catch { throw new Error('OrcaSlicer tidak ditemukan pada server ini') }
   if (active) throw Object.assign(new Error('OrcaSlicer sedang memproses model lain. Coba lagi setelah selesai.'), { statusCode: 409 })
-  const input = await prepareSlicerInput(bytes, tool, includeProfile)
+  const input = await prepareSlicerInput(bytes, tool, includeProfile, inputConfig)
   active = true
   let directory
   try {
@@ -169,16 +179,18 @@ export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, ex
     await writeFile(machinePath, JSON.stringify(machine))
     await writeFile(processPath, JSON.stringify(processPreset))
     await writeFile(filamentPath, JSON.stringify(filament))
-    await writeFile(join(directory, 'input.3mf'), input.bytes)
+    const inputName = custom && input.format === 'stl' ? 'input.stl' : 'input.3mf'
+    await writeFile(join(directory, inputName), input.bytes)
     const args = ['--datadir', join(directory, 'orca-data'), '--outputdir', directory,
       '--load-settings', `${machinePath};${processPath}`, '--load-filaments', input.settings.filament_colour.map(() => filamentPath).join(';'),
       '--curr-bed-type', 'Textured PEI Plate', ...(input.settings.filament_colour.length > 1 ? ['--enable-prime-tower'] : []),
-      '--arrange', '0', '--orient', '0', '--slice', '0', '--export-3mf', 'sliced.3mf', join(directory, 'input.3mf')]
+      '--arrange', custom ? '1' : '0', '--orient', '0', ...(custom ? ['--ensure-on-bed'] : []),
+      '--slice', '0', '--export-3mf', 'sliced.3mf', join(directory, inputName)]
     await runOrca(executable, args, directory, signal)
     const gcode = await readFile(join(directory, 'plate_1.gcode'), 'utf8')
     const stats = parseOrcaGcodeStats(gcode)
     if (stats.filamentGrams.length !== input.settings.filament_colour.length) throw new Error('Slot filament hasil slicing tidak cocok dengan model')
-    return { ...stats, tool, colors: input.settings.filament_colour, profile: includeProfile ? TOOL_PRINT_PROFILES[tool].label : 'Kobra X 0.16mm High Quality', bed: 'Textured PEI Plate' }
+    return { ...stats, tool, ...(custom ? { inputFormat: input.format, materialIds: inputConfig?.materialIds, sourceColors: inputConfig?.sourceColors, slotMap: inputConfig?.slotMap } : {}), colors: input.settings.filament_colour, profile: includeProfile ? TOOL_PRINT_PROFILES[tool].label : 'Kobra X 0.16mm High Quality', bed: 'Textured PEI Plate' }
   } finally {
     active = false
     if (directory) {

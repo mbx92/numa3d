@@ -15,7 +15,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node scripts/seed.js",
     "db:seed:ops": "node scripts/seed-ops.js",
-    "slicer:worker": "node scripts/slicer-worker.js",
+    "slicer:worker": "node --env-file-if-exists=.env scripts/slicer-worker.js",
     "start": "node .output/server/index.mjs"
   },
   "dependencies": {
@@ -27,7 +27,9 @@
     "bcryptjs": "^3.0.3",
     "clipper-lib": "^6.4.2",
     "drizzle-orm": "^0.36.4",
+    "fast-xml-parser": "5.11.0",
     "fflate": "^0.8.3",
+    "jsqr": "^1.4.0",
     "manifold-3d": "^3.5.1",
     "minio": "^8.0.7",
     "nuxt": "^3.14.0",
@@ -35,7 +37,6 @@
     "pdf-lib": "^1.17.1",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
-    "jsqr": "^1.4.0",
     "three": "^0.185.1",
     "three-bvh-csg": "^0.0.18"
   },

@@ -28,6 +28,6 @@ const settings = computed(() => slicerProjectSettings(profile.value.id, 1))
         <dt>Bed</dt><dd>{{ settings.textured_plate_temp[0] }} °C</dd>
       </dl>
     </template>
-    <p v-else class="text-ink-500">3MF membawa model, warna, susunan plate, dan referensi printer. Pilih pengaturan proses dan filament di OrcaSlicer.</p>
+    <InfoTooltip v-else label="Informasi ekspor tanpa profil">3MF membawa model, warna, susunan plate, dan referensi printer. Pilih pengaturan proses dan filament di OrcaSlicer.</InfoTooltip>
   </section>
 </template>

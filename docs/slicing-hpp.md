@@ -38,7 +38,17 @@ Panel estimasi volume lama dan pilihan memperbarui recipe produk lama sudah diha
 
 `POST /api/products/from-generator` khusus admin menerima multipart `file` (3MF maksimal 40 MB) dan `product` (JSON: `requestId` UUID, `name`, `tool`, `materials` berisi `materialId`/`quantityUsed`, `printTimeSeconds`, serta `machineId` opsional). Produk, recipe, metadata file, dan audit disimpan dalam satu transaksi. Upload gagal membatalkan produk baru; percobaan ulang dengan requestId yang sama mengembalikan produk yang sudah tersimpan.
 
-## API
+## Custom Order dari STL / 3MF
+
+Pada menu Custom, unggah satu file STL atau 3MF lalu pilih **Slice dengan Orca**. Pesanan baru hanya dapat disimpan setelah slicing selesai. STL ASCII/binary dan 3MF maksimal 40 MB, ukuran maksimal 260 × 260 × 260 mm. STL dibaca dalam mm; satuan dan transformasi 3MF mengikuti model. Orca menempatkan model di plate tanpa mengubah orientasinya, memakai profil Kobra X nozzle 0,4 mm, PLA, layer 0,16 mm High Quality. 3MF dibangun ulang sebagai proyek Orca bersih: geometri, komponen lokal, warna per bagian/per segitiga, serta painting Orca/Bambu dipertahankan. Profil, G-code, dan post-processing bawaan file diabaikan. Modifier, negative part, tekstur/gradien warna, dan volume Prusa yang belum didukung ditolak dengan pesan; ekspor ulang dari Orca bila diperlukan. File 3MF asli tetap disimpan di pesanan.
+
+STL memakai satu slot filament tanpa prime tower. Warna yang dipakai oleh 3MF ditampilkan sebelum slicing, lalu setiap warna dipetakan ke filament PLA inventori dalam gram. Warna yang sama dan stok positif dicocokkan otomatis; jika tidak tersedia, pengguna harus memilih pengganti secara eksplisit. Maksimal empat material berbeda sesuai konfigurasi Kobra X; beberapa warna sumber boleh memakai satu material yang sama, dan slot digabung sebelum Orca menghitung gram, pergantian warna, serta prime tower. Material kosong stok tidak dapat dipilih. Setelah slicing, kebutuhan setiap material dikalikan jumlah pesanan dan dibandingkan stok; penyimpanan ditolak bila kurang. Stok diperiksa ulang secara atomik saat produksi selesai, dikurangi untuk unit jadi dan gagal, serta dikembalikan per material saat hasil produksi dibatalkan. Seluruh objek dalam satu file dianggap satu unit pesanan: gram dan waktu hasil Orca menjadi biaya per unit, jumlah pesanan mengalikan HPP total dan estimasi produksi. Durasi untuk pencatatan produksi dibulatkan ke atas ke menit; statistik detik asli disimpan. Packaging, buffer gagal, tenaga kerja, dan mesin tetap mengikuti isian pesanan serta pengaturan HPP.
+
+`POST /api/slicer/inspect` menerima multipart `file` dan mengembalikan palet warna yang benar-benar dipakai. `POST /api/slicer/jobs` juga menerima `tool=custom-order` dengan `file` STL atau 3MF dan `materialIds` JSON berisi pilihan material untuk tiap warna sumber. Pemetaan divalidasi terhadap inventori dan disimpan di `slicer_jobs.input_config`; statistik tidak dapat diedit oleh klien. Pemakaian gram tiap material disimpan di `custom_order_materials`; HPP menghitung harga masing-masing filament, dengan biaya mesin, tenaga kerja, dan packaging sekali per unit. `POST /api/custom-orders` wajib menyertakan `slicerJobId` dari job custom selesai milik pengguna (admin dapat mengakses semua job). Server mengambil gram dan waktu dari job, menyimpan statistik di `custom_orders.slicer_result`, dan menyalin file asli ke penyimpanan pesanan dalam transaksi bersama produksi. Menghapus job antrean tidak menghapus file pesanan. Jalankan migrasi `0038_custom_order_slicing` dan `0039_custom_order_materials` sebelum memakai alur baru; worker yang diperbarui memakai antrean yang sama.
+
+Detail pesanan dapat melakukan slicing ulang dari STL / 3MF baru atau lampiran model yang sudah ada sebelum produksi dimulai. Perubahan data komersial mempertahankan gram/waktu yang tercatat. Pesanan lama tetap dapat dibuka dan diubah tanpa wajib slicing ulang.
+
+## API generator
 
 `POST /api/slicer/jobs`, wajib login, `multipart/form-data`:
 
@@ -55,12 +65,17 @@ Untuk deployment Compose/Coolify, jalankan kedua service dari `docker-compose.ym
 
 `GET /api/slicer/status` memeriksa heartbeat worker aktif. `GET /api/slicer/jobs` menyediakan daftar antrean, sedangkan `POST /api/slicer/jobs/:id/cancel` dan `POST /api/slicer/jobs/:id/retry` digunakan halaman `/slicer-queue`. Staff hanya melihat job miliknya; admin melihat seluruh antrean dan dapat menghapus job selesai.
 
-Setiap worker memproses satu pekerjaan sekaligus, batas 3 menit, maksimal 4 warna untuk konfigurasi awal. Beberapa replica worker aman karena job diklaim memakai `FOR UPDATE SKIP LOCKED`. Heartbeat mendeteksi worker mati dan mengembalikan job tertinggal ke antrean. Direktori kerja dibuat sementara dan dibersihkan. Worker mengganti pengaturan unggahan dengan profil generator dan hanya menerima struktur mesh/objek generator; pengaturan post-processing dari unggahan tidak dijalankan. API menghasilkan estimasi; tidak mengirim perintah ke printer.
+Setiap worker memproses satu pekerjaan sekaligus, batas 3 menit, maksimal 4 material untuk generator dan Custom Order 3MF; STL satu material. Beberapa replica worker aman karena job diklaim memakai `FOR UPDATE SKIP LOCKED`. Heartbeat mendeteksi worker mati dan mengembalikan job tertinggal ke antrean. Direktori kerja dibuat sementara dan dibersihkan. Worker mengganti pengaturan unggahan dengan profil generator dan hanya menerima struktur mesh/objek generator, atau geometri STL / 3MF yang divalidasi untuk Custom Order; pengaturan post-processing dari unggahan tidak dijalankan. API menghasilkan estimasi; tidak mengirim perintah ke printer.
 
 ## Verifikasi
+
+- `node --test tests/custom3mf.test.js tests/customOrderSlicing.test.js tests/customOrderUi.test.js`; set `CUSTOM_ORDER_DB_TEST=1` dan jalankan `tests/customOrderSlicingDb.test.js` untuk uji handler/transaksi database lokal. Semua fixture database dibatalkan.
+- Uji OrcaSlicer 2.4.2 pada STL dan 3MF box 20 × 20 × 10 mm: 2,02 g, 577 detik, satu slot filament tanpa prime tower.
 
 - `node --test tests/slicerHpp.test.js tests/slicerProfiles.test.js tests/hpp.test.js`.
 - `node --test tests/generatorProduct.test.js`; set `GENERATOR_PRODUCT_DB_TEST=1` untuk uji transaksi pada database lokal yang sudah dimigrasi. Data uji dibatalkan setelah pengujian.
 - Slicing nyata ketiga sampel melalui `sliceGenerator3mf` berhasil.
 - Uji HTTP dengan handler dan middleware auth asli: request tanpa sesi mendapat 401; request multipart terautentikasi menghasilkan 4,65 g untuk sampel Keychain AB.
 - Statistik, pemetaan gram ke recipe, cache profil, validasi input, dan pemisahan waktu mesin diuji. Cetak fisik belum dilakukan.
+
+- Uji OrcaSlicer 2.4.2 pada 3MF dua bagian bertumpuk 10 × 10 × 4 mm: 0,73 g (0,50 + 0,23 g), 261 detik, satu pergantian filament dan prime tower. Pemetaan keduanya ke satu filament: 0,33 g, 177 detik, tanpa pergantian atau tower.

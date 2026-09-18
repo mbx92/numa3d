@@ -19,7 +19,11 @@ defineProps({
       <component :is="icon" v-if="icon" class="w-4 h-4 text-accent-600 mt-0.5 shrink-0" aria-hidden="true" />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2 flex-wrap">
-          <h3 class="text-xs font-semibold text-ink-800">{{ title }}</h3>
+          <div class="flex items-center gap-1">
+            <h3 class="text-xs font-semibold text-ink-800">{{ title }}</h3>
+            <InfoTooltip v-if="description" :label="`Informasi ${title}`">{{ description }}</InfoTooltip>
+            <InfoTooltip v-if="description" label="Informasi KeychainFieldGroup">{{ description }}</InfoTooltip>
+          </div>
           <span
             v-if="linked"
             class="text-[10px] font-medium uppercase tracking-wide text-accent-700 bg-accent-100/80 px-1.5 py-0.5 rounded"
@@ -27,7 +31,7 @@ defineProps({
             Terhubung
           </span>
         </div>
-        <p v-if="description" class="text-[11px] text-ink-500 mt-0.5 leading-relaxed">{{ description }}</p>
+
       </div>
     </header>
     <div class="p-3 space-y-3">

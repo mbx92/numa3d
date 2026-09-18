@@ -237,9 +237,7 @@ onUnmounted(() => {
               </button>
             </li>
           </ul>
-          <p class="mt-1.5 text-[9px] leading-snug text-ink-400">
-            Klik part di scene atau legend · tarik part terpilih untuk geser
-          </p>
+          <InfoTooltip label="Informasi PreviewViewLegend">Klik part di scene atau legend · tarik part terpilih untuk geser</InfoTooltip>
         </div>
 
         <div v-if="showAssemblyControls" class="px-2.5 py-2 space-y-2 border-b border-ink-100">

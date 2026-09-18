@@ -100,15 +100,17 @@ async function remove(e) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Pengeluaran</h1>
+      <div class="flex items-center gap-1">
+        <h1 class="text-xl font-bold">Pengeluaran</h1>
+        <InfoTooltip label="Informasi pencatatan pengeluaran">
+          Pembelian material/packaging ke supplier sebaiknya dicatat di menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
+          agar stok ikut bertambah otomatis. Halaman ini untuk pengeluaran lain (listrik, alat, R&amp;D).
+        </InfoTooltip>
+      </div>
       <button class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Catat Pengeluaran</span><span class="sm:hidden">Catat</span>
       </button>
     </div>
-    <p class="text-xs text-ink-500">
-      Pembelian material/packaging ke supplier sebaiknya dicatat di menu <NuxtLink to="/purchases" class="text-accent-600 hover:underline">Pembelian</NuxtLink>
-      agar stok ikut bertambah otomatis. Halaman ini untuk pengeluaran lain (listrik, alat, R&amp;D).
-    </p>
 
     <!-- Filter -->
     <div class="panel p-3 space-y-2 overflow-hidden">
@@ -258,12 +260,15 @@ async function remove(e) {
             <IdrInput v-model="form.amount" required />
           </div>
           <div>
-            <label class="label">Produk terkait (opsional)</label>
+            <div class="flex items-center gap-1">
+              <label class="label">Produk terkait (opsional)</label>
+              <InfoTooltip label="Informasi Produk terkait (opsional)">Untuk R&amp;D / alokasi ke SKU katalog. Pembelian supplier menampilkan barang yang dibeli.</InfoTooltip>
+            </div>
             <select v-model="form.relatedProductId" class="input">
               <option value="">—</option>
               <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
-            <p class="text-xs text-ink-400 mt-1">Untuk R&amp;D / alokasi ke SKU katalog. Pembelian supplier menampilkan barang yang dibeli.</p>
+
           </div>
         </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>

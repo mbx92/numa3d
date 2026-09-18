@@ -77,15 +77,10 @@ const pickerSize = computed(() => (props.variant === 'list' ? 'md' : 'sm'))
               : 'group relative flex flex-col items-center gap-0.5 min-w-[5.5rem]'
           "
         >
-          <span
-            v-if="variant === 'list'"
-            class="block text-xs font-medium text-ink-800"
-          >
-            {{ field.label }}
-          </span>
-          <span v-if="variant === 'list' && field.hint" class="block text-[10px] text-ink-400 -mt-1">
-            {{ field.hint }}
-          </span>
+          <div v-if="variant === 'list'" class="flex items-center gap-1">
+            <span class="text-xs font-medium text-ink-800">{{ field.label }}</span>
+            <InfoTooltip v-if="field.hint" :label="`Informasi ${field.label}`">{{ field.hint }}</InfoTooltip>
+          </div>
           <MaterialColorPicker
             :material-id="materialIds[field.key] ?? null"
             :hex="parseMaterialColor(colors[field.key])"

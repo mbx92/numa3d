@@ -136,9 +136,7 @@ async function remove(s) {
       />
     </div>
 
-    <p v-if="isAdmin" class="text-xs text-ink-500">
-      Klik kartu series untuk membuka isinya, lalu gunakan tombol "Tambah Produk" di halaman itu.
-    </p>
+    <InfoTooltip v-if="isAdmin" label="Informasi index">Klik kartu series untuk membuka isinya, lalu gunakan tombol "Tambah Produk" di halaman itu.</InfoTooltip>
 
     <AppModal v-if="showForm" :title="editing ? 'Edit Series' : 'Tambah Series'" @close="((showForm = false), refresh())">
       <form class="space-y-3" @submit.prevent="save">
@@ -149,7 +147,7 @@ async function remove(s) {
             :upload-url="`/api/series/${editing.id}/image`"
             @changed="refresh()"
           />
-          <p class="text-xs text-ink-500 pt-1">Sampul ini tampil di kartu series pada halaman Katalog.</p>
+          <InfoTooltip label="Informasi index">Sampul ini tampil di kartu series pada halaman Katalog.</InfoTooltip>
         </div>
         <div>
           <label class="label">Nama Series</label>

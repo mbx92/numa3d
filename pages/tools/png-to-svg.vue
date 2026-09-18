@@ -184,11 +184,14 @@ onBeforeUnmount(() => {
 <template>
   <div class="max-w-5xl mx-auto space-y-4">
     <div>
-      <h1 class="text-xl font-bold">PNG → SVG</h1>
-      <p class="text-sm text-ink-500 mt-1">
-        Ubah logo atau siluet jadi path vektor — bisa diunggah ke Keychain, Clicker, atau Lightbox.
-        Bukan gambar tertanam.
-      </p>
+      <div class="flex items-center gap-1">
+        <h1 class="text-xl font-bold">PNG → SVG</h1>
+        <InfoTooltip label="Informasi PNG → SVG">
+          Ubah logo atau siluet jadi path vektor — bisa diunggah ke Keychain, Clicker, atau Lightbox.
+          Bukan gambar tertanam.
+        </InfoTooltip>
+      </div>
+
     </div>
 
     <div class="grid lg:grid-cols-5 gap-4">
@@ -363,11 +366,11 @@ onBeforeUnmount(() => {
           <NuxtLink to="/tools/keychain" v-bind="toolLinkAttrs" class="btn-secondary">Keychain</NuxtLink>
           <NuxtLink to="/tools/clicker" v-bind="toolLinkAttrs" class="btn-secondary">Clicker</NuxtLink>
         </div>
-        <p class="text-xs text-ink-400">
+        <InfoTooltip label="Informasi png-to-svg">
           Hasil berupa <code class="text-[11px] bg-ink-100 px-1 rounded">&lt;path&gt;</code>
           dengan <code class="text-[11px] bg-ink-100 px-1 rounded">fill-rule="evenodd"</code>
           supaya lubang (huruf O, dll.) tetap bolong.
-        </p>
+        </InfoTooltip>
       </div>
     </div>
   </div>

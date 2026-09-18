@@ -57,9 +57,7 @@ async function remove(u) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <p class="text-xs text-ink-500">
-        Admin: akses penuh. Staff: hanya bisa mencatat Pengeluaran & Penjualan — sisanya tampil read-only.
-      </p>
+      <InfoTooltip label="Informasi SettingsUsers">Admin: akses penuh. Staff: hanya bisa mencatat Pengeluaran & Penjualan — sisanya tampil read-only.</InfoTooltip>
       <button class="btn-primary shrink-0" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah User</span><span class="sm:hidden">Tambah</span>
       </button>

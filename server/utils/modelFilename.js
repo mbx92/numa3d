@@ -1,5 +1,5 @@
 import { sanitizeText } from './sanitizeText.js'
-import { cleanModelStem, fileExt, fileStem, isUuidFilename } from '../../utils/modelFilename.js'
+import { cleanModelStem, fileExt, fileStem, isUuidFilename } from '#shared/utils/modelFilename.js'
 
 export { fileExt, fileStem, isUuidFilename }
 

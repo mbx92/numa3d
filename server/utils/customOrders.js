@@ -1,3 +1,5 @@
+import { customMaterialRecipes } from '#shared/utils/customOrderMaterials.js'
+import { loadCustomOrderMaterials } from './customOrderSlicing.js'
 import { eq } from 'drizzle-orm'
 import { useDb, schema } from '../db/index.js'
 import { computeHpp } from './hpp.js'
@@ -37,21 +39,9 @@ export function parseCustomOrderBody(body) {
   }
 }
 
-export function customOrderHppInputs(order, { material, machine, packaging } = {}) {
+export function customOrderHppInputs(order, { material, materials, machine, packaging } = {}) {
   return {
-    recipes: [
-      {
-        materialId: order.materialId,
-        quantityUsed: Number(order.materialQuantityUsed) || 0,
-        printTimeMinutes: order.printTimeMinutes || 0,
-        machineId: order.machineId,
-        failureRatePercent: Number(order.failureRatePercent) || 0,
-        laborMinutes: Number(order.laborMinutes) || 0,
-        laborRatePerHour: Number(order.laborRatePerHour) || 0,
-        material: material || null,
-        machine: machine || null
-      }
-    ],
+    recipes: customMaterialRecipes(order, { material, materials, machine }),
     packs: order.packagingId
       ? [
           {
@@ -81,9 +71,13 @@ export function productionValuesFromOrder(order, extra = {}) {
   }
 }
 
-export async function hppForCustomOrder(order, { material, machine, packaging } = {}) {
+export async function hppForCustomOrder(order, { material, materials, machine, packaging } = {}) {
+  if (!order.materialUsage && order.id) {
+    const usage = await loadCustomOrderMaterials(useDb(), order.id)
+    if (usage.length) { order = { ...order, materialUsage: usage }; materials = usage.map((line) => line.material) }
+  }
   const settings = await getSettings()
-  const { recipes, packs } = customOrderHppInputs(order, { material, machine, packaging })
+  const { recipes, packs } = customOrderHppInputs(order, { material, materials, machine, packaging })
   return computeHpp(recipes, packs, settings)
 }
 
@@ -107,7 +101,9 @@ export async function loadCustomOrderHppMap(orderIds) {
       .leftJoin(schema.packaging, eq(schema.customOrders.packagingId, schema.packaging.id))
       .where(eq(schema.customOrders.id, id))
     if (!row) continue
-    const { recipes, packs } = customOrderHppInputs(row.order, {
+    const usage = await loadCustomOrderMaterials(db, id)
+    const { recipes, packs } = customOrderHppInputs({ ...row.order, materialUsage: usage }, {
+      materials: usage.map((line) => line.material),
       material: row.material,
       machine: row.machine,
       packaging: row.packaging

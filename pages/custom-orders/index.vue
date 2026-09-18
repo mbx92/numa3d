@@ -1,5 +1,5 @@
 <script setup>
-import { PlusIcon, TrashIcon, CheckIcon, XMarkIcon, ArrowUpTrayIcon, EyeIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, TrashIcon, CheckIcon, XMarkIcon, EyeIcon } from '@heroicons/vue/24/outline'
 import { customOrderHppFromForm, suggestedPrettyPrice } from '~/utils/hpp.js'
 
 const statusLabel = {
@@ -46,11 +46,22 @@ const showForm = ref(false)
 const form = ref({})
 const errorMsg = ref('')
 const saving = ref(false)
-const pendingFiles = ref([])
-const fileInput = ref(null)
+const sliceReady = ref(false)
+const slicing = ref(false)
+const filamentMaterials = computed(() => (materials.value || []).filter((m) =>
+  m.type === 'filament' && m.unit === 'gram' && (!m.filamentTypeName || /^PLA/i.test(m.filamentTypeName))
+))
+
+function onSliced(job) {
+  form.value.slicerJobId = job?.id || null
+  if (job) form.value.materialId = job.result.materialIds[0]
+  form.value.materialUsage = job ? job.result.filamentGrams.map((grams, i) => ({ materialId: job.result.materialIds[i], quantityUsed: grams / job.result.filamentGrams.reduce((a, b) => a + b, 0) * job.result.totalGrams })) : []
+  form.value.materialQuantityUsed = job?.result.totalGrams || 0
+  form.value.printTimeMinutes = job ? Math.ceil(job.result.printTimeSeconds / 60) : 0
+}
 
 function openAdd() {
-  const mat = materials.value?.[0]
+  const mat = filamentMaterials.value[0]
   form.value = {
     date: todayStr(),
     customerName: '',
@@ -69,51 +80,14 @@ function openAdd() {
     laborRatePerHour: 0,
     notes: ''
   }
-  pendingFiles.value = []
+  sliceReady.value = false
+  slicing.value = false
   errorMsg.value = ''
   showForm.value = true
 }
 
-function onPickFiles(event) {
-  const selected = Array.from(event?.target?.files || [])
-  if (!selected.length) return
-  pendingFiles.value = [...pendingFiles.value, ...selected]
-  if (fileInput.value) fileInput.value.value = ''
-}
-
-function removePendingFile(index) {
-  pendingFiles.value = pendingFiles.value.filter((_, i) => i !== index)
-}
-
-function formatSize(bytes) {
-  if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
-  if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB'
-  return bytes + ' B'
-}
-
-function uploadOne(orderId, file) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    const data = new FormData()
-    data.append('file', file)
-    xhr.open('POST', `/api/custom-orders/${orderId}/files`)
-    xhr.withCredentials = true
-    xhr.onload = () => {
-      let body = null
-      try {
-        body = xhr.responseText ? JSON.parse(xhr.responseText) : null
-      } catch {
-        body = null
-      }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(body)
-      else reject(new Error(body?.statusMessage || `Upload gagal (${xhr.status})`))
-    }
-    xhr.onerror = () => reject(new Error('Koneksi upload gagal'))
-    xhr.send(data)
-  })
-}
-
 async function save() {
+  if (saving.value || slicing.value || !sliceReady.value) return
   errorMsg.value = ''
   saving.value = true
   try {
@@ -125,18 +99,7 @@ async function save() {
         packagingId: form.value.packagingId || null
       }
     })
-    const uploadErrors = []
-    for (const file of pendingFiles.value) {
-      try {
-        await uploadOne(created.id, file)
-      } catch (e) {
-        uploadErrors.push(`${file.name}: ${e.message}`)
-      }
-    }
     showForm.value = false
-    if (uploadErrors.length) {
-      useToast().error(`Pesanan tersimpan, beberapa file gagal:\n${uploadErrors.join('\n')}`)
-    }
     await navigateTo(`/custom-orders/${created.id}`)
   } catch (e) {
     errorMsg.value = e.data?.statusMessage || 'Gagal menyimpan'
@@ -155,9 +118,6 @@ async function remove(row) {
   }
 }
 
-const selectedMaterial = computed(() =>
-  (materials.value || []).find((m) => Number(m.id) === Number(form.value.materialId))
-)
 const hppPreview = computed(() =>
   customOrderHppFromForm(
     form.value,
@@ -166,7 +126,7 @@ const hppPreview = computed(() =>
   )
 )
 const suggestedPreview = computed(() =>
-  suggestedPrettyPrice(hppPreview.value.total, settings.value?.defaultMarginPercent, settings.value?.priceRoundStep)
+  sliceReady.value ? suggestedPrettyPrice(hppPreview.value.total, settings.value?.defaultMarginPercent, settings.value?.priceRoundStep) : 0
 )
 function applySuggestedCustomPrice() {
   if (suggestedPreview.value) form.value.pricePerUnit = suggestedPreview.value
@@ -176,15 +136,17 @@ function applySuggestedCustomPrice() {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Custom</h1>
+      <div class="flex items-center gap-1">
+        <h1 class="text-xl font-bold">Custom</h1>
+        <InfoTooltip label="Informasi Custom">
+          Unggah STL atau 3MF pelanggan, slice dengan Orca, lalu hitung HPP sesuai material inventori. Produksi tetap di menu Produksi;
+          material terpotong saat cetak selesai.
+        </InfoTooltip>
+      </div>
       <button class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Pesanan Custom</span><span class="sm:hidden">Catat</span>
       </button>
     </div>
-    <p class="text-xs text-ink-500">
-      Desain milik pelanggan — tidak masuk katalog atau stok produk. File disimpan, produksi tetap di menu Produksi,
-      material terpotong saat cetak selesai.
-    </p>
 
     <div class="panel p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
       <div>
@@ -282,6 +244,8 @@ function applySuggestedCustomPrice() {
 
     <AppModal v-if="showForm" title="Pesanan custom" size="lg" @close="showForm = false">
       <form class="space-y-3" @submit.prevent="save">
+        <CustomOrderSlice :materials="materials || []" :quantity="Number(form.quantity) || 1" :disabled="saving" @sliced="onSliced" @ready="sliceReady = $event" @busy="slicing = $event" />
+        <p class="text-sm font-medium">2. Biaya dan jumlah pesanan</p>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Tanggal</label>
@@ -324,14 +288,12 @@ function applySuggestedCustomPrice() {
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="label">Material</label>
-            <select v-model="form.materialId" class="input" required>
-              <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }}</option>
-            </select>
+            <label class="label">Material dari hasil slicing</label>
+            <p class="text-sm">{{ form.materialUsage?.length ? form.materialUsage.map(line => materials.find(m => m.id === line.materialId)?.name).join(', ') : 'Pilih material pada langkah slicing' }}</p>
           </div>
           <div>
-            <label class="label">Pakai / unit ({{ selectedMaterial?.unit || 'satuan' }})</label>
-            <input v-model.number="form.materialQuantityUsed" type="number" min="0" step="0.1" class="input-num" required />
+            <label class="label">Gram / unit dari Orca</label>
+            <input :value="form.materialQuantityUsed" class="input-num bg-ink-50" readonly />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
@@ -357,7 +319,7 @@ function applySuggestedCustomPrice() {
           </div>
           <div>
             <label class="label">Durasi cetak / unit (mnt)</label>
-            <input v-model.number="form.printTimeMinutes" type="number" min="0" class="input-num" required />
+            <input :value="form.printTimeMinutes" class="input-num bg-ink-50" readonly />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
@@ -374,47 +336,19 @@ function applySuggestedCustomPrice() {
           <label class="label">Upah / jam</label>
           <IdrInput v-model="form.laborRatePerHour" />
         </div>
-        <p class="text-xs text-ink-500">
-          HPP estimasi {{ formatIDR(hppPreview.total) }} / unit
+        <p v-if="sliceReady" class="text-xs text-ink-500">
+          HPP estimasi {{ formatIDR(hppPreview.total) }} / unit · total {{ formatIDR(hppPreview.total * form.quantity) }}
           <span v-if="suggestedPreview"> · saran {{ formatIDR(suggestedPreview) }}</span>
         </p>
         <div>
           <label class="label">Catatan</label>
           <input v-model="form.notes" class="input" placeholder="opsional — nozzle, infill, warna…" />
         </div>
-        <div>
-          <label class="label">File desain (opsional)</label>
-          <label class="btn-secondary cursor-pointer">
-            <ArrowUpTrayIcon class="w-4 h-4" />Pilih file
-            <input
-              ref="fileInput"
-              type="file"
-              multiple
-              class="hidden"
-              accept=".stl,.obj,.3mf,.glb,.gltf,.png,.jpg,.jpeg,.webp,.pdf,.zip"
-              :disabled="saving"
-              @change="onPickFiles"
-            />
-          </label>
-          <p class="mt-1 text-xs text-ink-500">STL, OBJ, 3MF, GLB, gambar, PDF, atau ZIP. Maks 100 MB per file.</p>
-          <ul v-if="pendingFiles.length" class="mt-2 space-y-1">
-            <li
-              v-for="(file, index) in pendingFiles"
-              :key="`${file.name}-${file.size}-${index}`"
-              class="flex items-center justify-between gap-2 text-sm rounded border border-ink-200 px-2 py-1.5"
-            >
-              <span class="min-w-0 truncate font-mono text-xs">{{ file.name }} · {{ formatSize(file.size) }}</span>
-              <button type="button" class="text-xs text-red-500 shrink-0" :disabled="saving" @click="removePendingFile(index)">
-                Hapus
-              </button>
-            </li>
-          </ul>
-        </div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" class="btn-secondary" @click="showForm = false"><XMarkIcon class="w-4 h-4" />Batal</button>
-          <button type="submit" class="btn-primary" :disabled="saving">
-            <CheckIcon class="w-4 h-4" />{{ saving ? 'Menyimpan…' : pendingFiles.length ? 'Simpan & unggah file' : 'Simpan' }}
+          <button type="submit" class="btn-primary" :disabled="saving || slicing || !sliceReady">
+            <CheckIcon class="w-4 h-4" />{{ saving ? 'Menyimpan…' : 'Simpan pesanan & file' }}
           </button>
         </div>
       </form>

@@ -401,10 +401,10 @@ async function selectGalleryMesh(event) {
       <p class="text-[10px] text-ink-400 break-all">
         {{ meshFilename ? `Aktif: ${meshFilename}` : 'Pilih model .3mf/.stl sebagai bagian atas clicker.' }}
       </p>
-      <p class="text-[10px] text-ink-500">
+      <InfoTooltip label="Informasi ClickerDesignPicker">
         Mau potong model jadi base + lid (contoh hamburger)? Pakai
         <NuxtLink to="/tools/mesh-clicker" v-bind="toolLinkAttrs" class="text-accent-600 hover:text-accent-700 font-medium">Mesh → Clicker</NuxtLink>.
-      </p>
+      </InfoTooltip>
 
       <label class="block space-y-1">
         <span class="text-xs font-medium text-ink-700">Batas tinggi mesh (mm)</span>
@@ -415,14 +415,17 @@ async function selectGalleryMesh(event) {
       </label>
     </div>
 
-    <label v-if="shapeMode !== 'rect'" class="block space-y-1">
-      <span class="text-xs font-medium text-ink-700">Ukuran maks. (mm)</span>
-      <div class="flex items-center gap-2">
-        <input v-model.number="maxSizeMm" type="range" min="20" max="80" step="1" class="flex-1" />
-        <span class="text-xs font-mono w-10 text-right">{{ maxSizeMm }}</span>
-      </div>
-      <p class="text-[10px] text-ink-400">Skala artwork 20–80 mm — base menyesuaikan otomatis.</p>
-    </label>
+    <div v-if="shapeMode !== 'rect'" class="relative">
+      <label  class="block space-y-1">
+        <span class="text-xs font-medium text-ink-700 pr-7">Ukuran maks. (mm)</span>
+        <div class="flex items-center gap-2">
+          <input v-model.number="maxSizeMm" type="range" min="20" max="80" step="1" class="flex-1" />
+          <span class="text-xs font-mono w-10 text-right">{{ maxSizeMm }}</span>
+        </div>
+
+      </label>
+      <InfoTooltip label="Informasi Ukuran maks. (mm)" class="absolute right-0 top-0">Skala artwork 20–80 mm — base menyesuaikan otomatis.</InfoTooltip>
+    </div>
 
     <label class="block space-y-1">
       <span class="text-xs font-medium text-ink-700">Mode tampilan</span>
@@ -447,9 +450,9 @@ async function selectGalleryMesh(event) {
     </label>
 
     <div v-if="shapeMode === 'rect' && !flexiEnabled && keyringEnabled" class="space-y-1">
-      <p class="text-[11px] text-ink-500 rounded-md bg-ink-50 border border-ink-100 px-2 py-1.5">
+      <InfoTooltip label="Informasi ClickerDesignPicker">
         Loop atau lubang tali di sisi base untuk digantung. Opsional bersama clip kunci — bukan mekanisme kunci antar huruf.
-      </p>
+      </InfoTooltip>
       <div class="grid grid-cols-2 gap-1.5">
         <button
           type="button"

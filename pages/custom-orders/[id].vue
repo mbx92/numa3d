@@ -58,6 +58,19 @@ const editing = ref(false)
 const form = ref({})
 const saving = ref(false)
 const errorMsg = ref('')
+const sliceReady = ref(true)
+const slicing = ref(false)
+const canReslice = computed(() => !jobs.value.some((job) => job.status === 'in_progress' || job.stockApplied))
+const filamentMaterials = computed(() => (materials.value || []).filter((m) =>
+  m.type === 'filament' && m.unit === 'gram' && (!m.filamentTypeName || /^PLA/i.test(m.filamentTypeName))
+))
+function onSliced(job) {
+  form.value.slicerJobId = job?.id || null
+  if (job) form.value.materialId = job.result.materialIds[0]
+  form.value.materialUsage = job ? job.result.filamentGrams.map((grams, i) => ({ materialId: job.result.materialIds[i], quantityUsed: grams / job.result.filamentGrams.reduce((a, b) => a + b, 0) * job.result.totalGrams })) : []
+  form.value.materialQuantityUsed = job?.result.totalGrams || 0
+  form.value.printTimeMinutes = job ? Math.ceil(job.result.printTimeSeconds / 60) : 0
+}
 
 const files = computed(() => order.value?.files || [])
 const job = computed(() => order.value?.production)
@@ -123,6 +136,7 @@ function startEdit() {
     quantity: o.quantity,
     pricePerUnit: o.pricePerUnit,
     materialId: o.materialId,
+    materialUsage: o.materialUsage || [],
     materialQuantityUsed: o.materialQuantityUsed,
     packagingId: o.packagingId || '',
     packagingQuantityUsed: o.packagingQuantityUsed,
@@ -134,10 +148,13 @@ function startEdit() {
     notes: o.notes || ''
   }
   errorMsg.value = ''
+  sliceReady.value = true
+  slicing.value = false
   editing.value = true
 }
 
 async function saveEdit() {
+  if (saving.value || slicing.value || !sliceReady.value) return
   saving.value = true
   errorMsg.value = ''
   try {
@@ -347,17 +364,26 @@ async function deliver() {
         <div v-if="!editing" class="p-4 text-sm space-y-1">
           <div class="flex justify-between gap-2"><span class="text-ink-500">Jumlah</span><span class="font-mono">{{ order.quantity }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Harga / unit</span><span class="font-mono">{{ formatIDR(order.pricePerUnit) }}</span></div>
-          <div class="flex justify-between gap-2"><span class="text-ink-500">Material</span><span>{{ order.materialName }} · {{ formatNumber(order.materialQuantityUsed, 1) }} {{ order.materialUnit }}</span></div>
+          <div v-for="line in (order.materialUsage?.length ? order.materialUsage : [{ materialId: order.materialId, quantityUsed: order.materialQuantityUsed, material: { name: order.materialName, unit: order.materialUnit } }])" :key="line.materialId" class="flex justify-between gap-2"><span class="text-ink-500">Material</span><span>{{ line.material?.name }} · {{ formatNumber(line.quantityUsed, 2) }} {{ line.material?.unit }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Packaging</span><span>{{ order.packagingName || '—' }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Mesin</span><span>{{ order.machineName || '—' }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Durasi / unit</span><span>{{ formatMinutes(order.printTimeMinutes) }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Buffer gagal</span><span>{{ formatNumber(order.failureRatePercent, 1) }}%</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Kerja / unit</span><span>{{ formatMinutes(order.laborMinutes) }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">HPP estimasi</span><span class="font-mono">{{ formatIDR(order.hpp) }}</span></div>
+          <div class="flex justify-between gap-2"><span class="text-ink-500">HPP total pesanan</span><span class="font-mono">{{ formatIDR(order.hpp * order.quantity) }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Harga saran</span><span class="font-mono">{{ formatIDR(order.suggestedPrice) }}</span></div>
+          <p v-if="order.slicerResult" class="text-xs text-teal-700 pt-2">
+            Model {{ order.slicerResult.filename }} · {{ order.slicerResult.profile }} · {{ order.slicerResult.colors.length }} material.
+            Durasi asli {{ Math.floor(order.slicerResult.printTimeSeconds / 60) }} menit {{ Math.round(order.slicerResult.printTimeSeconds % 60) }} detik / unit; pencatatan dibulatkan ke atas ke menit.
+          </p>
           <p v-if="order.notes" class="text-xs text-ink-400 pt-2">{{ order.notes }}</p>
         </div>
         <form v-else class="p-4 space-y-3" @submit.prevent="saveEdit">
+          <CustomOrderSlice :materials="materials || []" :quantity="Number(form.quantity) || 1" v-if="canReslice" :files="files" :disabled="saving" @sliced="onSliced" @ready="sliceReady = $event" @busy="slicing = $event" />
+          <InfoTooltip label="Informasi pengaturan">
+            Material mengikuti pemetaan file. Gram dan durasi mengikuti hasil Orca; penggantian file atau material memerlukan slicing ulang.
+          </InfoTooltip>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="label">Tanggal</label>
@@ -387,7 +413,7 @@ async function deliver() {
               <div class="flex items-end justify-between gap-2 mb-1">
                 <label class="label !mb-0">Harga / unit</label>
                 <button
-                  v-if="suggestedPreview"
+                  v-if="sliceReady && suggestedPreview"
                   type="button"
                   class="text-xs font-medium text-accent-600 hover:text-accent-700"
                   @click="applySuggestedCustomPrice"
@@ -400,14 +426,15 @@ async function deliver() {
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="label">Material</label>
-              <select v-model="form.materialId" class="input" required>
-                <option v-for="m in materials" :key="m.id" :value="m.id">{{ m.name }}</option>
+              <label class="label">Material dari hasil slicing</label>
+              <p v-if="form.materialUsage?.length" class="text-sm">{{ form.materialUsage.map(line => materials.find(m => m.id === line.materialId)?.name).join(', ') }}</p>
+              <select v-if="!form.materialUsage?.length" v-model="form.materialId" class="input" required>
+                <option v-for="m in (order.slicerResult || form.slicerJobId ? filamentMaterials : materials)" :key="m.id" :value="m.id">{{ m.name }}</option>
               </select>
             </div>
             <div>
               <label class="label">Pakai / unit ({{ selectedMaterial?.unit || 'satuan' }})</label>
-              <input v-model.number="form.materialQuantityUsed" type="number" min="0" step="0.1" class="input-num" required />
+              <input :value="form.materialQuantityUsed" class="input-num bg-ink-50" readonly />
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
@@ -433,7 +460,7 @@ async function deliver() {
             </div>
             <div>
               <label class="label">Durasi cetak / unit (mnt)</label>
-              <input v-model.number="form.printTimeMinutes" type="number" min="0" class="input-num" required />
+              <input :value="form.printTimeMinutes" class="input-num bg-ink-50" readonly />
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
@@ -450,7 +477,7 @@ async function deliver() {
             <label class="label">Upah / jam</label>
             <IdrInput v-model="form.laborRatePerHour" />
           </div>
-          <p class="text-xs text-ink-500">HPP estimasi {{ formatIDR(hppPreview.total) }} · saran {{ formatIDR(suggestedPreview) }}</p>
+          <p v-if="sliceReady" class="text-xs text-ink-500">HPP estimasi {{ formatIDR(hppPreview.total) }} / unit · total {{ formatIDR(hppPreview.total * form.quantity) }} · saran {{ formatIDR(suggestedPreview) }}</p>
           <div>
             <label class="label">Catatan</label>
             <input v-model="form.notes" class="input" placeholder="opsional — nozzle, infill, warna…" />
@@ -458,7 +485,7 @@ async function deliver() {
           <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
           <div class="flex justify-end gap-2">
             <button type="button" class="btn-secondary" @click="editing = false"><XMarkIcon class="w-4 h-4" />Batal</button>
-            <button type="submit" class="btn-primary" :disabled="saving"><CheckIcon class="w-4 h-4" />Simpan</button>
+            <button type="submit" class="btn-primary" :disabled="saving || slicing || !sliceReady"><CheckIcon class="w-4 h-4" />Simpan</button>
           </div>
         </form>
       </div>
@@ -518,13 +545,16 @@ async function deliver() {
 
     <div class="panel">
       <div class="panel-header flex items-center justify-between">
-        <span class="panel-title">File desain</span>
+        <div class="flex items-center gap-1">
+          <span class="panel-title">File desain</span>
+          <InfoTooltip label="Informasi File desain">STL, OBJ, 3MF, GLB, gambar, PDF, atau ZIP. Maks 100 MB per file.</InfoTooltip>
+        </div>
         <label class="btn-secondary cursor-pointer">
           <ArrowUpTrayIcon class="w-3.5 h-3.5" />{{ uploading ? 'Mengunggah…' : 'Unggah' }}
           <input ref="fileInput" type="file" multiple class="hidden" :disabled="uploading" @change="uploadFiles" />
         </label>
       </div>
-      <p class="px-4 pt-3 text-xs text-ink-500">STL, OBJ, 3MF, GLB, gambar, PDF, atau ZIP. Maks 100 MB per file.</p>
+
       <p v-if="uploadError" class="px-4 pt-2 text-sm text-red-600 whitespace-pre-line">{{ uploadError }}</p>
       <ul v-if="files.length" class="divide-y divide-ink-100">
         <li v-for="f in files" :key="f.id" class="p-4 space-y-2">

@@ -486,13 +486,11 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
               class="input-num w-full text-sm"
             />
           </KeychainCompactField>
-          <p class="text-[10px] text-ink-400">
-            Ukuran XY & tinggi mesh diatur di panel Mesh. Base mengikuti siluet convex hull model.
-          </p>
+          <InfoTooltip label="Informasi mesh-clicker">Ukuran XY & tinggi mesh diatur di panel Mesh. Base mengikuti siluet convex hull model.</InfoTooltip>
         </template>
 
         <template v-else-if="activeToolPanel === 'colors'">
-          <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
+          <InfoTooltip label="Informasi mesh-clicker">Warna bagian mengikuti material di katalog.</InfoTooltip>
           <ToolColorBar
             v-model:mode="colorMode"
             v-model:colors="form.colors"
@@ -527,10 +525,10 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
               <dd>{{ result.dimensions.widthMm }}×{{ result.dimensions.depthMm }} mm</dd>
             </div>
           </dl>
-          <p class="text-[10px] text-ink-400 leading-relaxed pt-2">
+          <InfoTooltip label="Informasi mesh-clicker">
             Orientasi model: sumbu Z harus ke atas (roti atas di +Z). Jika terbalik, putar di CAD lalu
             upload ulang.
-          </p>
+          </InfoTooltip>
         </template>
 
         <template v-else-if="activeToolPanel === 'export'">

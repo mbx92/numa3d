@@ -141,7 +141,22 @@ function monthLabel(key) {
       </div>
 
       <div class="panel">
-        <div class="panel-header"><span class="panel-title">Rincian Laba Rugi</span></div>
+        <div class="panel-header">
+          <div class="flex items-center gap-1">
+            <span class="panel-title">Rincian Laba Rugi</span>
+            <InfoTooltip label="Informasi perhitungan laba rugi">
+              <p>
+              Pembelian material periode ini <span class="font-mono">{{ formatIDR(summary?.materialPurchases) }}</span>
+              tidak dikurangkan dari laba karena biaya material sudah termasuk dalam HPP per unit yang terjual —
+              mengurangkan keduanya akan menghitung biaya material dua kali.
+              </p>
+              <p>
+              Pembelian mesin <span class="font-mono">{{ formatIDR(summary?.machinePurchases) }}</span>
+              juga tidak dikurangkan dari laba (aset; masuk HPP lewat depresiasi). Tetap terhitung di kas keluar.
+              </p>
+            </InfoTooltip>
+          </div>
+        </div>
         <table class="table-std">
           <tbody>
             <tr>
@@ -177,15 +192,6 @@ function monthLabel(key) {
           </tbody>
         </table>
         <div class="p-3 space-y-2 border-t border-ink-200 text-xs text-ink-500">
-          <p>
-            Pembelian material periode ini <span class="font-mono">{{ formatIDR(summary?.materialPurchases) }}</span>
-            tidak dikurangkan dari laba karena biaya material sudah termasuk dalam HPP per unit yang terjual —
-            mengurangkan keduanya akan menghitung biaya material dua kali.
-          </p>
-          <p>
-            Pembelian mesin <span class="font-mono">{{ formatIDR(summary?.machinePurchases) }}</span>
-            juga tidak dikurangkan dari laba (aset; masuk HPP lewat depresiasi). Tetap terhitung di kas keluar.
-          </p>
           <p>
             Total kas keluar periode ini (pembelian material + biaya operasional):
             <span class="font-mono font-semibold text-ink-700">{{ formatIDR(summary?.totalCashOut) }}</span>
@@ -343,7 +349,10 @@ function monthLabel(key) {
 
     <!-- Tren bulanan -->
     <div v-else-if="tab === 'monthly'" class="space-y-3">
-      <p class="text-xs text-ink-500">12 bulan terakhir (tidak mengikuti filter tanggal di atas).</p>
+      <div class="flex items-center gap-1">
+        <span class="text-sm font-medium">Tren Bulanan</span>
+        <InfoTooltip label="Informasi periode tren bulanan">12 bulan terakhir (tidak mengikuti filter tanggal di atas).</InfoTooltip>
+      </div>
       <div class="panel p-4 space-y-2">
         <div v-for="m in monthly" :key="m.month" class="space-y-1">
           <div class="flex items-center justify-between text-sm gap-2">

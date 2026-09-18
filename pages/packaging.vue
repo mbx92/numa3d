@@ -65,8 +65,11 @@ async function remove(p) {
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-2">
       <div>
-        <h1 class="text-xl font-bold">Packaging</h1>
-        <p class="text-sm text-ink-500">Box, bubble, stiker setelah produk jadi. Switch/magnet ada di Material → Komponen.</p>
+        <div class="flex items-center gap-1">
+          <h1 class="text-xl font-bold">Packaging</h1>
+          <InfoTooltip label="Informasi Packaging">Box, bubble, stiker setelah produk jadi. Switch/magnet ada di Material → Komponen.</InfoTooltip>
+        </div>
+
       </div>
       <button v-if="isAdmin" class="btn-primary" @click="openAdd">
         <PlusIcon class="w-4 h-4" /><span class="hidden sm:inline">Tambah Packaging</span><span class="sm:hidden">Tambah</span>
@@ -182,9 +185,7 @@ async function remove(p) {
             :upload-url="`/api/packaging/${editing.id}/image`"
             @changed="refresh()"
           />
-          <p class="text-xs text-ink-500 pt-1">
-            Gambar membantu membedakan jenis packaging saat memilih di recipe.
-          </p>
+          <InfoTooltip label="Informasi packaging">Gambar membantu membedakan jenis packaging saat memilih di recipe.</InfoTooltip>
         </div>
         <div>
           <label class="label">Nama</label>

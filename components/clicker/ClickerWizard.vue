@@ -236,7 +236,7 @@ function submit() {
         </template>
 
         <template v-else-if="step === 1">
-          <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
+          <InfoTooltip label="Informasi ClickerWizard">Warna bagian mengikuti material di katalog.</InfoTooltip>
           <ToolColorBar
             v-model:mode="colorMode"
             v-model:colors="draft.colors"

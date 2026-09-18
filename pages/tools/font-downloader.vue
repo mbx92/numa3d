@@ -362,11 +362,14 @@ onUnmounted(() => {
 <template>
   <div class="max-w-5xl mx-auto space-y-4">
     <div>
-      <h1 class="text-xl font-bold">Font Downloader</h1>
-      <p class="text-sm text-ink-500 mt-1">
-        Klik font untuk preview dan unduh file TTF. Admin bisa juga menyimpan ke server
-        untuk generator.
-      </p>
+      <div class="flex items-center gap-1">
+        <h1 class="text-xl font-bold">Font Downloader</h1>
+        <InfoTooltip label="Informasi Font Downloader">
+          Klik font untuk preview dan unduh file TTF. Admin bisa juga menyimpan ke server
+          untuk generator.
+        </InfoTooltip>
+      </div>
+
     </div>
 
     <div class="grid lg:grid-cols-5 gap-4">
@@ -514,7 +517,7 @@ onUnmounted(() => {
           <div v-if="!installed?.length" class="flex-1 flex items-center justify-center p-8 text-sm text-ink-500 text-center">
             <div>
               <p>Belum ada font lokal di server.</p>
-              <p class="text-xs text-ink-400 mt-2">Admin bisa menyimpan font terpilih ke server untuk generator.</p>
+              <InfoTooltip label="Informasi font-downloader">Admin bisa menyimpan font terpilih ke server untuk generator.</InfoTooltip>
             </div>
           </div>
           <ul v-else class="divide-y divide-ink-100 overflow-y-auto flex-1">

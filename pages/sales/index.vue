@@ -614,7 +614,7 @@ async function remove(s) {
                   class="input-num flex-1"
                 />
               </div>
-              <p class="text-xs text-ink-400 mt-1">Rp atau % dari nilai setelah fee marketplace.</p>
+              <InfoTooltip label="Informasi index">Rp atau % dari nilai setelah fee marketplace.</InfoTooltip>
             </div>
             <div v-if="form.paymentStatus === 'paid'" class="sm:col-span-2">
               <label class="label">Catatan pembayaran</label>
@@ -763,7 +763,7 @@ async function remove(s) {
                 class="input-num flex-1"
               />
             </div>
-            <p class="text-xs text-ink-400 mt-1">Rp atau % dari nilai setelah fee marketplace.</p>
+            <InfoTooltip label="Informasi index">Rp atau % dari nilai setelah fee marketplace.</InfoTooltip>
           </div>
           <div class="sm:col-span-2">
             <label class="label">Catatan pembayaran</label>

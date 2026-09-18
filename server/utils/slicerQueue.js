@@ -1,27 +1,36 @@
 import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import * as schema from '../db/schema.js'
+import { validateStl } from './stl.js'
+import { inspectCustomModel, resolveCustomMaterials } from './customModelMaterials.js'
 
-export const SLICER_TOOLS = new Set(['keychain', 'clicker', 'qr-plate'])
+export const SLICER_TOOLS = new Set(['keychain', 'clicker', 'qr-plate', 'custom-order'])
 export const MAX_SLICER_FILE_BYTES = 40 * 1024 * 1024
 
 const invalid = (message) => Object.assign(new Error(message), { statusCode: 400 })
 
 export function validateSlicerUpload({ file, filename, tool, includeProfile }) {
-  if (!file?.length || file.length > MAX_SLICER_FILE_BYTES) throw invalid('File 3MF wajib disertakan, maksimal 40 MB')
-  if (file[0] !== 0x50 || file[1] !== 0x4b || file[2] !== 3 || file[3] !== 4) throw invalid('Format file 3MF tidak valid')
   if (!SLICER_TOOLS.has(tool)) throw invalid('Generator tidak didukung untuk slicing')
-  const safeName = String(filename || 'model.3mf').replace(/[\u0000-\u001f\u007f\\/]/g, '_').slice(0, 180) || 'model.3mf'
-  return { file, filename: safeName, tool, includeProfile: includeProfile !== false }
+  const custom = tool === 'custom-order'
+  const ext = custom ? String(filename || '').split('.').pop().toLowerCase() : '3mf'
+  if (custom && !['stl', '3mf'].includes(ext)) throw invalid('Custom order hanya menerima file STL atau 3MF untuk slicing')
+  if (!file?.length || file.length > MAX_SLICER_FILE_BYTES) throw invalid(`File ${ext.toUpperCase()} wajib disertakan, maksimal 40 MB`)
+  if (custom && ext === 'stl') {
+    validateStl(file)
+  } else if (file[0] !== 0x50 || file[1] !== 0x4b || file[2] !== 3 || file[3] !== 4) throw invalid('Format file 3MF tidak valid')
+  const cleaned = String(filename || `model.${ext}`).replace(/[\u0000-\u001f\u007f\\/]/g, '_')
+  const safeName = custom ? `${cleaned.slice(0, -(ext.length + 1)).slice(0, 179 - ext.length)}.${ext}` : cleaned.slice(0, 180)
+  return { file, filename: safeName, tool, format: ext, includeProfile: custom ? false : includeProfile !== false }
 }
 
-export async function enqueueSlicerJob({ db, storage, auth, file, filename, tool, includeProfile }) {
+export async function enqueueSlicerJob({ db, storage, auth, file, filename, tool, includeProfile, materialIds }) {
   const input = validateSlicerUpload({ file, filename, tool, includeProfile })
+  const inputConfig = tool === 'custom-order' ? await resolveCustomMaterials(db, inspectCustomModel(input.file, input.format), materialIds) : null
   const requestId = randomUUID()
-  const objectKey = `slicer/jobs/${auth.id}/${requestId}.3mf`
+  const objectKey = `slicer/jobs/${auth.id}/${requestId}.${input.format}`
   let uploaded = false
   try {
-    await storage.put(objectKey, input.file)
+    await storage.put(objectKey, input.file, `model/${input.format}`)
     uploaded = true
     const [job] = await db.insert(schema.slicerJobs).values({
       userId: auth.id,
@@ -29,6 +38,7 @@ export async function enqueueSlicerJob({ db, storage, auth, file, filename, tool
       objectKey,
       tool: input.tool,
       includeProfile: input.includeProfile,
+      inputConfig,
       stage: 'Menunggu worker'
     }).returning()
     return job

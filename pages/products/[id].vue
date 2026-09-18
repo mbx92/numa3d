@@ -482,16 +482,24 @@ const tab = computed({
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="label">Status</label>
+                <div class="flex items-center gap-1">
+                  <label class="label">Status</label>
+                  <InfoTooltip label="Informasi Status">Draft = kumpulkan data; R&amp;D = riset; Aktif = siap jual.</InfoTooltip>
+                </div>
                 <select v-model="info.status" class="input" :disabled="!isAdmin">
                   <option v-for="s in PRODUCT_STATUSES" :key="s" :value="s">{{ productStatusLabel[s] }}</option>
                 </select>
-                <p class="text-xs text-ink-500 mt-1">Draft = kumpulkan data; R&amp;D = riset; Aktif = siap jual.</p>
+
               </div>
               <div>
-                <label class="label">Stok tersedia</label>
+                <div class="flex items-center gap-1">
+                  <label class="label">Stok tersedia</label>
+                  <InfoTooltip label="Informasi Stok tersedia">
+                    Bertambah dari Produksi, berkurang saat penjualan. Tidak bisa diturunkan melewati stok yang direservasi order.
+                  </InfoTooltip>
+                </div>
                 <input v-model.number="info.stockQuantity" type="number" min="0" class="input-num" :disabled="!isAdmin" />
-                <p class="text-xs text-ink-400 mt-1">Bertambah dari Produksi, berkurang saat penjualan. Tidak bisa diturunkan melewati stok yang direservasi order.</p>
+
               </div>
             </div>
             <div>
@@ -794,9 +802,7 @@ const tab = computed({
           </button>
         </div>
         <div class="p-3 sm:p-4 space-y-3">
-          <p class="text-xs text-ink-500">
-            Hanya material: filament, resin, atau komponen (switch, magnet). Pekerjaan cetak ada di panel Proses.
-          </p>
+          <InfoTooltip label="Informasi pengaturan">Hanya material: filament, resin, atau komponen (switch, magnet). Pekerjaan cetak ada di panel Proses.</InfoTooltip>
           <div v-for="(r, i) in recipeRows" :key="i" class="flex items-start gap-3 border border-ink-200 rounded-panel p-3">
             <div class="w-16 h-16 rounded-panel border border-ink-200 overflow-hidden shrink-0">
               <div
@@ -845,9 +851,7 @@ const tab = computed({
           <span class="panel-title">Proses — Pekerjaan</span>
         </div>
         <div class="p-3 sm:p-4 space-y-3">
-          <p class="text-xs text-ink-500">
-            Waktu cetak, mesin, dan tenaga kerja per unit jadi. Bukan baris bahan.
-          </p>
+          <InfoTooltip label="Informasi pengaturan">Waktu cetak, mesin, dan tenaga kerja per unit jadi. Bukan baris bahan.</InfoTooltip>
           <div class="flex items-start gap-3">
             <div class="w-16 h-16 rounded-panel border border-ink-200 bg-ink-50 overflow-hidden flex items-center justify-center shrink-0">
               <img
@@ -1023,7 +1027,7 @@ const tab = computed({
             <input v-model="renameName" class="input flex-1" required maxlength="160" />
             <span class="font-mono text-sm text-ink-500 shrink-0">.{{ fileExt(renameTarget.filename).toLowerCase() }}</span>
           </div>
-          <p class="text-xs text-ink-400 mt-1">Ekstensi tidak diubah agar file tetap bisa di-preview.</p>
+          <InfoTooltip label="Informasi pengaturan">Ekstensi tidak diubah agar file tetap bisa di-preview.</InfoTooltip>
         </div>
         <p v-if="renameError" class="text-sm text-red-600">{{ renameError }}</p>
         <div class="flex justify-end gap-2">

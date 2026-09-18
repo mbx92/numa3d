@@ -182,9 +182,9 @@ async function saveNewProduct() {
         <template v-if="sliced.primeTower"> · termasuk prime tower</template>
         <template v-if="sliced.filamentChanges"> · {{ sliced.filamentChanges }} ganti filament</template>
       </p>
-      <p class="text-[10px] text-ink-400 leading-relaxed">
+      <InfoTooltip label="Informasi GeneratorSliceHpp">
         3MF membawa proses Numa3D lengkap (bukan hanya layer/dinding). Slice di jendela Orca tetap bisa beda jika filament atau matriks flush di akun desktop sudah dikalibrasi.
-      </p>
+      </InfoTooltip>
       <ul v-if="estimate.lines.length" class="space-y-0.5 font-mono text-ink-600">
         <li v-for="line in estimate.lines" :key="line.materialId">
           {{ line.materialName }} · {{ formatNumber(line.quantityUsed, 1) }} {{ line.unit }}
@@ -224,7 +224,7 @@ async function saveNewProduct() {
           <ClipboardDocumentListIcon class="w-4 h-4" />Buat order
         </NuxtLink>
       </div>
-      <p class="text-ink-500">Estimasi OrcaSlicer {{ sliced.slicerVersion }}. Bukan perintah ke printer.</p>
+      <InfoTooltip label="Informasi GeneratorSliceHpp">Estimasi OrcaSlicer {{ sliced.slicerVersion }}. Bukan perintah ke printer.</InfoTooltip>
     </div>
   </section>
 </template>

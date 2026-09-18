@@ -1,3 +1,4 @@
+import { customMaterialRecipes } from '#shared/utils/customOrderMaterials.js'
 // Perhitungan HPP per unit + harga jual saran. Murni angka, tanpa DB.
 // Dipakai server (API) dan klien (preview form).
 
@@ -117,19 +118,7 @@ export function customOrderHppFromForm(form, { materials, machines, packagingIte
   const machine = (machines || []).find((m) => Number(m.id) === Number(form?.machineId)) || null
   const packaging = (packagingItems || []).find((p) => Number(p.id) === Number(form?.packagingId)) || null
   return computeHpp(
-    [
-      {
-        materialId: form?.materialId,
-        quantityUsed: form?.materialQuantityUsed,
-        printTimeMinutes: form?.printTimeMinutes,
-        machineId: form?.machineId,
-        failureRatePercent: form?.failureRatePercent,
-        laborMinutes: form?.laborMinutes,
-        laborRatePerHour: form?.laborRatePerHour,
-        material,
-        machine
-      }
-    ],
+    customMaterialRecipes(form, { materials, material, machine }),
     form?.packagingId
       ? [
           {

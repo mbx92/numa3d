@@ -40,6 +40,6 @@ function select(id) {
         <div class="text-[10px] font-medium text-ink-800 leading-tight">{{ opt.name }}</div>
       </button>
     </div>
-    <p class="text-[11px] text-ink-400">{{ getKeychainTypography(modelValue).description }}</p>
+    <InfoTooltip label="Informasi KeychainTypographyPicker">{{ getKeychainTypography(modelValue).description }}</InfoTooltip>
   </div>
 </template>

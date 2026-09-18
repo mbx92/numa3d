@@ -502,7 +502,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
 
           <!-- Colors -->
           <template v-else-if="activeToolPanel === 'colors'">
-            <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
+            <InfoTooltip label="Informasi keychain">Warna bagian mengikuti material di katalog.</InfoTooltip>
             <div class="space-y-4">
               <div class="space-y-2">
                 <p class="text-xs font-medium text-ink-600">Teks & plate</p>

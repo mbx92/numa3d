@@ -97,8 +97,11 @@ async function save() {
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-3">
       <div>
-        <h1 class="text-xl font-bold">Order</h1>
-        <p class="text-xs text-ink-500 mt-1">Permintaan pelanggan sebelum masuk produksi dan penjualan.</p>
+        <div class="flex items-center gap-1">
+          <h1 class="text-xl font-bold">Order</h1>
+          <InfoTooltip label="Informasi Order">Permintaan pelanggan sebelum masuk produksi dan penjualan.</InfoTooltip>
+        </div>
+
       </div>
       <button class="btn-primary" @click="openAdd()"><PlusIcon class="w-4 h-4" />Order baru</button>
     </div>

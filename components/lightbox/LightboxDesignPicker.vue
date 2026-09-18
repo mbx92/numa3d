@@ -75,11 +75,14 @@ function clearImage() {
     </template>
 
     <template v-else-if="designMode === 'image'">
-      <label class="block space-y-1.5">
-        <span class="text-xs font-medium text-ink-700">Upload gambar</span>
-        <input type="file" accept="image/png,image/jpeg,image/webp" class="input text-xs" @change="onImageFile" />
-        <p class="text-[10px] text-ink-400">PNG/JPG/WebP — logo, kartun, atau grafis flat. Maks. 2 MB.</p>
-      </label>
+      <div class="relative">
+        <label class="block space-y-1.5">
+          <span class="text-xs font-medium text-ink-700 pr-7">Upload gambar</span>
+          <input type="file" accept="image/png,image/jpeg,image/webp" class="input text-xs" @change="onImageFile" />
+
+        </label>
+        <InfoTooltip label="Informasi Upload gambar" class="absolute right-0 top-0">PNG/JPG/WebP — logo, kartun, atau grafis flat. Maks. 2 MB.</InfoTooltip>
+      </div>
       <div v-if="imagePreview" class="relative rounded-lg border border-ink-200 overflow-hidden bg-checker">
         <img :src="imagePreview" alt="Preview" class="w-full max-h-32 object-contain" />
         <button
@@ -134,21 +137,24 @@ function clearImage() {
         :preview-text="text"
         :show-downloader-link="false"
       />
-      <p class="text-[10px] text-ink-500 leading-snug rounded-md border border-ink-100 bg-ink-50 px-2 py-1.5">
+      <InfoTooltip label="Informasi LightboxDesignPicker">
         Mode QR: frame rounded-rect, gap
         <span class="font-mono">{{ QR_LIGHTBOX.frameGapMm }} mm</span>, teks di bawah QR (di atas lip stand)
         agar kode tetap terbaca.
-      </p>
+      </InfoTooltip>
     </template>
 
-    <label v-if="!isSvgMode" class="block space-y-1">
-      <span class="text-xs font-medium text-ink-700">Ukuran maks. (mm)</span>
-      <div class="flex items-center gap-2">
-        <input v-model.number="maxSizeMm" type="range" min="40" max="150" step="2" class="flex-1" />
-        <span class="text-xs font-mono w-10 text-right">{{ maxSizeMm }}</span>
-      </div>
-      <p class="text-[10px] text-ink-400">Seperti MakerWorld — skala otomatis 40–150 mm.</p>
-    </label>
+    <div v-if="!isSvgMode" class="relative">
+      <label  class="block space-y-1">
+        <span class="text-xs font-medium text-ink-700 pr-7">Ukuran maks. (mm)</span>
+        <div class="flex items-center gap-2">
+          <input v-model.number="maxSizeMm" type="range" min="40" max="150" step="2" class="flex-1" />
+          <span class="text-xs font-mono w-10 text-right">{{ maxSizeMm }}</span>
+        </div>
+
+      </label>
+      <InfoTooltip label="Informasi Ukuran maks. (mm)" class="absolute right-0 top-0">Seperti MakerWorld — skala otomatis 40–150 mm.</InfoTooltip>
+    </div>
 
     <p v-if="imageError" class="text-xs text-red-600">{{ imageError }}</p>
   </div>

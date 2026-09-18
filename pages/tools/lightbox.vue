@@ -530,7 +530,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
           </template>
 
           <template v-else-if="activeToolPanel === 'colors'">
-            <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
+            <InfoTooltip label="Informasi lightbox">Warna bagian mengikuti material di katalog.</InfoTooltip>
             <ToolColorBar
               v-model:mode="colorMode"
               v-model:colors="form.colors"
@@ -563,9 +563,7 @@ const { downloadPlate, exportingPlate } = usePrintPlateExport(result, ensureFres
           </template>
 
           <template v-else-if="activeToolPanel === 'info'">
-            <p class="text-[11px] text-ink-500">
-              Terinspirasi <strong>MakerWorld Lightbox Maker</strong> — face multi-layer + cavity LED di belakang.
-            </p>
+            <InfoTooltip label="Informasi lightbox">Terinspirasi <strong>MakerWorld Lightbox Maker</strong> — face multi-layer + cavity LED di belakang.</InfoTooltip>
             <p v-if="form.standEnabled" class="text-[11px] text-ink-500">
               Stand: <strong>{{ activeStandPreset.label }}</strong> — {{ activeStandPreset.description }}
             </p>

@@ -1,3 +1,4 @@
+import { loadCustomOrderMaterials } from '../../utils/customOrderSlicing.js'
 import { desc, eq } from 'drizzle-orm'
 import { useDb, schema } from '../../db/index.js'
 import { hppForCustomOrder } from '../../utils/customOrders.js'
@@ -38,6 +39,7 @@ export default defineEventHandler(async (event) => {
     .select()
     .from(schema.customOrderFiles)
     .where(eq(schema.customOrderFiles.customOrderId, id))
+  const materialUsage = await loadCustomOrderMaterials(db, id)
   const hpp = await hppForCustomOrder(row.order, {
     material: row.material,
     machine: row.machine,
@@ -52,6 +54,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     ...row.order,
+    materialUsage,
     materialName: row.material?.name || null,
     materialUnit: row.material?.unit || null,
     machineName: row.machine?.name || null,

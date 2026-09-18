@@ -373,18 +373,21 @@ defineExpose({ refreshLibrary, loadGalleryMesh, runAutoDetect })
       </button>
     </div>
 
-    <label class="block space-y-1">
-      <span class="text-xs font-medium text-ink-700">Sumbu atas model</span>
-      <select v-model="meshUpAxis" class="input text-sm">
-        <option value="auto">Auto (sumbu terpanjang)</option>
-        <option value="z">Z (standar CAD)</option>
-        <option value="y">Y (Blender / glTF)</option>
-        <option value="x">X</option>
-      </select>
-      <p class="text-[10px] text-ink-400">
+    <div class="relative">
+      <label class="block space-y-1">
+        <span class="text-xs font-medium text-ink-700 pr-7">Sumbu atas model</span>
+        <select v-model="meshUpAxis" class="input text-sm">
+          <option value="auto">Auto (sumbu terpanjang)</option>
+          <option value="z">Z (standar CAD)</option>
+          <option value="y">Y (Blender / glTF)</option>
+          <option value="x">X</option>
+        </select>
+
+      </label>
+      <InfoTooltip label="Informasi Sumbu atas model" class="absolute right-0 top-0">
         Jika potongan melintang badan (bukan di bibir pot), ganti sumbu — coba Y atau Z.
-      </p>
-    </label>
+      </InfoTooltip>
+    </div>
 
     <button
       type="button"
@@ -537,17 +540,20 @@ defineExpose({ refreshLibrary, loadGalleryMesh, runAutoDetect })
     </template>
 
     <template v-if="!isPartsMode">
-    <label class="block space-y-1">
-      <span class="text-xs font-medium text-ink-700">Rasio lid (bagian atas)</span>
-      <div class="flex items-center gap-2">
-        <input v-model.number="splitPct" type="range" min="12" max="70" step="1" class="flex-1" />
-        <span class="text-xs font-mono w-12 text-right">{{ splitPct }}%</span>
-      </div>
-      <p class="text-[10px] text-ink-400">
+    <div class="relative">
+      <label class="block space-y-1">
+        <span class="text-xs font-medium text-ink-700 pr-7">Rasio lid (bagian atas)</span>
+        <div class="flex items-center gap-2">
+          <input v-model.number="splitPct" type="range" min="12" max="70" step="1" class="flex-1" />
+          <span class="text-xs font-mono w-12 text-right">{{ splitPct }}%</span>
+        </div>
+
+      </label>
+      <InfoTooltip label="Informasi Rasio lid (bagian atas)" class="absolute right-0 top-0">
         Bidang = tinggi potong (atas↔bawah). Resizer = kolom XY — bagian luar kotak tidak terbelah.
         Kaktus+pot: wilayah 100%, bidang di bibir pot.
-      </p>
-    </label>
+      </InfoTooltip>
+    </div>
 
     <div class="grid grid-cols-2 gap-2">
       <label class="block space-y-1">
@@ -557,29 +563,33 @@ defineExpose({ refreshLibrary, loadGalleryMesh, runAutoDetect })
           <span class="text-xs font-mono w-10 text-right">{{ regionWPct }}%</span>
         </div>
       </label>
-      <label class="block space-y-1">
-        <span class="text-xs font-medium text-ink-700">Dalam wilayah</span>
-        <div class="flex items-center gap-2">
-          <input v-model.number="regionDPct" type="range" min="8" max="100" step="1" class="flex-1" />
-          <span class="text-xs font-mono w-10 text-right">{{ regionDPct }}%</span>
-        </div>
-      </label>
+      <div class="flex items-center gap-1">
+        <label class="block space-y-1">
+          <span class="text-xs font-medium text-ink-700">Dalam wilayah</span>
+          <div class="flex items-center gap-2">
+            <input v-model.number="regionDPct" type="range" min="8" max="100" step="1" class="flex-1" />
+            <span class="text-xs font-mono w-10 text-right">{{ regionDPct }}%</span>
+          </div>
+        </label>
+        <InfoTooltip label="Informasi Dalam wilayah  %">Di preview: bola oranye = resize sudut, biru = geser posisi, bidang = tinggi potong.</InfoTooltip>
+      </div>
     </div>
-    <p class="text-[10px] text-ink-400 -mt-1">
-      Di preview: bola oranye = resize sudut, biru = geser posisi, bidang = tinggi potong.
-    </p>
+
     </template>
 
-    <label class="block space-y-1">
-      <span class="text-xs font-medium text-ink-700">Ketebalan dudukan stem (mm)</span>
-      <div class="flex items-center gap-2">
-        <input v-model.number="meshStemBuryMm" type="range" min="0.8" max="6" step="0.1" class="flex-1" />
-        <span class="text-xs font-mono w-10 text-right">{{ meshStemBuryMm }}</span>
-      </div>
-      <p class="text-[10px] text-ink-400">
+    <div class="relative">
+      <label class="block space-y-1">
+        <span class="text-xs font-medium text-ink-700 pr-7">Ketebalan dudukan stem (mm)</span>
+        <div class="flex items-center gap-2">
+          <input v-model.number="meshStemBuryMm" type="range" min="0.8" max="6" step="0.1" class="flex-1" />
+          <span class="text-xs font-mono w-10 text-right">{{ meshStemBuryMm }}</span>
+        </div>
+
+      </label>
+      <InfoTooltip label="Informasi Ketebalan dudukan stem (mm)" class="absolute right-0 top-0">
         Dudukan dibuat di bawah lid; stem hanya overlap tipis agar menyatu tanpa menembus wajah mesh.
-      </p>
-    </label>
+      </InfoTooltip>
+    </div>
 
     <label class="block space-y-1">
       <span class="text-xs font-medium text-ink-700">Ukuran maks. XY (mm)</span>

@@ -59,7 +59,7 @@ function selectPreset(id) {
           <span class="text-[9px] leading-none font-medium truncate w-full text-center">{{ p.label }}</span>
         </button>
       </div>
-      <p class="text-[10px] text-ink-400 mt-1">{{ activePreset.description }}</p>
+      <InfoTooltip label="Informasi LightboxStandPicker">{{ activePreset.description }}</InfoTooltip>
     </div>
 
     <template v-if="showDimensions">
@@ -90,7 +90,7 @@ function selectPreset(id) {
           <input v-model="standColor" type="color" class="h-9 w-10 rounded-md border border-ink-200 cursor-pointer" />
         </KeychainCompactField>
       </div>
-      <p class="text-[10px] text-ink-400">Lebar & slot 0 = otomatis menyesuaikan ukuran body lightbox.</p>
+      <InfoTooltip label="Informasi LightboxStandPicker">Lebar & slot 0 = otomatis menyesuaikan ukuran body lightbox.</InfoTooltip>
     </template>
   </div>
 </template>

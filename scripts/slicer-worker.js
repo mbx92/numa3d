@@ -119,6 +119,7 @@ async function processJob(job) {
     const result = await sliceGenerator3mf(bytes, {
       tool: job.tool,
       includeProfile: job.include_profile,
+      inputConfig: job.input_config,
       signal: controller.signal
     })
     const { rows } = await pool.query('SELECT cancel_requested FROM slicer_jobs WHERE id = $1', [job.id])

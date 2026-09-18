@@ -168,17 +168,20 @@ function submit() {
       <div class="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-5 py-4 space-y-4">
         <!-- Step 1: Teks -->
         <template v-if="step === 0">
-          <label class="block space-y-1.5">
-            <span class="text-xs font-medium text-ink-700">Teks keychain</span>
-            <input
-              v-model="draft.text"
-              class="input text-lg font-semibold tracking-wide"
-              maxlength="40"
-              :placeholder="TEXT_PLACEHOLDER"
-              autofocus
-            />
-            <p class="text-[10px] text-ink-400">Opsional jika hanya pakai logo SVG.</p>
-          </label>
+          <div class="relative">
+            <label class="block space-y-1.5">
+              <span class="text-xs font-medium text-ink-700 pr-7">Teks keychain</span>
+              <input
+                v-model="draft.text"
+                class="input text-lg font-semibold tracking-wide"
+                maxlength="40"
+                :placeholder="TEXT_PLACEHOLDER"
+                autofocus
+              />
+
+            </label>
+            <InfoTooltip label="Informasi Teks keychain" class="absolute right-0 top-0">Opsional jika hanya pakai logo SVG.</InfoTooltip>
+          </div>
 
           <KeychainSvgUpload
             v-model:svg-content="draft.svgContent"
@@ -197,7 +200,7 @@ function submit() {
 
         <!-- Step 2: Warna (4) -->
         <template v-else-if="step === 1">
-          <p class="text-xs text-ink-500">Warna bagian mengikuti material di katalog.</p>
+          <InfoTooltip label="Informasi KeychainWizard">Warna bagian mengikuti material di katalog.</InfoTooltip>
           <p v-if="accentLabel" class="text-[11px] text-ink-500">
             Huruf aksen: <strong>{{ accentLabel }}</strong>
           </p>
@@ -213,13 +216,16 @@ function submit() {
 
         <!-- Step 3: Font & attachment -->
         <template v-else-if="step === 2">
-          <label class="block space-y-1.5">
-            <span class="text-xs font-medium text-ink-700">Theme preset</span>
-            <select v-model="draft.themeId" class="input text-sm" @change="applyThemePreset(draft.themeId)">
-              <option v-for="t in themes" :key="t.id" :value="t.id">{{ t.name }}</option>
-            </select>
-            <p class="text-[11px] text-ink-400">{{ activeTheme.description }}</p>
-          </label>
+          <div class="relative">
+            <label class="block space-y-1.5">
+              <span class="text-xs font-medium text-ink-700 pr-7">Theme preset</span>
+              <select v-model="draft.themeId" class="input text-sm" @change="applyThemePreset(draft.themeId)">
+                <option v-for="t in themes" :key="t.id" :value="t.id">{{ t.name }}</option>
+              </select>
+
+            </label>
+            <InfoTooltip label="Informasi Theme preset" class="absolute right-0 top-0">{{ activeTheme.description }}</InfoTooltip>
+          </div>
 
           <KeychainFontPicker v-model="draft.fontUrl" :preview-text="draft.text || 'NUMA 3D'" />
 
@@ -238,7 +244,7 @@ function submit() {
 
         <!-- Step 4: Ukuran -->
         <template v-else>
-          <p class="text-xs text-ink-500">Ukuran area teks (mm) — base menyesuaikan otomatis.</p>
+          <InfoTooltip label="Informasi KeychainWizard">Ukuran area teks (mm) — base menyesuaikan otomatis.</InfoTooltip>
           <div class="grid grid-cols-2 gap-3">
             <label class="block space-y-1.5">
               <span class="text-xs font-medium text-ink-700">Lebar teks</span>

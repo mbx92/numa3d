@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, gte, eq, sql } from 'drizzle-orm'
 import { adjustOrderReservation } from './orders.js'
 
 function ints(job) {
@@ -75,8 +75,15 @@ async function applyCustomCompletion(tx, schema, job, sign) {
   if (!order) {
     throw createError({ statusCode: 400, statusMessage: 'Pesanan custom tidak ditemukan' })
   }
-  const matQty = (Number(order.materialQuantityUsed) || 0) * printed * sign
-  await bumpStock(tx, schema.materials, order.materialId, -matQty)
+  const rows = await tx.select().from(schema.customOrderMaterials).where(eq(schema.customOrderMaterials.customOrderId, customOrderId))
+  const usage = rows.length ? rows : [{ materialId: order.materialId, quantityUsed: order.materialQuantityUsed }]
+  for (const line of [...usage].sort((a, b) => a.materialId - b.materialId)) {
+    const needed = Number(line.quantityUsed) * printed
+    if (!needed) continue
+    const [updated] = await tx.update(schema.materials).set({ stockQuantity: sql`${schema.materials.stockQuantity} - ${needed * sign}` })
+      .where(and(eq(schema.materials.id, line.materialId), ...(sign > 0 ? [gte(schema.materials.stockQuantity, needed)] : []))).returning({ id: schema.materials.id })
+    if (!updated) throw createError({ statusCode: 400, statusMessage: `Stok material #${line.materialId} tidak cukup untuk produksi (${needed.toFixed(2)} g)` })
+  }
   const packQty = (Number(order.packagingQuantityUsed) || 0) * good * sign
   if (order.packagingId) await bumpStock(tx, schema.packaging, order.packagingId, -packQty)
   if (order.status !== 'delivered' && order.status !== 'cancelled') {

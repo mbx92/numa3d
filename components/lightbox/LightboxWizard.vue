@@ -216,13 +216,13 @@ function submit() {
         </template>
 
         <template v-else-if="step === 2">
-          <p class="text-xs text-ink-500">Atur cahaya, tebal muka, rongga LED, dan stand.</p>
+          <InfoTooltip label="Informasi LightboxWizard">Atur cahaya, tebal muka, rongga LED, dan stand.</InfoTooltip>
 
           <section class="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold text-ink-800">Strip LED</p>
-                <p class="text-[10px] text-ink-400">Hanya tampilan di layar, tidak ikut dicetak</p>
+                <InfoTooltip label="Informasi LightboxWizard">Hanya tampilan di layar, tidak ikut dicetak</InfoTooltip>
               </div>
               <input v-model="draft.ledStripEnabled" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-300 text-accent-600" />
             </div>
@@ -246,7 +246,7 @@ function submit() {
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-xs font-semibold text-ink-800">Diffuser</p>
-                <p class="text-[10px] text-ink-400">Lapisan tipis agar cahaya lebih rata</p>
+                <InfoTooltip label="Informasi LightboxWizard">Lapisan tipis agar cahaya lebih rata</InfoTooltip>
               </div>
               <input v-model="draft.diffuserEnabled" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-300 text-accent-600" />
             </div>
@@ -265,7 +265,7 @@ function submit() {
           <section class="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
             <div>
               <p class="text-xs font-semibold text-ink-800">Tebal muka</p>
-              <p class="text-[10px] text-ink-400">Latar dan tinggi timbul teks/gambar/QR</p>
+              <InfoTooltip label="Informasi LightboxWizard">Latar dan tinggi timbul teks/gambar/QR</InfoTooltip>
             </div>
             <div class="grid grid-cols-2 gap-2">
               <label class="block space-y-1">
@@ -282,7 +282,7 @@ function submit() {
           <section class="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
             <div>
               <p class="text-xs font-semibold text-ink-800">Rongga dan belakang</p>
-              <p class="text-[10px] text-ink-400">Ruang dalam untuk LED dan kabel</p>
+              <InfoTooltip label="Informasi LightboxWizard">Ruang dalam untuk LED dan kabel</InfoTooltip>
             </div>
             <div class="grid grid-cols-2 gap-2">
               <label class="block space-y-1">
@@ -323,7 +323,7 @@ function submit() {
           <section class="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
             <div>
               <p class="text-xs font-semibold text-ink-800">Stand</p>
-              <p class="text-[10px] text-ink-400">Boleh dilewati</p>
+              <InfoTooltip label="Informasi LightboxWizard">Boleh dilewati</InfoTooltip>
             </div>
             <LightboxStandPicker
               v-model:stand-model-id="draft.standModelId"
