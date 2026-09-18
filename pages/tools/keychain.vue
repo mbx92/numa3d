@@ -25,6 +25,7 @@ import {
   generateKeychain
 } from '~/utils/keychainGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
+import { libraryUploadForm } from '~/utils/modelFilename.js'
 import { resolveGeneratorPartExport } from '~/utils/generatorPartExport.js'
 import { resolveInsertFit } from '~/utils/keychainCore.js'
 import { EXPORT_FORMATS, exportMime } from '~/utils/keychainExport.js'
@@ -260,8 +261,7 @@ async function downloadPart(part) {
 function uploadBlob(blob, filename) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    const fd = new FormData()
-    fd.append('file', new File([blob], filename, { type: blob.type || exportMime(exportFormat.value) }))
+    const fd = libraryUploadForm(blob, filename, blob.type || exportMime(exportFormat.value))
     xhr.open('POST', '/api/library-files')
     xhr.withCredentials = true
     xhr.onload = () => {

@@ -6,6 +6,7 @@ import { createCodeStudioGenerator } from '~/utils/codeStudioGenerator.js'
 import { buildCodeStudioAiPrompt } from '~/utils/codeStudioAi.js'
 import { resolveGeneratorPartExport } from '~/utils/generatorPartExport.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
+import { libraryUploadForm } from '~/utils/modelFilename.js'
 
 definePageMeta({ layout: 'tool', toolTitle: 'Code Studio', toolFullBleed: true })
 
@@ -114,9 +115,7 @@ async function saveToGallery() {
     if (!(await ensureFreshResult())) return
     const { blob, filename } = await resolveGeneratorPartExport(result.value, 'base', format.value)
     if (!blob) throw new Error('Hasil export kosong')
-    const body = new FormData()
-    body.append('file', new File([blob], filename, { type: blob.type }))
-    await $fetch('/api/library-files', { method: 'POST', body, timeout: 120000, retry: 0 })
+    await $fetch('/api/library-files', { method: 'POST', body: libraryUploadForm(blob, filename, blob.type), timeout: 120000, retry: 0 })
     toast.success('Model disimpan ke Galeri 3D')
   } catch (e) { toast.error(e.data?.statusMessage || e.message || 'Upload gagal') }
   finally { saving.value = false }

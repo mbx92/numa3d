@@ -3,6 +3,7 @@ import { useDb, schema } from '../../db/index.js'
 import { useMinio, minioBucket, ensureBucket } from '../../utils/minio.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
+import { displayLibraryFilename, fileExt } from '../../utils/modelFilename.js'
 
 const ALLOWED_EXT = {
   stl: 'model/stl',
@@ -13,13 +14,24 @@ const ALLOWED_EXT = {
 }
 const MAX_SIZE = 100 * 1024 * 1024
 
+function partText(parts, name) {
+  const part = parts?.find((entry) => entry.name === name && !entry.filename)
+  if (!part?.data) return ''
+  return Buffer.from(part.data).toString('utf8').trim()
+}
+
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
   const parts = await readMultipartFormData(event)
-  const file = parts?.find((p) => p.name === 'file' && p.filename)
+  const file = parts?.find((p) => p.name === 'file' && (p.filename || partText(parts, 'filename')))
   if (!file) throw createError({ statusCode: 400, statusMessage: 'File wajib diunggah (field "file")' })
 
-  const ext = (file.filename.split('.').pop() || '').toLowerCase()
+  const filename = displayLibraryFilename({
+    requested: partText(parts, 'filename'),
+    multipartName: file.filename,
+    objectKey: file.filename
+  })
+  const ext = fileExt(filename)
   if (!ALLOWED_EXT[ext]) {
     throw createError({
       statusCode: 400,
@@ -37,7 +49,9 @@ export default defineEventHandler(async (event) => {
 
   await ensureBucket()
   await useMinio().putObject(minioBucket(), objectKey, file.data, file.data.length, {
-    'Content-Type': contentType
+    'Content-Type': contentType,
+    'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+    'x-amz-meta-original-filename': encodeURIComponent(filename)
   })
 
   const db = useDb()
@@ -45,7 +59,7 @@ export default defineEventHandler(async (event) => {
     const rows = await db
       .insert(schema.libraryFiles)
       .values({
-        filename: file.filename,
+        filename,
         objectKey,
         sizeBytes: file.data.length,
         contentType

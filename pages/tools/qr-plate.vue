@@ -17,6 +17,7 @@ import { generateQrPlate, disposeQrPlateWorker } from '~/utils/qrPlateGenerator.
 import { QR_PLATE_ICONS, qrIconSvg } from '~/utils/qrPlateIcons.js'
 import { decodeWhatsappQrFile } from '~/utils/qrFromImage.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
+import { libraryUploadForm } from '~/utils/modelFilename.js'
 import { useUiLayout } from '~/composables/useUiLayout.js'
 import { useToolColorMode } from '~/composables/useToolColorMode.js'
 import ToolColorBar from '~/components/ToolColorBar.vue'
@@ -243,9 +244,7 @@ async function saveToGallery() {
   try {
     const output = await freshResult()
     const blob = output.get3mfBlob(printExportOptions.value)
-    const body = new FormData()
-    body.append('file', new File([blob], `${output.slug}.3mf`, { type: blob.type }))
-    await $fetch('/api/library-files', { method: 'POST', body, timeout: 120000, retry: 0 })
+    await $fetch('/api/library-files', { method: 'POST', body: libraryUploadForm(blob, `${output.slug}.3mf`, blob.type), timeout: 120000, retry: 0 })
     toast.success('Pelat QR disimpan ke Galeri 3D')
   } catch (e) { toast.error(e.data?.statusMessage || e.message || 'Gagal menyimpan') }
   finally { saving.value = false }

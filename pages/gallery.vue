@@ -13,6 +13,7 @@ import {
   CursorArrowRaysIcon
 } from '@heroicons/vue/24/outline'
 import { isMeshClickerFile } from '~/utils/clickerManifold/meshImport.js'
+import { libraryUploadForm } from '~/utils/modelFilename.js'
 
 const isAdmin = computed(() => useState('authUser').value?.role === 'admin')
 const { toolLinkAttrs } = useStandaloneDisplay()
@@ -77,8 +78,7 @@ function canMakeClicker(f) {
 function uploadOneFile(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    const form = new FormData()
-    form.append('file', file)
+    const form = libraryUploadForm(file, file.name, file.type)
     xhr.open('POST', '/api/library-files')
     xhr.withCredentials = true
     xhr.upload.onprogress = (e) => {

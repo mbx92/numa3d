@@ -18,6 +18,7 @@ import { MESH_CLICKER_DEFAULTS, getSwitchPreset } from '~/utils/clickerPresets.j
 import { EXPORT_FORMATS, exportMime } from '~/utils/keychainExport.js'
 import { generateClicker } from '~/utils/clickerGenerator.js'
 import { downloadBlob } from '~/utils/downloadBlob.js'
+import { libraryUploadForm, isUuidFilename } from '~/utils/modelFilename.js'
 import { resolveGeneratorPartExport } from '~/utils/generatorPartExport.js'
 import ToolColorBar from '~/components/ToolColorBar.vue'
 import ToolPanelShell from '~/components/ToolPanelShell.vue'
@@ -316,8 +317,7 @@ async function downloadPart(part) {
 function uploadBlob(blob, filename) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    const fd = new FormData()
-    fd.append('file', new File([blob], filename, { type: blob.type || exportMime(exportFormat.value) }))
+    const fd = libraryUploadForm(blob, filename, blob.type || exportMime(exportFormat.value))
     xhr.open('POST', '/api/library-files')
     xhr.withCredentials = true
     xhr.onload = () => {
@@ -367,6 +367,7 @@ watch(canSimulateClick, (ok) => {
 
 function onMeshLoaded({ filename }) {
   if (!form.label || form.label === MESH_CLICKER_DEFAULTS.label) {
+    if (isUuidFilename(filename)) return
     const base = String(filename || '')
       .replace(/\.(3mf|stl)$/i, '')
       .replace(/[_-]+/g, ' ')

@@ -2,6 +2,7 @@ import { basename } from 'node:path/posix'
 import { inArray } from 'drizzle-orm'
 import { schema } from '../db/index.js'
 import { useMinio, minioBucket } from './minio.js'
+import { displayLibraryFilename } from './modelFilename.js'
 
 const LIBRARY_PREFIX = 'library/'
 const CONTENT_TYPES = {
@@ -30,6 +31,21 @@ function listLibraryObjects() {
   })
 }
 
+function metaFilename(metaData) {
+  const meta = metaData || {}
+  const raw = meta['original-filename'] || meta.originalfilename || meta['x-amz-meta-original-filename']
+  if (!raw) return ''
+  try { return decodeURIComponent(String(raw)) } catch { return String(raw) }
+}
+
+export async function filenameForLibraryObject(objectKey, metaData) {
+  return displayLibraryFilename({
+    requested: metaFilename(metaData),
+    multipartName: basename(objectKey),
+    objectKey
+  })
+}
+
 export async function syncLibraryFilesFromMinio(db) {
   const objects = await listLibraryObjects()
   if (!objects.length) return { created: 0 }
@@ -43,15 +59,18 @@ export async function syncLibraryFilesFromMinio(db) {
   const missing = objects.filter((obj) => !existing.has(obj.name))
   if (!missing.length) return { created: 0 }
 
-  await db.insert(schema.libraryFiles).values(
-    missing.map((obj) => ({
-      filename: basename(obj.name),
+  const values = []
+  for (const obj of missing) {
+    let metaData = {}
+    try { metaData = (await useMinio().statObject(minioBucket(), obj.name)).metaData || {} } catch { /* listing without metadata */ }
+    values.push({
+      filename: await filenameForLibraryObject(obj.name, metaData),
       objectKey: obj.name,
       sizeBytes: Number(obj.size || 0),
       contentType: contentTypeForKey(obj.name),
       createdAt: obj.lastModified instanceof Date ? obj.lastModified : new Date()
-    }))
-  )
-  return { created: missing.length }
+    })
+  }
+  await db.insert(schema.libraryFiles).values(values)
+  return { created: values.length }
 }
-
