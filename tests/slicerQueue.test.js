@@ -12,11 +12,19 @@ test('slicer queue accepts generator 3MF and sanitizes its filename', () => {
   assert.equal(value.filename.includes('\\'), false)
   assert.equal(value.tool, 'keychain')
   assert.equal(value.includeProfile, true)
+  const profile = validateSlicerUpload({
+    file: valid3mf, filename: '../makerworld.3mf', tool: '3mf-profile', includeProfile: false
+  })
+  assert.equal(profile.tool, '3mf-profile')
+  assert.equal(profile.format, '3mf')
+  assert.equal(profile.filename, '.._makerworld.3mf')
+  assert.equal(profile.includeProfile, true)
 })
 
 test('slicer queue rejects unknown tools, non-3MF data and oversized input', () => {
   assert.throws(() => validateSlicerUpload({ file: valid3mf, tool: 'lightbox' }), /tidak didukung/)
   assert.throws(() => validateSlicerUpload({ file: Buffer.from('not a zip'), tool: 'keychain' }), /Format file/)
+  assert.throws(() => validateSlicerUpload({ file: valid3mf, filename: 'model.stl', tool: '3mf-profile' }), /hanya menerima file 3MF/)
   assert.throws(() => validateSlicerUpload({ file: { length: MAX_SLICER_FILE_BYTES + 1 }, tool: 'keychain' }), /40 MB/)
 })
 

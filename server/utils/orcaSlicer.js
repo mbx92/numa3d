@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process'
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate'
 import { validateStl } from './stl.js'
 import { prepareCustom3mf } from './custom3mf.js'
+import { convertProfile3mf } from './profile3mf.js'
 
 const MAX_BYTES = 40 * 1024 * 1024
 const ARCHIVE_FILES = new Set(['[Content_Types].xml', '_rels/.rels', '3D/3dmodel.model', 'Metadata/model_settings.config', 'Metadata/project_settings.config'])
@@ -57,6 +58,10 @@ export async function orcaSlicerStatus(options) {
 }
 
 export async function prepareSlicerInput(bytes, tool, includeProfile = true, inputConfig = null) {
+  if (tool === '3mf-profile') {
+    const prepared = await convertProfile3mf(bytes, 'model.3mf', inputConfig)
+    return { bytes: prepared.bytes, format: '3mf', settings: prepared.settings, sourceColors: prepared.inspection.model.colors }
+  }
   if (tool === 'custom-order') {
     const format = bytes?.[0] === 0x50 && bytes?.[1] === 0x4b ? '3mf' : 'stl'
     if (format === '3mf') return prepareCustom3mf(bytes, inputConfig)
@@ -148,7 +153,10 @@ function runOrca(executable, args, cwd, signal) {
 
 export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, executable, profilesPath, signal, inputConfig = null } = {}) {
   const custom = tool === 'custom-order'
+  const profile3mf = tool === '3mf-profile'
+  const profileTool = profile3mf ? 'qr-plate' : tool
   if (custom) includeProfile = false
+  if (profile3mf) includeProfile = true
   if (active) throw Object.assign(new Error('OrcaSlicer sedang memproses model lain. Coba lagi setelah selesai.'), { statusCode: 409 })
   const install = resolveOrcaInstall({ executable, profilesPath })
   executable = install.executable
@@ -190,7 +198,8 @@ export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, ex
     const gcode = await readFile(join(directory, 'plate_1.gcode'), 'utf8')
     const stats = parseOrcaGcodeStats(gcode)
     if (stats.filamentGrams.length !== input.settings.filament_colour.length) throw new Error('Slot filament hasil slicing tidak cocok dengan model')
-    return { ...stats, tool, ...(custom ? { inputFormat: input.format, materialIds: inputConfig?.materialIds, sourceColors: inputConfig?.sourceColors, slotMap: inputConfig?.slotMap } : {}), colors: input.settings.filament_colour, profile: includeProfile ? TOOL_PRINT_PROFILES[tool].label : 'Kobra X 0.16mm High Quality', bed: 'Textured PEI Plate' }
+    const mappedMaterials = custom || profile3mf
+    return { ...stats, tool, ...(mappedMaterials ? { inputFormat: input.format, materialIds: inputConfig?.materialIds, sourceColors: inputConfig?.sourceColors, slotMap: inputConfig?.slotMap } : {}), colors: input.settings.filament_colour, profile: includeProfile ? TOOL_PRINT_PROFILES[profileTool].label : 'Kobra X 0.16mm High Quality', bed: 'Textured PEI Plate' }
   } finally {
     active = false
     if (directory) {

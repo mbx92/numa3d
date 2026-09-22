@@ -42,6 +42,7 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
   if (!relation || relation['@_TargetMode'] === 'External') throw invalid('3MF harus berisi model lokal')
   const rootPath = internalPath(relation['@_Target'])
   const palette = [], usedSlots = new Set(), configs = new Map()
+  let plateCount = 0
   let hasDefinedColors = false
   const color = (value) => {
     if (!/^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value || '')) throw invalid('Warna filament 3MF tidak valid')
@@ -81,7 +82,9 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
   }
   for (const name of ['Metadata/model_settings.config', 'Metadata/Slic3r_PE_model.config']) {
     if (!archive[name]) continue
-    for (const object of list(xml(name)?.config?.object)) {
+    const config = xml(name)?.config
+    plateCount = Math.max(plateCount, list(config?.plate).length)
+    for (const object of list(config?.object)) {
       const parts = new Map()
       for (const part of list(object.part)) {
         if (part['@_subtype'] && part['@_subtype'] !== 'normal_part') throw invalid('3MF dengan modifier atau negative part belum didukung')
@@ -91,6 +94,7 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
       configs.set(String(object['@_id']), { slot: extruder(object.metadata), parts })
     }
   }
+  if (plateCount > 1) throw invalid('3MF multi-plate belum didukung; ekspor satu plate dari OrcaSlicer')
   const models = new Map()
   const id = (value) => {
     if (!/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value) <= 0) throw invalid('ID objek 3MF tidak valid')
@@ -204,10 +208,14 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
       offset += 50
     }
   }
-  validateStl(output)
+  const geometry = validateStl(output)
   const originalSlots = [...usedSlots].sort((a, b) => a - b)
   const sourceColors = originalSlots.map((slot) => palette[slot])
-  if (inspect) return { format: '3mf', colors: sourceColors, hasDefinedColors, maxColors: 4 }
+  if (inspect) return {
+    format: '3mf', colors: sourceColors, hasDefinedColors, maxColors: 4,
+    triangles: geometry.triangles, size: geometry.size, objects: instances.length,
+    plates: Math.max(plateCount, 1)
+  }
   if (project) {
     const colors = inputConfig?.colors || sourceColors
     const slots = inputConfig?.slotMap || sourceColors.map((_, index) => index)

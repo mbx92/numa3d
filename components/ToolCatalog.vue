@@ -9,7 +9,8 @@ import {
   CodeBracketIcon,
   CubeTransparentIcon,
   PhotoIcon,
-  QrCodeIcon
+  QrCodeIcon,
+  AdjustmentsHorizontalIcon
 } from '@heroicons/vue/24/outline'
 
 import { isBetaToolPath } from '~/utils/toolNavigation.js'
@@ -25,6 +26,13 @@ const tools = [
     description: 'Pelat QR berbingkai: satu QR, atau Wi-Fi plus WhatsApp dari foto JPEG. Ekspor 3MF, STL, GLB, dan OpenSCAD.',
     icon: markRaw(QrCodeIcon),
     tags: ['QR', '3MF', 'STL', 'SCAD']
+  },
+  {
+    to: '/tools/3mf-profile',
+    title: 'Profil Anycubic untuk 3MF',
+    description: 'Ubah 3MF MakerWorld menjadi proyek OrcaSlicer bersih dengan profil QR Plate Detail untuk Anycubic Kobra X.',
+    icon: markRaw(AdjustmentsHorizontalIcon),
+    tags: ['MakerWorld', 'OrcaSlicer', 'Anycubic']
   },
   {
     to: '/tools/code-studio',

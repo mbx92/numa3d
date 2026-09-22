@@ -13,6 +13,8 @@ Tombol **Slice gram & waktu** menjalankan CLI OrcaSlicer di server dengan proses
 
 Pilihan profil berlaku untuk plate lengkap, ekspor per bagian, dan 3MF yang disimpan ke Galeri. Mengubah pilihan ini tidak memerlukan generate ulang geometri. Jika dimatikan, ekspor hanya membawa model, warna, layout, dan referensi printer; proses serta filament dipilih di OrcaSlicer. STL dan GLB tidak membawa profil cetak.
 
+File 3MF dari MakerWorld atau sumber lain dapat diproses melalui **Tools → Profil Anycubic untuk 3MF**. Tool tersebut membuat proyek bersih, menerapkan profil QR Plate Detail, memetakan warna ke material inventori, dan dapat menjalankan slicing gram/waktu melalui worker OrcaSlicer; lihat [konverter profil 3MF](3mf-profile-converter.md).
+
 ## Nilai awal
 
 | Profil | Layer | Dinding | Infill | Dinding luar | Permukaan atas |

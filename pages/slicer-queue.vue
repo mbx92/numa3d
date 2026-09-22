@@ -8,7 +8,7 @@ const statusBadge = {
   queued: 'bg-ink-200 text-ink-700', processing: 'bg-amber-100 text-amber-800',
   completed: 'bg-green-100 text-green-700', failed: 'bg-red-100 text-red-700', cancelled: 'bg-ink-100 text-ink-500'
 }
-const toolLabel = { keychain: 'Keychain', clicker: 'Clicker', 'qr-plate': 'QR Plate', 'custom-order': 'Custom Order (STL / 3MF)' }
+const toolLabel = { keychain: 'Keychain', clicker: 'Clicker', 'qr-plate': 'QR Plate', '3mf-profile': 'Profil Anycubic 3MF', 'custom-order': 'Custom Order (STL / 3MF)' }
 const authUser = useState('authUser')
 const isAdmin = computed(() => authUser.value?.role === 'admin')
 const filter = ref('')
