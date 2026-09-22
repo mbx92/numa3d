@@ -3,6 +3,7 @@ import { useDb, schema } from '../../db/index.js'
 import { requireAdmin } from '../../utils/rbac.js'
 import { logAudit } from '../../utils/audit.js'
 import { availableProductStock } from '../../utils/orders.js'
+import { normalizeProductKind } from '#shared/utils/productKind.js'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -16,6 +17,7 @@ export default defineEventHandler(async (event) => {
     status: body.status,
     seriesId: Number.isInteger(seriesId) && seriesId > 0 ? seriesId : null
   }
+  if (body.kind !== undefined) patch.kind = normalizeProductKind(body.kind)
   if (body.stockQuantity !== undefined && body.stockQuantity !== '') {
     patch.stockQuantity = Math.max(Math.round(Number(body.stockQuantity) || 0), 0)
   }

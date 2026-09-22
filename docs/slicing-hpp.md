@@ -38,9 +38,21 @@ Panel estimasi volume lama dan pilihan memperbarui recipe produk lama sudah diha
 
 `POST /api/products/from-generator` khusus admin menerima multipart `file` (3MF maksimal 40 MB) dan `product` (JSON: `requestId` UUID, `name`, `tool`, `materials` berisi `materialId`/`quantityUsed`, `printTimeSeconds`, serta `machineId` opsional). Produk, recipe, metadata file, dan audit disimpan dalam satu transaksi. Upload gagal membatalkan produk baru; percobaan ulang dengan requestId yang sama mengembalikan produk yang sudah tersimpan.
 
-## Custom Order dari STL / 3MF
+## Slicing produk dari menu khusus
 
-Pada menu Custom, unggah satu file STL atau 3MF lalu pilih **Slice dengan Orca**. Pesanan baru hanya dapat disimpan setelah slicing selesai. STL ASCII/binary dan 3MF maksimal 40 MB, ukuran maksimal 260 × 260 × 260 mm. STL dibaca dalam mm; satuan dan transformasi 3MF mengikuti model. Orca menempatkan model di plate tanpa mengubah orientasinya, memakai profil Kobra X nozzle 0,4 mm, PLA, layer 0,16 mm High Quality. 3MF dibangun ulang sebagai proyek Orca bersih: geometri, komponen lokal, warna per bagian/per segitiga, serta painting Orca/Bambu dipertahankan. Profil, G-code, dan post-processing bawaan file diabaikan. Modifier, negative part, tekstur/gradien warna, dan volume Prusa yang belum didukung ditolak dengan pesan; ekspor ulang dari Orca bila diperlukan. File 3MF asli tetap disimpan di pesanan.
+Menu **Slicing Orca** (`/slicer-queue`) memisahkan pekerjaan Orca dari pencatatan order. Pilih produk tujuan, lalu unggah STL/3MF atau gunakan lampiran model yang sudah tersimpan pada produk. Warna model dipetakan ke filament inventori memakai dialog material; mesin, buffer gagal, waktu kerja, dan upah dapat ditentukan sebelum job masuk antrean.
+
+Admin dapat memakai tombol **Jeda worker** dan **Aktifkan worker** pada halaman yang sama. Jeda tidak mematikan proses/container: job aktif diselesaikan dulu, lalu worker tetap mengirim heartbeat tanpa mengambil antrean baru. Karena itu tombol aktifkan dapat melanjutkan worker dalam beberapa detik. Jika halaman menampilkan **Belum ada worker aktif**, servicenya benar-benar tidak berjalan dan harus dimulai dengan `npm run slicer:worker` saat pengembangan atau direstart sebagai service `slicer-worker` di Docker/Coolify; aplikasi web sengaja tidak diberi akses mengendalikan container host.
+
+Saat worker selesai, gram tiap material dan durasi cetak ditulis ke recipe produk dalam satu transaksi. Material cetak lama diganti, sedangkan material komponen (`part`) dan packaging tetap dipertahankan. Karena HPP produk dihitung dari recipe, perubahan hasil slicing langsung tercermin pada HPP tanpa menunggu pembuatan order. Job menyimpan produk tujuan dan penanda waktu saat recipe berhasil diterapkan.
+
+Produk memiliki kategori **Produk normal**, **Custom**, atau **Koleksi kita**. Ketiganya dibuat dan dipesan melalui menu Produk dan Order Produk yang sama. Menu Custom lama tidak lagi tampil di navigasi, tetapi route dan data historisnya tetap dipertahankan agar pesanan lama masih dapat dibuka.
+
+`POST /api/slicer/jobs` untuk alur ini memakai `tool=product`, `productId`, `materialIds`, serta opsi recipe `machineId`, `failureRatePercent`, `laborMinutes`, dan `laborRatePerHour`. Jalankan migrasi `0040_product_slicing` dan gunakan worker versi yang sama dengan aplikasi web.
+
+## Custom Order lama dari STL / 3MF
+
+Alur ini dipertahankan untuk kompatibilitas data pesanan lama. Pada route Custom lama, unggah satu file STL atau 3MF lalu pilih **Slice dengan Orca**. Pesanan baru hanya dapat disimpan setelah slicing selesai. STL ASCII/binary dan 3MF maksimal 40 MB, ukuran maksimal 260 × 260 × 260 mm. STL dibaca dalam mm; satuan dan transformasi 3MF mengikuti model. Orca menempatkan model di plate tanpa mengubah orientasinya, memakai profil Kobra X nozzle 0,4 mm, PLA, layer 0,16 mm High Quality. 3MF dibangun ulang sebagai proyek Orca bersih: geometri, komponen lokal, warna per bagian/per segitiga, serta painting Orca/Bambu dipertahankan. Profil, G-code, dan post-processing bawaan file diabaikan. Modifier, negative part, tekstur/gradien warna, dan volume Prusa yang belum didukung ditolak dengan pesan; ekspor ulang dari Orca bila diperlukan. File 3MF asli tetap disimpan di pesanan.
 
 Batas 40 MB mengacu pada ukuran berkas yang diunggah. Isi arsip 3MF setelah diekstrak dibatasi 200 MB, dan mesh maksimal 2.684.352 segitiga. File ZIP yang kecil dapat melewati batas tersebut bila mesh sangat rapat; sederhanakan mesh dan ekspor ulang sebelum mengunggah. Model besar dapat memerlukan beberapa gigabita RAM saat dikonversi atau di-slice.
 

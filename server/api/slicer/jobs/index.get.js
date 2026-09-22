@@ -10,6 +10,8 @@ export default defineEventHandler(async (event) => {
     id: schema.slicerJobs.id,
     userId: schema.slicerJobs.userId,
     username: schema.users.username,
+    productId: schema.slicerJobs.productId,
+    productName: schema.products.name,
     filename: schema.slicerJobs.filename,
     tool: schema.slicerJobs.tool,
     includeProfile: schema.slicerJobs.includeProfile,
@@ -25,9 +27,11 @@ export default defineEventHandler(async (event) => {
     createdAt: schema.slicerJobs.createdAt,
     startedAt: schema.slicerJobs.startedAt,
     finishedAt: schema.slicerJobs.finishedAt,
+    recipeAppliedAt: schema.slicerJobs.recipeAppliedAt,
     heartbeatAt: schema.slicerJobs.heartbeatAt
   }).from(schema.slicerJobs)
     .leftJoin(schema.users, eq(schema.slicerJobs.userId, schema.users.id))
+    .leftJoin(schema.products, eq(schema.slicerJobs.productId, schema.products.id))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(schema.slicerJobs.createdAt), desc(schema.slicerJobs.id))
     .limit(250)

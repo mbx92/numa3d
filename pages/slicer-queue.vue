@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowPathIcon, StopIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import { ArrowPathIcon, PauseIcon, PlayIcon, StopIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const statusLabel = {
   queued: 'Menunggu', processing: 'Diproses', completed: 'Selesai', failed: 'Gagal', cancelled: 'Dibatalkan'
@@ -8,12 +8,16 @@ const statusBadge = {
   queued: 'bg-ink-200 text-ink-700', processing: 'bg-amber-100 text-amber-800',
   completed: 'bg-green-100 text-green-700', failed: 'bg-red-100 text-red-700', cancelled: 'bg-ink-100 text-ink-500'
 }
-const toolLabel = { keychain: 'Keychain', clicker: 'Clicker', 'qr-plate': 'QR Plate', '3mf-profile': 'Profil Anycubic 3MF', 'custom-order': 'Custom Order (STL / 3MF)' }
+const toolLabel = { keychain: 'Keychain', clicker: 'Clicker', 'qr-plate': 'QR Plate', '3mf-profile': 'Profil Anycubic 3MF', 'custom-order': 'Custom Order lama', product: 'Recipe Produk' }
 const authUser = useState('authUser')
 const isAdmin = computed(() => authUser.value?.role === 'admin')
+const controlBusy = ref(false)
 const filter = ref('')
 const { data: jobs, refresh } = await useFetch('/api/slicer/jobs')
 const { data: worker, refresh: refreshWorker } = await useFetch('/api/slicer/status')
+const { data: products } = await useFetch('/api/slicer/products')
+const { data: materials } = await useFetch('/api/materials')
+const { data: machines } = await useFetch('/api/machines')
 const filteredJobs = computed(() => filter.value ? (jobs.value || []).filter((job) => job.status === filter.value) : (jobs.value || []))
 const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } = usePagination(filteredJobs, 15)
 watch(filter, reset)
@@ -48,6 +52,31 @@ async function reload() {
   await Promise.all([refresh(), refreshWorker()])
 }
 
+async function queued(job) {
+  await refresh()
+  useToast().success(`Job #${job.id} masuk antrean. Recipe akan diperbarui otomatis setelah Orca selesai.`)
+}
+
+async function setWorkerEnabled(enabled) {
+  if (controlBusy.value) return
+  if (!enabled && worker.value?.processing > 0) {
+    const confirmed = await useConfirm().confirm('Job yang sedang diproses akan diselesaikan, lalu worker dijeda. Lanjutkan?', {
+      title: 'Jeda worker', confirmText: 'Jeda setelah selesai'
+    })
+    if (!confirmed) return
+  }
+  controlBusy.value = true
+  try {
+    await $fetch('/api/slicer/control', { method: 'PUT', body: { enabled } })
+    await refreshWorker()
+    useToast().success(enabled ? 'Pemrosesan worker diaktifkan' : 'Pemrosesan worker dijeda')
+  } catch (error) {
+    useToast().error(error.data?.statusMessage || 'Gagal mengubah status worker')
+  } finally {
+    controlBusy.value = false
+  }
+}
+
 async function cancel(job) {
   if (!(await useConfirm().confirm(`Batalkan job slicing #${job.id}?`, { title: 'Batalkan slicing', confirmText: 'Batalkan', danger: true }))) return
   try {
@@ -77,18 +106,31 @@ async function remove(job) {
   <div class="space-y-4">
     <div>
       <div class="flex items-center gap-1">
-        <h1 class="text-xl font-bold">Antrian Slicer</h1>
-        <InfoTooltip label="Informasi Antrian Slicer">Job generator diproses oleh worker OrcaSlicer terpisah. Halaman diperbarui otomatis setiap 3 detik.</InfoTooltip>
+        <h1 class="text-xl font-bold">Slicing Orca</h1>
+        <InfoTooltip label="Informasi Slicing Orca">Slicing berjalan di worker terpisah. Hasil gram dan waktu otomatis menjadi recipe serta HPP produk, sehingga pencatatan tetap dapat digunakan.</InfoTooltip>
       </div>
 
     </div>
 
+    <ProductSlicerForm
+      :products="products || []"
+      :materials="materials || []"
+      :machines="machines || []"
+      :disabled="!worker?.ready"
+      @queued="queued"
+    />
+
     <div class="panel p-3 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p class="text-sm font-medium" :class="worker?.ready ? 'text-emerald-700' : 'text-red-700'">{{ worker?.message || 'Memeriksa worker…' }}</p>
+        <p class="text-sm font-medium" :class="worker?.ready ? 'text-emerald-700' : worker?.enabled === false ? 'text-amber-700' : 'text-red-700'">{{ worker?.message || 'Memeriksa worker…' }}</p>
         <p class="text-xs text-ink-400">{{ worker?.workerId || 'Belum ada worker aktif' }}</p>
+        <p v-if="worker && !worker.serviceActive" class="mt-1 text-xs text-ink-500">Service worker tidak berjalan. Jalankan <code class="font-mono">npm run slicer:worker</code> atau restart service <code class="font-mono">slicer-worker</code> di Docker/Coolify.</p>
       </div>
-      <button class="btn-secondary" @click="reload"><ArrowPathIcon class="w-4 h-4" />Muat ulang</button>
+      <div class="flex flex-wrap gap-2">
+        <button v-if="isAdmin && worker?.serviceActive && worker?.enabled !== false" class="btn-secondary" :disabled="controlBusy" @click="setWorkerEnabled(false)"><PauseIcon class="w-4 h-4" />Jeda worker</button>
+        <button v-if="isAdmin && worker?.enabled === false" class="btn-primary" :disabled="controlBusy" @click="setWorkerEnabled(true)"><PlayIcon class="w-4 h-4" />Aktifkan worker</button>
+        <button class="btn-secondary" @click="reload"><ArrowPathIcon class="w-4 h-4" />Muat ulang</button>
+      </div>
     </div>
 
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -101,14 +143,14 @@ async function remove(job) {
     <div class="md:hidden space-y-2">
       <article v-for="job in paged" :key="job.id" class="panel p-3 space-y-2">
         <div class="flex justify-between gap-2">
-          <div><p class="font-medium">#{{ job.id }} · {{ toolLabel[job.tool] || job.tool }}</p><p class="text-xs text-ink-500 break-all">{{ job.filename }}</p></div>
+          <div><p class="font-medium">#{{ job.id }} · {{ job.productName || toolLabel[job.tool] || job.tool }}</p><p class="text-xs text-ink-500 break-all">{{ job.filename }}</p></div>
           <span class="badge shrink-0" :class="statusBadge[job.status]">{{ statusLabel[job.status] }}</span>
         </div>
         <div v-if="job.status === 'processing'" class="space-y-1">
           <div class="h-1.5 rounded bg-ink-100 overflow-hidden"><div class="h-full bg-accent-500" :style="{ width: `${job.progress || 5}%` }" /></div>
           <p class="text-xs text-ink-500">{{ job.stage }}</p>
         </div>
-        <p v-if="job.result" class="text-xs font-mono">{{ resultText(job) }}</p>
+        <p v-if="job.result" class="text-xs font-mono">{{ resultText(job) }}<span v-if="job.recipeAppliedAt" class="text-emerald-700"> · recipe tersimpan</span></p>
         <p v-if="job.error" class="text-xs text-red-700 break-words">{{ job.error }}</p>
         <div class="flex flex-wrap gap-1">
           <button v-if="['queued', 'processing'].includes(job.status)" class="btn-danger" @click="cancel(job)"><StopIcon class="w-4 h-4" />Batalkan</button>
@@ -124,7 +166,7 @@ async function remove(job) {
         <thead><tr><th>Job</th><th>Pemilik</th><th>Status</th><th>Durasi</th><th>Hasil</th><th>Percobaan</th><th></th></tr></thead>
         <tbody>
           <tr v-for="job in paged" :key="job.id">
-            <td><div class="font-medium">#{{ job.id }} · {{ toolLabel[job.tool] || job.tool }}</div><div class="text-xs text-ink-400 max-w-[16rem] truncate">{{ job.filename }}</div></td>
+            <td><div class="font-medium">#{{ job.id }} · {{ job.productName || toolLabel[job.tool] || job.tool }}</div><div class="text-xs text-ink-400 max-w-[16rem] truncate">{{ job.filename }}</div></td>
             <td class="text-ink-500">{{ job.username || 'user dihapus' }}</td>
             <td class="min-w-[12rem]">
               <span class="badge" :class="statusBadge[job.status]">{{ statusLabel[job.status] }}</span>
@@ -132,7 +174,7 @@ async function remove(job) {
               <div class="text-[11px] mt-1" :class="job.error ? 'text-red-700' : 'text-ink-400'">{{ job.error || job.stage }}</div>
             </td>
             <td class="font-mono text-xs">{{ duration(job) }}</td>
-            <td class="font-mono text-xs">{{ resultText(job) }}</td>
+            <td class="font-mono text-xs">{{ resultText(job) }}<div v-if="job.recipeAppliedAt" class="text-emerald-700">Recipe &amp; HPP diperbarui</div></td>
             <td class="font-mono text-xs">{{ job.attempts }}/{{ job.maxAttempts }}</td>
             <td class="whitespace-nowrap text-right">
               <button v-if="['queued', 'processing'].includes(job.status)" class="btn-danger" @click="cancel(job)"><StopIcon class="w-4 h-4" />Batalkan</button>

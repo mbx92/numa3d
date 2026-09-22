@@ -9,6 +9,7 @@ import {
   PhotoIcon
 } from '@heroicons/vue/24/outline'
 import { PRODUCT_STATUSES, productStatusLabel, productStatusBadge } from '~/utils/productStatus.js'
+import { PRODUCT_KINDS, productKindLabel, productKindBadge } from '#shared/utils/productKind.js'
 
 const { data: products, refresh } = await useFetch('/api/products')
 const { data: seriesList } = await useFetch('/api/series')
@@ -19,10 +20,12 @@ const statusLabel = productStatusLabel
 
 const search = ref('')
 const statusFilter = ref('')
+const kindFilter = ref('')
 const filteredProducts = computed(() => {
   const q = search.value.trim().toLowerCase()
   return (products.value || []).filter((p) => {
     if (statusFilter.value && p.status !== statusFilter.value) return false
+    if (kindFilter.value && (p.kind || 'normal') !== kindFilter.value) return false
     if (!q) return true
     return p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)
   })
@@ -31,14 +34,14 @@ const { page, pageSize, paged, total, totalPages, rangeStart, rangeEnd, reset } 
   filteredProducts,
   10
 )
-watch([search, statusFilter], reset)
+watch([search, statusFilter, kindFilter], reset)
 
 const showForm = ref(false)
 const form = ref({})
 const errorMsg = ref('')
 
 function openAdd() {
-  form.value = { name: '', description: '', status: 'draft', seriesId: '' }
+  form.value = { name: '', description: '', status: 'draft', kind: 'normal', seriesId: '' }
   errorMsg.value = ''
   showForm.value = true
 }
@@ -88,6 +91,10 @@ async function remove(p) {
         <option value="">Semua status</option>
         <option v-for="s in PRODUCT_STATUSES" :key="s" :value="s">{{ statusLabel[s] }}</option>
       </select>
+      <select v-model="kindFilter" class="input w-full sm:w-44">
+        <option value="">Semua kategori</option>
+        <option v-for="kind in PRODUCT_KINDS" :key="kind" :value="kind">{{ productKindLabel[kind] }}</option>
+      </select>
     </div>
 
     <!-- Tabel (desktop) -->
@@ -99,6 +106,7 @@ async function remove(p) {
               <th class="w-14"></th>
               <th>Produk</th>
               <th>Status</th>
+              <th>Kategori</th>
               <th class="text-right">Stok</th>
               <th class="text-right">HPP / unit</th>
               <th class="text-right">Harga jual</th>
@@ -120,6 +128,7 @@ async function remove(p) {
                 <div v-if="p.description" class="text-xs text-ink-400">{{ p.description }}</div>
               </td>
               <td><span class="badge" :class="statusBadge[p.status]">{{ statusLabel[p.status] }}</span></td>
+              <td><span class="badge" :class="productKindBadge[p.kind || 'normal']">{{ productKindLabel[p.kind || 'normal'] }}</span></td>
               <td class="num" :class="(p.stockQuantity || 0) <= 0 ? 'text-amber-600 font-semibold' : ''">
                 {{ formatNumber(p.stockQuantity) }}
               </td>
@@ -141,8 +150,8 @@ async function remove(p) {
               </td>
             </tr>
             <tr v-if="!total">
-              <td colspan="7" class="text-center text-ink-500 py-6">
-                {{ search || statusFilter ? 'Tidak ada produk yang cocok.' : 'Belum ada produk.' }}
+              <td colspan="8" class="text-center text-ink-500 py-6">
+                {{ search || statusFilter || kindFilter ? 'Tidak ada produk yang cocok.' : 'Belum ada produk.' }}
               </td>
             </tr>
           </tbody>
@@ -171,7 +180,10 @@ async function remove(p) {
         <div class="min-w-0 flex-1 space-y-1">
           <div class="flex items-start justify-between gap-2">
             <NuxtLink :to="`/products/${p.id}`" class="font-medium break-words hover:text-accent-600">{{ p.name }}</NuxtLink>
-            <span class="badge shrink-0" :class="statusBadge[p.status]">{{ statusLabel[p.status] }}</span>
+            <span class="flex shrink-0 flex-col items-end gap-1">
+              <span class="badge" :class="productKindBadge[p.kind || 'normal']">{{ productKindLabel[p.kind || 'normal'] }}</span>
+              <span class="badge" :class="statusBadge[p.status]">{{ statusLabel[p.status] }}</span>
+            </span>
           </div>
           <div class="text-sm font-mono">
             Stok {{ formatNumber(p.stockQuantity) }}
@@ -190,7 +202,7 @@ async function remove(p) {
         </div>
       </div>
       <p v-if="!total" class="panel p-6 text-center text-sm text-ink-500">
-        {{ search || statusFilter ? 'Tidak ada produk yang cocok.' : 'Belum ada produk.' }}
+        {{ search || statusFilter || kindFilter ? 'Tidak ada produk yang cocok.' : 'Belum ada produk.' }}
       </p>
       <div v-else class="panel">
         <AppPagination
@@ -223,6 +235,13 @@ async function remove(p) {
             <option v-for="s in PRODUCT_STATUSES" :key="s" :value="s">{{ statusLabel[s] }}</option>
           </select>
 
+        </div>
+        <div>
+          <label class="label">Kategori produk</label>
+          <select v-model="form.kind" class="input">
+            <option v-for="kind in PRODUCT_KINDS" :key="kind" :value="kind">{{ productKindLabel[kind] }}</option>
+          </select>
+          <p class="mt-1 text-xs text-ink-500">Custom, produk normal, dan koleksi tetap memakai alur Order yang sama.</p>
         </div>
         <div>
           <div class="flex items-center gap-1">

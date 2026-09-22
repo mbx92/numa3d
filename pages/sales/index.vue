@@ -287,10 +287,7 @@ async function remove(s) {
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end gap-2 min-w-0">
         <div class="min-w-0 lg:w-44">
           <label class="label">Produk</label>
-          <select v-model="filters.productId" class="input">
-            <option value="">Semua</option>
-            <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
+          <ProductPicker v-model="filters.productId" :products="products || []" clearable clear-label="Semua produk" />
         </div>
         <div class="min-w-0 lg:w-36">
           <label class="label">Channel</label>
@@ -504,11 +501,7 @@ async function remove(s) {
 
           <div>
             <label class="label">Produk</label>
-            <select v-model="form.productId" class="input" required>
-              <option v-for="p in products" :key="p.id" :value="p.id">
-                {{ p.name }}{{ p.hasRecipe ? ` — HPP ${formatIDR(p.hpp)}` : ' — belum ada recipe' }} · bebas {{ formatNumber(p.availableStock) }}
-              </option>
-            </select>
+            <ProductPicker v-model="form.productId" :products="products || []" :disabled="saving" />
             <div v-if="selectedProduct" class="flex items-center gap-2 mt-2">
               <div class="w-10 h-10 rounded border border-ink-200 bg-ink-50 overflow-hidden flex items-center justify-center shrink-0">
                 <img

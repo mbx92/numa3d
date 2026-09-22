@@ -62,7 +62,7 @@ export async function prepareSlicerInput(bytes, tool, includeProfile = true, inp
     const prepared = await convertProfile3mf(bytes, 'model.3mf', inputConfig)
     return { bytes: prepared.bytes, format: '3mf', settings: prepared.settings, sourceColors: prepared.inspection.model.colors }
   }
-  if (tool === 'custom-order') {
+  if (tool === 'custom-order' || tool === 'product') {
     const format = bytes?.[0] === 0x50 && bytes?.[1] === 0x4b ? '3mf' : 'stl'
     if (format === '3mf') return prepareCustom3mf(bytes, inputConfig)
     validateStl(bytes)
@@ -152,7 +152,7 @@ function runOrca(executable, args, cwd, signal) {
 }
 
 async function sliceOne3mf(bytes, { tool, includeProfile = true, executable, profilesPath, signal, inputConfig = null } = {}) {
-  const custom = tool === 'custom-order'
+  const custom = tool === 'custom-order' || tool === 'product'
   const profile3mf = tool === '3mf-profile'
   const profileTool = profile3mf ? 'qr-plate' : tool
   if (custom) includeProfile = false
@@ -234,7 +234,7 @@ export async function sliceGenerator3mf(bytes, options = {}) {
   active = true
   try {
     const { inputConfig, tool } = options
-    const selectedPlates = tool === 'custom-order' ? inputConfig?.selectedPlates : null
+    const selectedPlates = ['custom-order', 'product'].includes(tool) ? inputConfig?.selectedPlates : null
     if (!Array.isArray(selectedPlates) || selectedPlates.length <= 1) {
       const result = await sliceOne3mf(bytes, selectedPlates?.length ? { ...options, inputConfig: { ...inputConfig, selectedPlate: selectedPlates[0] } } : options)
       if (!selectedPlates?.length) return result

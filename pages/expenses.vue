@@ -124,10 +124,7 @@ async function remove(e) {
         </div>
         <div class="min-w-0">
           <label class="label">Produk</label>
-          <select v-model="filters.productId" class="input w-full min-w-0">
-            <option value="">Semua</option>
-            <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
+          <ProductPicker v-model="filters.productId" :products="products || []" clearable clear-label="Semua produk" />
         </div>
       </div>
       <div class="date-range">
@@ -264,10 +261,7 @@ async function remove(e) {
               <label class="label">Produk terkait (opsional)</label>
               <InfoTooltip label="Informasi Produk terkait (opsional)">Untuk R&amp;D / alokasi ke SKU katalog. Pembelian supplier menampilkan barang yang dibeli.</InfoTooltip>
             </div>
-            <select v-model="form.relatedProductId" class="input">
-              <option value="">—</option>
-              <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </select>
+            <ProductPicker v-model="form.relatedProductId" :products="products || []" clearable clear-label="Tanpa produk terkait" />
 
           </div>
         </div>

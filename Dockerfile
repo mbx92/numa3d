@@ -72,7 +72,7 @@ COPY --from=worker-deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY --from=orca /opt/orca /opt/orca
 COPY server/db/schema.js ./server/db/schema.js
-COPY server/utils/orcaSlicer.js server/utils/minio.js server/utils/stl.js server/utils/custom3mf.js server/utils/filamentPainting.js ./server/utils/
+COPY server/utils/orcaSlicer.js server/utils/minio.js server/utils/stl.js server/utils/custom3mf.js server/utils/filamentPainting.js server/utils/slicerRecipe.js ./server/utils/
 COPY shared/utils/customOrderMaterials.js ./shared/utils/
 COPY utils/slicerProjectSettings.js utils/slicerHpp.js utils/kobraXHq016Process.js utils/hpp.js ./utils/
 COPY scripts/slicer-worker.js scripts/slicer-healthcheck.js ./scripts/

@@ -1,5 +1,6 @@
 <script setup>
 import { PlusIcon, EyeIcon } from '@heroicons/vue/24/outline'
+import { productKindLabel, productKindBadge } from '#shared/utils/productKind.js'
 
 const statusLabel = {
   draft: 'Draft',
@@ -124,6 +125,7 @@ async function save() {
           <span class="font-medium break-words">#{{ order.id }} · {{ order.productName }}</span>
           <span class="badge shrink-0" :class="statusBadge[order.status]">{{ statusLabel[order.status] }}</span>
         </div>
+        <span class="badge" :class="productKindBadge[order.productKind || 'normal']">{{ productKindLabel[order.productKind || 'normal'] }}</span>
         <div class="text-xs text-ink-500">{{ order.customerName }} · {{ formatDate(order.date) }}</div>
         <div class="text-xs font-mono text-ink-400">{{ order.quantity }} unit · {{ formatIDR(order.pricePerUnit) }}/unit</div>
       </NuxtLink>
@@ -139,7 +141,7 @@ async function save() {
               <td class="font-mono text-xs whitespace-nowrap">{{ formatDate(order.date) }}</td>
               <td class="font-mono">#{{ order.id }}</td>
               <td>{{ order.customerName }}<div class="text-xs text-ink-400">{{ channelLabel[order.channel] }}</div></td>
-              <td>{{ order.productName }}</td>
+              <td>{{ order.productName }}<div><span class="badge text-[10px]" :class="productKindBadge[order.productKind || 'normal']">{{ productKindLabel[order.productKind || 'normal'] }}</span></div></td>
               <td class="num">{{ order.quantity }}</td>
               <td class="num">{{ formatIDR(order.quantity * order.pricePerUnit) }}</td>
               <td><span class="badge" :class="statusBadge[order.status]">{{ statusLabel[order.status] }}</span></td>
@@ -159,12 +161,12 @@ async function save() {
           <div><label class="label">Channel</label><select v-model="form.channel" class="input"><option v-for="(label, key) in channelLabel" :key="key" :value="key">{{ label }}</option></select></div>
         </div>
         <div><label class="label">Pelanggan</label><input v-model="form.customerName" class="input" required placeholder="nama pelanggan / toko" /></div>
-        <div><label class="label">Produk</label><select v-model="form.productId" class="input" required><option v-for="product in products" :key="product.id" :value="product.id">{{ product.name }} · stok bebas {{ formatNumber(product.availableStock) }}</option></select></div>
+        <div><label class="label">Produk</label><ProductPicker v-model="form.productId" :products="products || []" :disabled="saving" /></div>
         <div class="grid grid-cols-2 gap-3">
           <div><label class="label">Jumlah</label><input v-model.number="form.quantity" type="number" min="1" class="input-num" required /></div>
           <div><label class="label">Harga / unit</label><IdrInput v-model="form.pricePerUnit" required /></div>
         </div>
-        <p v-if="selectedProduct" class="text-xs text-ink-500">Stok fisik {{ formatNumber(selectedProduct.stockQuantity) }} · reservasi {{ formatNumber(selectedProduct.reservedQuantity) }} · bebas {{ formatNumber(selectedProduct.availableStock) }} · HPP {{ formatIDR(selectedProduct.hpp || 0) }}</p>
+        <p v-if="selectedProduct" class="text-xs text-ink-500"><span class="badge mr-1" :class="productKindBadge[selectedProduct.kind || 'normal']">{{ productKindLabel[selectedProduct.kind || 'normal'] }}</span> Stok fisik {{ formatNumber(selectedProduct.stockQuantity) }} · reservasi {{ formatNumber(selectedProduct.reservedQuantity) }} · bebas {{ formatNumber(selectedProduct.availableStock) }} · HPP {{ formatIDR(selectedProduct.hpp || 0) }}</p>
         <div><label class="label">Catatan</label><input v-model="form.notes" class="input" placeholder="opsional" /></div>
         <p v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</p>
         <div class="flex justify-end gap-2"><button type="button" class="btn-secondary" @click="showForm = false">Batal</button><button type="submit" class="btn-primary" :disabled="saving">{{ saving ? 'Menyimpan…' : 'Simpan draft' }}</button></div>

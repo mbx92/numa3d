@@ -13,6 +13,7 @@ export default defineEventHandler(async (event) => {
   const includeProfile = parts?.find((part) => part.name === 'includeProfile')?.data.toString() !== 'false'
   const rawPlate = parts?.find((part) => part.name === 'selectedPlate')?.data.toString()
   const rawPlates = parts?.find((part) => part.name === 'selectedPlates')?.data.toString()
+  const productId = parts?.find((part) => part.name === 'productId')?.data.toString()
   try {
     const rawMaterials = parts?.find((part) => part.name === 'materialIds')?.data.toString()
     let materialIds
@@ -21,8 +22,14 @@ export default defineEventHandler(async (event) => {
     if (rawPlates != null) {
       try { selectedPlates = JSON.parse(rawPlates) } catch { throw Object.assign(new Error('Pilihan plate tidak valid'), { statusCode: 400 }) }
     }
+    const recipeConfig = {
+      machineId: parts?.find((part) => part.name === 'machineId')?.data.toString() || null,
+      failureRatePercent: parts?.find((part) => part.name === 'failureRatePercent')?.data.toString(),
+      laborMinutes: parts?.find((part) => part.name === 'laborMinutes')?.data.toString(),
+      laborRatePerHour: parts?.find((part) => part.name === 'laborRatePerHour')?.data.toString()
+    }
     const job = await enqueueSlicerJob({
-      db: useDb(), auth: event.context.auth, file: file?.data, filename: file?.filename, tool, includeProfile, materialIds, selectedPlates, selectedPlate: rawPlate == null ? null : Number(rawPlate),
+      db: useDb(), auth: event.context.auth, file: file?.data, filename: file?.filename, tool, includeProfile, materialIds, selectedPlates, selectedPlate: rawPlate == null ? null : Number(rawPlate), productId, recipeConfig,
       storage: {
         async put(key, bytes, contentType) {
           await ensureBucket()

@@ -381,10 +381,7 @@ async function remove(j) {
       </div>
       <div>
         <label class="label">Produk</label>
-        <select v-model="filters.productId" class="input">
-          <option value="">Semua</option>
-          <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
+        <ProductPicker v-model="filters.productId" :products="products || []" clearable clear-label="Semua produk" />
       </div>
       <div>
         <label class="label">Dari</label>
@@ -572,11 +569,7 @@ async function remove(j) {
           <label class="label">{{ form.customOrderId ? 'Pesanan custom' : form.orderItemId ? 'Order produk' : 'Produk' }}</label>
           <p v-if="form.customOrderId" class="input bg-ink-50">Custom — lihat halaman pesanan</p>
           <p v-else-if="form.orderItemId" class="input bg-ink-50">Order #{{ form.orderId }} — produk dikunci oleh order</p>
-          <select v-else v-model="form.productId" class="input" required>
-            <option v-for="p in products" :key="p.id" :value="p.id">
-              {{ p.name }} · stok {{ formatNumber(p.stockQuantity) }}{{ p.hasRecipe ? '' : ' (belum recipe)' }}
-            </option>
-          </select>
+          <ProductPicker v-else v-model="form.productId" :products="products || []" :disabled="saving" />
           <p v-if="selectedProduct && !selectedProduct.hasRecipe" class="text-xs text-amber-600 mt-1">
             Belum ada recipe — stok produk tetap bertambah saat selesai, material tidak terpotong.
           </p>

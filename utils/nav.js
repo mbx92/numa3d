@@ -9,7 +9,6 @@ import {
   ClipboardDocumentListIcon,
   QueueListIcon,
   PrinterIcon,
-  PuzzlePieceIcon,
   BuildingStorefrontIcon,
   BanknotesIcon,
   ShoppingCartIcon,
@@ -44,10 +43,9 @@ export const navSections = [
     label: 'Operasi',
     items: [
       { to: '/tools', label: 'Tools', icon: WrenchScrewdriverIcon },
-      { to: '/orders', label: 'Order', icon: ClipboardDocumentListIcon },
-      { to: '/slicer-queue', label: 'Antrian Slicer', icon: QueueListIcon },
-      { to: '/production', label: 'Produksi', icon: PrinterIcon },
-      { to: '/custom-orders', label: 'Custom', icon: PuzzlePieceIcon }
+      { to: '/slicer-queue', label: 'Slicing Orca', icon: QueueListIcon },
+      { to: '/orders', label: 'Order Produk', icon: ClipboardDocumentListIcon },
+      { to: '/production', label: 'Produksi', icon: PrinterIcon }
     ]
   },
   {

@@ -4,6 +4,7 @@ import { getHppForProducts } from '../../utils/productHpp.js'
 import { getSettings } from '../../utils/settings.js'
 import { decorateProductPricing } from '../../utils/productPricing.js'
 import { ACTIVE_ORDER_STATUSES } from '../../utils/orders.js'
+import { getProductPreviewMap, withProductPreview } from '../../utils/productPreviews.js'
 
 export default defineEventHandler(async () => {
   const db = useDb()
@@ -20,6 +21,7 @@ export default defineEventHandler(async () => {
     .groupBy(schema.orderItems.productId)
   const reservationMap = new Map(reservationRows.map((row) => [row.productId, Number(row.quantity) || 0]))
   const hppMap = await getHppForProducts(products.map((p) => p.id))
+  const previews = await getProductPreviewMap(db, products.map((p) => p.id))
   return products.map((p) => {
     const hpp = hppMap.get(p.id)
     const printMinutesPerUnit = (hpp?.recipeRows || []).reduce(
@@ -27,12 +29,12 @@ export default defineEventHandler(async () => {
       0
     )
     const reservedQuantity = reservationMap.get(p.id) || 0
-    return {
+    return withProductPreview({
       ...p,
       ...decorateProductPricing(p, hpp, settings),
       reservedQuantity,
       availableStock: Math.max((Number(p.stockQuantity) || 0) - reservedQuantity, 0),
       printMinutesPerUnit
-    }
+    }, previews)
   })
 })

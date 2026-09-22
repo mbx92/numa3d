@@ -16,6 +16,7 @@ import { sql } from 'drizzle-orm'
 export const userRoleEnum = pgEnum('user_role', ['admin', 'staff'])
 export const materialTypeEnum = pgEnum('material_type', ['filament', 'resin', 'part'])
 export const productStatusEnum = pgEnum('product_status', ['draft', 'rnd', 'active', 'discontinued'])
+export const productKindEnum = pgEnum('product_kind', ['normal', 'custom', 'collection'])
 export const salesChannelEnum = pgEnum('sales_channel', [
   'tokopedia',
   'shopee',
@@ -138,6 +139,7 @@ export const products = pgTable('products', {
   name: text('name').notNull(),
   description: text('description'),
   status: productStatusEnum('status').notNull().default('draft'),
+  kind: productKindEnum('kind').notNull().default('normal'),
   // Object key gambar di MinIO — dipakai sebagai foto utama di katalog.
   imageKey: text('image_key'),
   // Series tempat produk ini bernaung (boleh null = belum punya series).
@@ -248,11 +250,13 @@ export const productPackaging = pgTable('product_packaging', {
 export const slicerJobs = pgTable('slicer_jobs', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
   filename: text('filename').notNull(),
   objectKey: text('object_key').notNull().unique(),
   tool: text('tool').notNull(),
   includeProfile: boolean('include_profile').notNull().default(true),
   inputConfig: jsonb('input_config'),
+  recipeConfig: jsonb('recipe_config'),
   status: slicerJobStatusEnum('status').notNull().default('queued'),
   attempts: integer('attempts').notNull().default(0),
   maxAttempts: integer('max_attempts').notNull().default(3),
@@ -265,6 +269,7 @@ export const slicerJobs = pgTable('slicer_jobs', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   startedAt: timestamp('started_at'),
   finishedAt: timestamp('finished_at'),
+  recipeAppliedAt: timestamp('recipe_applied_at'),
   heartbeatAt: timestamp('heartbeat_at')
 })
 
@@ -424,6 +429,7 @@ export const auditLogs = pgTable('audit_logs', {
 // (dibutuhkan untuk komponen listrik dan depresiasi per jam pada HPP).
 export const appSettings = pgTable('app_settings', {
   id: serial('id').primaryKey(),
+  slicerEnabled: boolean('slicer_enabled').notNull().default(true),
   electricityRatePerKwh: integer('electricity_rate_per_kwh').notNull().default(1445),
   machineUsageHoursPerMonth: integer('machine_usage_hours_per_month').notNull().default(100),
   defaultMarginPercent: real('default_margin_percent').notNull().default(40),

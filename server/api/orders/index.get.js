@@ -21,6 +21,7 @@ export default defineEventHandler(async (event) => {
       productId: schema.orderItems.productId,
       productName: schema.products.name,
       productStatus: schema.products.status,
+      productKind: schema.products.kind,
       quantity: schema.orderItems.quantity,
       quantityReserved: schema.orderItems.quantityReserved,
       pricePerUnit: schema.orderItems.pricePerUnit,

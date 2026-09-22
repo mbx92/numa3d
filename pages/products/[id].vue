@@ -21,6 +21,7 @@ import { materialTypeLabel } from '~/utils/materialType.js'
 import { materialSwatchColor } from '~/utils/materialColor.js'
 import { roundPriceUp, suggestedPrice } from '~/utils/hpp.js'
 import { machineBuildVolume } from '~/utils/printBed.js'
+import { productKindLabel, productKindBadge, PRODUCT_KINDS } from '#shared/utils/productKind.js'
 
 const route = useRoute()
 const id = route.params.id
@@ -38,6 +39,7 @@ const info = ref({
   name: product.value?.name,
   description: product.value?.description,
   status: product.value?.status,
+  kind: product.value?.kind || 'normal',
   seriesId: product.value?.seriesId ?? null,
   stockQuantity: product.value?.stockQuantity ?? 0
 })
@@ -431,6 +433,7 @@ const tab = computed({
       <span class="badge shrink-0" :class="productStatusClass(product.status)">
         {{ productStatusLabel[product.status] || product.status }}
       </span>
+      <span class="badge shrink-0" :class="productKindBadge[product.kind || 'normal']">{{ productKindLabel[product.kind || 'normal'] }}</span>
     </div>
 
     <div class="tab-bar -mb-px">
@@ -507,6 +510,12 @@ const tab = computed({
               <select v-model="info.seriesId" class="input" :disabled="!isAdmin">
                 <option value="">— tanpa series —</option>
                 <option v-for="s in seriesList" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Kategori produk</label>
+              <select v-model="info.kind" class="input" :disabled="!isAdmin">
+                <option v-for="kind in PRODUCT_KINDS" :key="kind" :value="kind">{{ productKindLabel[kind] }}</option>
               </select>
             </div>
             <button v-if="isAdmin" type="submit" class="btn-secondary w-full sm:w-auto" :disabled="savingInfo">
@@ -814,11 +823,17 @@ const tab = computed({
             <div class="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div class="min-w-0">
                 <label class="label">Material</label>
-                <select v-model="r.materialId" class="input w-full" :disabled="!isAdmin">
-                  <option v-for="m in materials" :key="m.id" :value="m.id">
-                    {{ m.name }} · {{ materialTypeLabel(m.type) }} ({{ formatIDR(m.pricePerUnit) }}/{{ m.unit }})
-                  </option>
-                </select>
+                <MaterialColorPicker
+                  :material-id="r.materialId"
+                  :hex="materialOf(r.materialId)?.color"
+                  label="Bahan recipe"
+                  material-type="all"
+                  :materials="materials || []"
+                  allow-out-of-stock
+                  :disabled="!isAdmin"
+                  @select="r.materialId = $event.id"
+                />
+                <p v-if="materialOf(r.materialId)" class="mt-1 text-[11px] text-ink-400">{{ materialTypeLabel(materialOf(r.materialId).type) }} · {{ formatIDR(materialOf(r.materialId).pricePerUnit) }}/{{ materialOf(r.materialId).unit }}</p>
               </div>
               <div>
                 <label class="label">Qty / unit</label>

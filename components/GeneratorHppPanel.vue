@@ -154,13 +154,10 @@ async function applyRecipe() {
         <span v-if="suggested" class="text-ink-400 font-normal text-[11px]"> · saran {{ formatIDR(suggested) }}</span>
       </p>
 
-      <label class="block">
+      <div>
         <span class="label !text-[10px]">Produk</span>
-        <select v-model="productId" class="input text-sm">
-          <option value="">— pilih —</option>
-          <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
-      </label>
+        <ProductPicker v-model="productId" :products="products || []" placeholder="Pilih produk" :disabled="saving" />
+      </div>
       <label class="block">
         <span class="label !text-[10px]">Mesin (opsional)</span>
         <select v-model="machineId" class="input text-sm">

@@ -11,6 +11,7 @@ const props = defineProps({
   materialType: { type: String, default: 'filament' },
   size: { type: String, default: 'md' },
   materials: { type: Array, default: null },
+  allowOutOfStock: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false }
 })
 
@@ -27,6 +28,7 @@ const paletteId = useId()
 const options = computed(() => props.materials ?? toolMaterials.filterByType(props.materialType ?? 'filament'))
 const selected = computed(() => options.value.find((material) => Number(material.id) === Number(props.materialId)) || null)
 const showFilamentTabs = computed(() => (props.materialType ?? 'filament') === 'filament')
+const typeLabel = computed(() => props.materialType === 'all' ? 'Semua material' : materialTypeLabel(props.materialType))
 const localFilamentTypes = computed(() => [...new Map((props.materials || [])
   .filter((material) => material.filamentTypeId != null && material.filamentTypeName)
   .map((material) => [material.filamentTypeId, { id: material.filamentTypeId, name: material.filamentTypeName }])).values()])
@@ -64,7 +66,7 @@ function close() {
 }
 
 function pick(material) {
-  if (props.disabled || (props.materials && Number(material.stockQuantity) <= 0)) return
+  if (props.disabled || (props.materials && !props.allowOutOfStock && Number(material.stockQuantity) <= 0)) return
   emit('select', material)
   close()
 }
@@ -141,7 +143,7 @@ onUnmounted(() => {
           <div class="flex items-start justify-between gap-3 border-b border-ink-100 px-4 py-3">
             <div class="min-w-0">
               <p class="text-sm font-semibold text-ink-900">Pilih material</p>
-              <p class="text-xs text-ink-500 truncate">{{ label }} · {{ materialTypeLabel(materialType) }}</p>
+              <p class="text-xs text-ink-500 truncate">{{ label }} · {{ typeLabel }}</p>
             </div>
             <button
               type="button"
@@ -166,7 +168,7 @@ onUnmounted(() => {
 
           <div :id="`${paletteId}-panel`" :role="showFilamentTabs ? 'tabpanel' : undefined" :aria-labelledby="showFilamentTabs ? `${paletteId}-tab-${selectedFilamentType}` : undefined">
           <div v-if="!options.length" class="px-4 py-8 text-center text-sm text-amber-700">
-            Belum ada material {{ materialTypeLabel(materialType).toLowerCase() }}. Tambah di halaman Material.
+            Belum ada {{ materialType === 'all' ? 'material' : `material ${materialTypeLabel(materialType).toLowerCase()}` }}. Tambah di halaman Material.
           </div>
           <p v-else-if="!filteredOptions.length" class="px-4 py-8 text-center text-sm text-ink-500">Belum ada warna untuk jenis filament ini.</p>
 
@@ -176,7 +178,7 @@ onUnmounted(() => {
                 v-for="m in filteredOptions"
                 :key="m.id"
                 type="button"
-                :disabled="materials && Number(m.stockQuantity) <= 0"
+                :disabled="materials && !allowOutOfStock && Number(m.stockQuantity) <= 0"
                 class="relative flex flex-col items-stretch rounded-lg border p-2.5 text-left transition-all hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/40"
                 :class="
                   Number(materialId) === Number(m.id)
@@ -196,7 +198,7 @@ onUnmounted(() => {
                   </span>
                 </span>
                 <span class="mt-1 text-[10px] font-mono text-ink-400">{{ m.color || 'tanpa swatch' }}</span>
-                <span v-if="materials" class="mt-1 text-[10px] text-ink-400">Stok {{ Number(m.stockQuantity).toFixed(1) }} g</span>
+                <span v-if="materials" class="mt-1 text-[10px] text-ink-400">Stok {{ Number(m.stockQuantity).toFixed(1) }} {{ m.unit }}</span>
                 <span
                   v-if="Number(materialId) === Number(m.id)"
                   class="absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent-500 text-white shadow-sm"

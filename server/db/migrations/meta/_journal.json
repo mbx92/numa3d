@@ -281,6 +281,20 @@
       "when": 1789776000002,
       "tag": "0039_custom_order_materials",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790078400000,
+      "tag": "0040_product_slicing",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790089032000,
+      "tag": "0041_slicer_control",
+      "breakpoints": true
     }
   ]
 }
