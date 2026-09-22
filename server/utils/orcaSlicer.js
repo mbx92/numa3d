@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate'
 import { validateStl } from './stl.js'
-import { prepareCustom3mf } from './custom3mf.js'
+import { inspectCustom3mf, prepareCustom3mf } from './custom3mf.js'
 import { convertProfile3mf } from './profile3mf.js'
 
 const MAX_BYTES = 40 * 1024 * 1024
@@ -151,21 +151,18 @@ function runOrca(executable, args, cwd, signal) {
   })
 }
 
-export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, executable, profilesPath, signal, inputConfig = null } = {}) {
+async function sliceOne3mf(bytes, { tool, includeProfile = true, executable, profilesPath, signal, inputConfig = null } = {}) {
   const custom = tool === 'custom-order'
   const profile3mf = tool === '3mf-profile'
   const profileTool = profile3mf ? 'qr-plate' : tool
   if (custom) includeProfile = false
   if (profile3mf) includeProfile = true
-  if (active) throw Object.assign(new Error('OrcaSlicer sedang memproses model lain. Coba lagi setelah selesai.'), { statusCode: 409 })
   const install = resolveOrcaInstall({ executable, profilesPath })
   executable = install.executable
   profilesPath = install.profilesPath
   if (!executable) throw new Error('OrcaSlicer belum dikonfigurasi pada server ini')
   try { await access(executable) } catch { throw new Error('OrcaSlicer tidak ditemukan pada server ini') }
-  if (active) throw Object.assign(new Error('OrcaSlicer sedang memproses model lain. Coba lagi setelah selesai.'), { statusCode: 409 })
   const input = await prepareSlicerInput(bytes, tool, includeProfile, inputConfig)
-  active = true
   let directory
   try {
     directory = await mkdtemp(join(tmpdir(), 'numa3d-slice-'))
@@ -199,12 +196,70 @@ export async function sliceGenerator3mf(bytes, { tool, includeProfile = true, ex
     const stats = parseOrcaGcodeStats(gcode)
     if (stats.filamentGrams.length !== input.settings.filament_colour.length) throw new Error('Slot filament hasil slicing tidak cocok dengan model')
     const mappedMaterials = custom || profile3mf
-    return { ...stats, tool, ...(mappedMaterials ? { inputFormat: input.format, materialIds: inputConfig?.materialIds, sourceColors: inputConfig?.sourceColors, slotMap: inputConfig?.slotMap } : {}), colors: input.settings.filament_colour, profile: includeProfile ? TOOL_PRINT_PROFILES[profileTool].label : 'Kobra X 0.16mm High Quality', bed: 'Textured PEI Plate' }
+    return { ...stats, tool, ...(mappedMaterials ? { inputFormat: input.format, materialIds: inputConfig?.materialIds, sourceColors: inputConfig?.sourceColors, slotMap: inputConfig?.slotMap, ...(input.selectedPlate ? { selectedPlate: input.selectedPlate, plateName: input.plateName } : {}) } : {}), colors: input.settings.filament_colour, profile: includeProfile ? TOOL_PRINT_PROFILES[profileTool].label : 'Kobra X 0.16mm High Quality', bed: 'Textured PEI Plate' }
   } finally {
-    active = false
     if (directory) {
       const target = resolve(directory), boundary = relative(resolve(tmpdir()), target)
       if (boundary && !boundary.startsWith('..') && !isAbsolute(boundary)) await rm(target, { recursive: true, force: true }).catch(() => {})
     }
+  }
+}
+
+export function combinePlateSlicingResults(results, inputConfig) {
+  if (!results.length || results.length !== inputConfig.selectedPlates?.length) throw new Error('Hasil slicing plate tidak lengkap')
+  const total = { totalGrams: 0, printTimeSeconds: 0, filamentGrams: inputConfig.materialIds.map(() => 0), filamentChanges: 0, primeTower: false }
+  const plates = results.map((result, index) => {
+    if (result.selectedPlate !== inputConfig.selectedPlates[index] || result.materialIds?.length !== result.filamentGrams.length) throw new Error('Hasil slicing plate tidak cocok')
+    for (const [slot, grams] of result.filamentGrams.entries()) {
+      const globalSlot = inputConfig.materialIds.indexOf(result.materialIds[slot])
+      if (globalSlot < 0) throw new Error('Material hasil slicing plate tidak cocok')
+      total.filamentGrams[globalSlot] += grams
+    }
+    total.totalGrams += result.totalGrams
+    total.printTimeSeconds += result.printTimeSeconds
+    total.filamentChanges += result.filamentChanges
+    total.primeTower ||= result.primeTower
+    return { id: result.selectedPlate, name: result.plateName, totalGrams: result.totalGrams, printTimeSeconds: result.printTimeSeconds, filamentGrams: result.filamentGrams, materialIds: result.materialIds, colors: result.colors, filamentChanges: result.filamentChanges, primeTower: result.primeTower }
+  })
+  return {
+    ...results[0], ...total, selectedPlate: undefined, plateName: undefined,
+    selectedPlates: inputConfig.selectedPlates, plateNames: plates.map((plate) => plate.name), plates,
+    sourceColors: inputConfig.sourceColors, materialIds: inputConfig.materialIds,
+    slotMap: inputConfig.slotMap, colors: inputConfig.colors
+  }
+}
+
+export async function sliceGenerator3mf(bytes, options = {}) {
+  if (active) throw Object.assign(new Error('OrcaSlicer sedang memproses model lain. Coba lagi setelah selesai.'), { statusCode: 409 })
+  active = true
+  try {
+    const { inputConfig, tool } = options
+    const selectedPlates = tool === 'custom-order' ? inputConfig?.selectedPlates : null
+    if (!Array.isArray(selectedPlates) || selectedPlates.length <= 1) {
+      const result = await sliceOne3mf(bytes, selectedPlates?.length ? { ...options, inputConfig: { ...inputConfig, selectedPlate: selectedPlates[0] } } : options)
+      if (!selectedPlates?.length) return result
+      return { ...result, selectedPlates, plateNames: [result.plateName], plates: [{ id: selectedPlates[0], name: result.plateName, totalGrams: result.totalGrams, printTimeSeconds: result.printTimeSeconds, filamentGrams: result.filamentGrams, materialIds: result.materialIds, colors: result.colors, filamentChanges: result.filamentChanges, primeTower: result.primeTower }] }
+    }
+    const results = []
+    for (const id of selectedPlates) {
+      const inspected = inspectCustom3mf(bytes, id)
+      if (inspected.empty) throw new Error(`Plate ${id} tidak memiliki model yang dapat dicetak`)
+      const globalSlots = inspected.colors.map((color) => inputConfig.sourceColors.indexOf(color))
+      if (globalSlots.some((slot) => slot < 0)) throw new Error('Palet plate 3MF berubah, periksa pemetaan material kembali')
+      const usedMaterialSlots = [...new Set(globalSlots.map((slot) => inputConfig.slotMap[slot]))]
+      if (usedMaterialSlots.some((slot) => !Number.isInteger(slot) || slot < 0 || slot >= inputConfig.materialIds.length)) throw new Error('Pemetaan material plate 3MF tidak valid')
+      const localConfig = {
+        ...inputConfig, selectedPlate: id, selectedPlates: undefined,
+        sourceColors: inspected.colors,
+        materialIds: usedMaterialSlots.map((slot) => inputConfig.materialIds[slot]),
+        colors: usedMaterialSlots.map((slot) => inputConfig.colors[slot]),
+        slotMap: globalSlots.map((slot) => usedMaterialSlots.indexOf(inputConfig.slotMap[slot]))
+      }
+      const result = await sliceOne3mf(bytes, { ...options, inputConfig: localConfig })
+      results.push(result)
+    }
+    return combinePlateSlicingResults(results, inputConfig)
+  } finally {
+    active = false
   }
 }

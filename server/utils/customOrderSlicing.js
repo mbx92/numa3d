@@ -18,7 +18,8 @@ export function customOrderSliceValues(job, auth) {
   if (!count || count > (stl ? 1 : 4) || result.filamentGrams?.length !== count || (stl && (result.filamentChanges || result.primeTower))) throw invalid(stl ? 'STL hanya mendukung satu warna' : 'Statistik warna 3MF tidak valid')
   if (result.filamentGrams.some((grams) => !Number.isFinite(grams) || grams < 0)) throw invalid('Statistik filament tidak valid')
   const sum = result.filamentGrams.reduce((a, b) => a + b, 0)
-  if (sum <= 0 || Math.abs(sum - result.totalGrams) > Math.max(0.05, count * 0.011)) throw invalid('Statistik filament tidak cocok dengan total gram')
+  const plateCount = Math.max(1, result.selectedPlates?.length || 1)
+  if (sum <= 0 || Math.abs(sum - result.totalGrams) > Math.max(0.05, plateCount * count * 0.011)) throw invalid('Statistik filament tidak cocok dengan total gram')
   if (!Number.isFinite(result.totalGrams) || result.totalGrams <= 0 || !Number.isFinite(result.printTimeSeconds) || result.printTimeSeconds <= 0) {
     throw invalid('Statistik hasil slicing tidak valid')
   }

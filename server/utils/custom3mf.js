@@ -7,18 +7,21 @@ import { mapFilamentPainting, filamentPaintingForSlot } from './filamentPainting
 
 const invalid = (message) => Object.assign(new Error(message), { statusCode: 400 })
 const list = (value) => value == null ? [] : Array.isArray(value) ? value : [value]
-const MAX_TRIANGLES = Math.floor((40 * 1024 * 1024 - 84) / 50)
+const MAX_3MF_EXPANDED_BYTES = 200 * 1024 * 1024
+const MAX_3MF_STL_BYTES = 128 * 1024 * 1024
+const MAX_TRIANGLES = Math.floor((MAX_3MF_STL_BYTES - 84) / 50)
 const UNITS = { micron: 0.001, millimeter: 1, centimeter: 10, meter: 1000, inch: 25.4, foot: 304.8 }
 
 // Read geometry and filament assignments, then rebuild a clean Orca project.
 // Uploaded profiles, G-code and post-processing never reach Orca.
-export function custom3mfToStl(bytes, { project = false, inspect = false, inputConfig = null } = {}) {
+export function custom3mfToStl(bytes, { project = false, inspect = false, inputConfig = null, selectedPlate = null } = {}) {
   if (!bytes?.length || bytes.length > 40 * 1024 * 1024) throw invalid('Ukuran 3MF maksimal 40 MB')
   let expanded = 0, entries = 0, archive
   try {
     archive = unzipSync(bytes, { filter(entry) {
       expanded += entry.originalSize
-      if (++entries > 1024 || expanded > 100 * 1024 * 1024) throw invalid('Isi arsip 3MF terlalu besar')
+      if (++entries > 1024) throw invalid('Arsip 3MF memiliki terlalu banyak berkas')
+      if (expanded > MAX_3MF_EXPANDED_BYTES) throw invalid(`Isi 3MF menjadi sekitar ${Math.ceil(expanded / 1024 / 1024)} MB setelah diekstrak; batasnya 200 MB.`)
       return /\.model$/i.test(entry.name) || ['_rels/.rels', 'Metadata/model_settings.config', 'Metadata/project_settings.config', 'Metadata/Slic3r_PE_model.config', 'Metadata/Slic3r_PE.config', 'Metadata/slicer_config.json'].includes(entry.name)
     } })
   } catch (error) {
@@ -42,7 +45,7 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
   if (!relation || relation['@_TargetMode'] === 'External') throw invalid('3MF harus berisi model lokal')
   const rootPath = internalPath(relation['@_Target'])
   const palette = [], usedSlots = new Set(), configs = new Map()
-  let plateCount = 0
+  let plateMetadata = []
   let hasDefinedColors = false
   const color = (value) => {
     if (!/^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value || '')) throw invalid('Warna filament 3MF tidak valid')
@@ -83,7 +86,7 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
   for (const name of ['Metadata/model_settings.config', 'Metadata/Slic3r_PE_model.config']) {
     if (!archive[name]) continue
     const config = xml(name)?.config
-    plateCount = Math.max(plateCount, list(config?.plate).length)
+    if (list(config?.plate).length && !plateMetadata.length) plateMetadata = list(config.plate)
     for (const object of list(config?.object)) {
       const parts = new Map()
       for (const part of list(object.part)) {
@@ -94,7 +97,32 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
       configs.set(String(object['@_id']), { slot: extruder(object.metadata), parts })
     }
   }
-  if (plateCount > 1) throw invalid('3MF multi-plate belum didukung; ekspor satu plate dari OrcaSlicer')
+  const metadataValue = (entries, key) => list(entries).find((entry) => entry['@_key'] === key)?.['@_value']
+  const plates = plateMetadata.length ? plateMetadata.map((plate, index) => {
+    const rawId = metadataValue(plate.metadata, 'plater_id') ?? String(index + 1)
+    const plateId = Number(rawId)
+    if (!Number.isSafeInteger(plateId) || plateId <= 0) throw invalid('ID plate 3MF tidak valid')
+    const name = String(metadataValue(plate.metadata, 'plater_name') || '').trim().slice(0, 120)
+    const references = list(plate.model_instance).map((instance) => {
+      const objectId = metadataValue(instance.metadata, 'object_id')
+      const instanceId = metadataValue(instance.metadata, 'instance_id')
+      if (!/^\d+$/.test(String(objectId)) || !/^\d+$/.test(String(instanceId))) throw invalid('Referensi instance plate 3MF tidak valid')
+      return `${Number(objectId)}:${Number(instanceId)}`
+    })
+    return { id: plateId, name, references }
+  }) : [{ id: 1, name: '', references: [] }]
+  if (new Set(plates.map((plate) => plate.id)).size !== plates.length) throw invalid('ID plate 3MF berulang')
+  const requestedPlate = selectedPlate ?? inputConfig?.selectedPlate ?? plates[0].id
+  if (!Number.isSafeInteger(requestedPlate) || !plates.some((plate) => plate.id === requestedPlate)) throw invalid('Plate 3MF yang dipilih tidak tersedia')
+  const plate = plates.find((entry) => entry.id === requestedPlate)
+  const assignments = new Map()
+  if (plates.length > 1 || plate.references.length) {
+    for (const entry of plates) for (const reference of entry.references) {
+      if (assignments.has(reference)) throw invalid('Instance 3MF terdaftar pada lebih dari satu plate')
+      assignments.set(reference, entry.id)
+    }
+    if (!assignments.size) throw invalid('3MF multi-plate tidak memiliki daftar objek per plate')
+  }
   const models = new Map()
   const id = (value) => {
     if (!/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value) <= 0) throw invalid('ID objek 3MF tidak valid')
@@ -142,7 +170,8 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
       if (object.components) throw invalid('Struktur objek 3MF tidak valid')
       const vertices = list(object.mesh.vertices?.vertex), faces = list(object.mesh.triangles?.triangle)
       triangles += faces.length
-      if (!vertices.length || !faces.length || triangles > MAX_TRIANGLES) throw invalid('Mesh 3MF kosong atau terlalu besar')
+      if (!vertices.length || !faces.length) throw invalid('Mesh 3MF kosong')
+      if (triangles > MAX_TRIANGLES) throw invalid(`Mesh 3MF memiliki ${triangles.toLocaleString('id-ID')} segitiga; batasnya ${MAX_TRIANGLES.toLocaleString('id-ID')}. Sederhanakan mesh lalu ekspor ulang.`)
       const assigned = inheritedSlot ?? config?.slot
       const defaultSlot = assigned != null ? assigned : object['@_pid'] != null ? propertySlot(source, object['@_pid'], object['@_pindex'] ?? '0') : ensureSlot(0)
       const faceColors = faces.map((face) => {
@@ -171,13 +200,30 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
       }
     }
   }
-  for (const item of list(root.doc.build?.item)) {
+  const instanceCounts = new Map(), buildItems = list(root.doc.build?.item)
+  for (const item of buildItems) {
+    const objectId = id(item['@_objectid'])
+    const instanceId = instanceCounts.get(objectId) || 0
+    instanceCounts.set(objectId, instanceId + 1)
     if (['0', 'false'].includes(item['@_printable'])) continue
+    if (assignments.size) {
+      const assignedPlate = assignments.get(`${objectId}:${instanceId}`)
+      if (assignedPlate == null) throw invalid('Objek 3MF tidak memiliki plate yang jelas')
+      if (assignedPlate !== requestedPlate) continue
+    }
     const path = item['@_path'] ? internalPath(item['@_path'], rootPath) : rootPath
-    const config = configs.get(String(item['@_objectid'])) || null
-    visit(path, item['@_objectid'], transform(item['@_transform'], root.scale), new Set(), config, config?.slot ?? null)
+    const config = configs.get(objectId) || null
+    visit(path, objectId, transform(item['@_transform'], root.scale), new Set(), config, config?.slot ?? null)
   }
-  if (!triangles) throw invalid('3MF tidak memiliki model yang dapat dicetak')
+  if (!triangles) {
+    if (inspect) return {
+      format: '3mf', colors: [], hasDefinedColors, maxColors: 4,
+      triangles: 0, size: [0, 0, 0], objects: 0, empty: true,
+      plates: plates.map(({ id, name }) => ({ id, name })), selectedPlate: requestedPlate,
+      plateName: plate.name
+    }
+    throw invalid('Plate 3MF yang dipilih tidak memiliki model yang dapat dicetak')
+  }
   const output = Buffer.alloc(84 + triangles * 50)
   output.write('Numa3D single-color 3MF geometry')
   output.writeUInt32LE(triangles, 80)
@@ -208,13 +254,14 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
       offset += 50
     }
   }
-  const geometry = validateStl(output)
+  const geometry = validateStl(output, { maxBytes: MAX_3MF_STL_BYTES })
   const originalSlots = [...usedSlots].sort((a, b) => a - b)
   const sourceColors = originalSlots.map((slot) => palette[slot])
   if (inspect) return {
     format: '3mf', colors: sourceColors, hasDefinedColors, maxColors: 4,
     triangles: geometry.triangles, size: geometry.size, objects: instances.length,
-    plates: Math.max(plateCount, 1)
+    plates: plates.map(({ id, name }) => ({ id, name })), selectedPlate: requestedPlate,
+    plateName: plate.name
   }
   if (project) {
     const colors = inputConfig?.colors || sourceColors
@@ -252,10 +299,26 @@ export function custom3mfToStl(bytes, { project = false, inspect = false, inputC
       'Metadata/model_settings.config': strToU8(`<config><object id="${assemblyId}"><metadata key="extruder" value="1"/>${parts.join('')}</object><plate><metadata key="plater_id" value="1"/><model_instance><metadata key="object_id" value="${assemblyId}"/><metadata key="instance_id" value="0"/><metadata key="identify_id" value="1"/></model_instance></plate></config>`),
       'Metadata/project_settings.config': strToU8(JSON.stringify(settings))
     }
-    return { bytes: zipSync(clean), format: '3mf', settings, sourceColors }
+    return { bytes: zipSync(clean), format: '3mf', settings, sourceColors, selectedPlate: requestedPlate, plateName: plate.name }
   }
   return output
 }
 
-export function inspectCustom3mf(bytes) { return custom3mfToStl(bytes, { inspect: true }) }
+export function inspectCustom3mf(bytes, selectedPlates = null) {
+  if (selectedPlates == null || !Array.isArray(selectedPlates)) return custom3mfToStl(bytes, { inspect: true, selectedPlate: selectedPlates })
+  if (!selectedPlates.length || selectedPlates.length > 16 || selectedPlates.some((id) => !Number.isSafeInteger(id) || id <= 0) || new Set(selectedPlates).size !== selectedPlates.length) {
+    throw invalid('Pilih 1–16 plate 3MF tanpa duplikat')
+  }
+  const details = selectedPlates.map((id) => custom3mfToStl(bytes, { inspect: true, selectedPlate: id }))
+  const colors = [...new Set(details.flatMap((detail) => detail.colors))]
+  return {
+    format: '3mf', colors, hasDefinedColors: details.some((detail) => detail.hasDefinedColors), maxColors: 4,
+    triangles: details.reduce((sum, detail) => sum + detail.triangles, 0),
+    objects: details.reduce((sum, detail) => sum + detail.objects, 0),
+    size: [0, 1, 2].map((axis) => Math.max(...details.map((detail) => detail.size[axis]))),
+    plates: details[0].plates, selectedPlates,
+    plateNames: details.map((detail) => detail.plateName),
+    emptyPlates: details.filter((detail) => detail.empty).map((detail) => detail.selectedPlate)
+  }
+}
 export function prepareCustom3mf(bytes, inputConfig) { return custom3mfToStl(bytes, { project: true, inputConfig }) }

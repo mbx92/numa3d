@@ -11,12 +11,18 @@ export default defineEventHandler(async (event) => {
   const file = parts?.find((part) => part.name === 'file' && part.filename)
   const tool = parts?.find((part) => part.name === 'tool')?.data.toString()
   const includeProfile = parts?.find((part) => part.name === 'includeProfile')?.data.toString() !== 'false'
+  const rawPlate = parts?.find((part) => part.name === 'selectedPlate')?.data.toString()
+  const rawPlates = parts?.find((part) => part.name === 'selectedPlates')?.data.toString()
   try {
     const rawMaterials = parts?.find((part) => part.name === 'materialIds')?.data.toString()
     let materialIds
     try { materialIds = rawMaterials ? JSON.parse(rawMaterials) : [] } catch { throw Object.assign(new Error('Pemetaan material tidak valid'), { statusCode: 400 }) }
+    let selectedPlates = null
+    if (rawPlates != null) {
+      try { selectedPlates = JSON.parse(rawPlates) } catch { throw Object.assign(new Error('Pilihan plate tidak valid'), { statusCode: 400 }) }
+    }
     const job = await enqueueSlicerJob({
-      db: useDb(), auth: event.context.auth, file: file?.data, filename: file?.filename, tool, includeProfile, materialIds,
+      db: useDb(), auth: event.context.auth, file: file?.data, filename: file?.filename, tool, includeProfile, materialIds, selectedPlates, selectedPlate: rawPlate == null ? null : Number(rawPlate),
       storage: {
         async put(key, bytes, contentType) {
           await ensureBucket()

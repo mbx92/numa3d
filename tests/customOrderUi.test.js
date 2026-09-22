@@ -23,38 +23,48 @@ test('custom order waits for STL / 3MF slicing, maps missing 3MF colors, checks 
   const compile = async (url, id) => {
     const { descriptor } = parse(readFileSync(fileURLToPath(url), 'utf8'))
     const compiled = compileScript(descriptor, { id, inlineTemplate: true })
-    const source = `import { computed, ref, shallowRef, watch, onUnmounted } from 'vue';\n${compiled.content}`
+    const source = `import { computed, ref, shallowRef, watch, onMounted, onUnmounted } from 'vue';\n${compiled.content}`
     return (await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)).default
   }
   const Page = await compile(pageUrl, 'custom-order-page-test')
   const Slicer = await compile(new URL('../components/CustomOrderSlice.vue', import.meta.url), 'custom-order-slicer-test')
+  const MaterialPicker = await compile(new URL('../components/MaterialColorPicker.vue', import.meta.url), 'custom-order-material-picker-test')
   const materials = [
     { id: 8, name: 'PLA White', type: 'filament', unit: 'gram', pricePerUnit: 200, filamentTypeName: 'PLA', stockQuantity: 100, color: '#ffffff' },
     { id: 9, name: 'PLA Black', type: 'filament', unit: 'gram', pricePerUnit: 250, filamentTypeName: 'PLA', stockQuantity: 100, color: '#000000' },
     { id: 10, name: 'Resin', type: 'resin', unit: 'ml', pricePerUnit: 100 },
     { id: 11, name: 'PETG', type: 'filament', unit: 'gram', pricePerUnit: 250, filamentTypeName: 'PETG' }
   ]
+  globalThis.useId = () => 'custom-order-material-picker'
+  globalThis.useToolMaterials = () => ({
+    filterByType: (type) => materials.filter((material) => material.type === type),
+    materialById: (id) => materials.find((material) => Number(material.id) === Number(id)) || null,
+    filamentTypes: ref([{ id: 1, name: 'PLA' }, { id: 2, name: 'PETG' }]),
+    refresh: async () => {}, refreshFilamentTypes: async () => {}
+  })
   globalThis.useFetch = async (url) => ({ data: ref({
     '/api/custom-orders': [], '/api/materials': materials, '/api/machines': [],
     '/api/packaging': [], '/api/settings': { defaultMarginPercent: 40, priceRoundStep: 500 }
   }[url]), refresh() {} })
   globalThis.usePagination = (rows) => ({ page: ref(1), pageSize: ref(10), paged: rows, total: computed(() => rows.value.length), totalPages: ref(1), rangeStart: ref(0), rangeEnd: ref(0), reset() {} })
   globalThis.todayStr = () => '2026-09-18'
-  let saved, navigated, calls = 0, multi = false
+  let saved, navigated, calls = 0, multi = false, selectedPlates = [1]
   globalThis.navigateTo = async (to) => { navigated = to }
   globalThis.$fetch = async (url, options) => {
     if (url === '/api/slicer/inspect') {
       multi = options.body.get('file').name.endsWith('.3mf')
-      return multi ? { format: '3mf', colors: ['#ffffff', '#ff0000'], hasDefinedColors: true, maxColors: 4 } : { format: 'stl', colors: ['#ffffff'], hasDefinedColors: false, maxColors: 1 }
+      selectedPlates = JSON.parse(options.body.get('selectedPlates') || '[1]')
+      return multi ? { format: '3mf', colors: selectedPlates.includes(2) ? ['#ffffff', '#ff0000'] : ['#ffffff'], hasDefinedColors: true, maxColors: 4, selectedPlates, plates: [{ id: 1, name: 'Kecil' }, { id: 2, name: 'Besar' }] } : { format: 'stl', colors: ['#ffffff'], hasDefinedColors: false, maxColors: 1 }
     }
     if (url === '/api/slicer/jobs') {
       assert.equal(options.body.get('tool'), 'custom-order')
       assert.ok(['box.stl', 'box.3mf'].includes(options.body.get('file').name))
+      if (multi) assert.equal(options.body.get('selectedPlates'), '[1,2]')
       return { id: 9, status: 'queued', stage: 'Menunggu worker' }
     }
     if (url === '/api/slicer/jobs/9') return {
       id: 9, status: 'completed', stage: 'Selesai',
-      result: multi ? { totalGrams: 10, printTimeSeconds: 577, filamentGrams: [4, 6], colors: ['#ffffff', '#000000'], materialIds: [8, 9] } : { totalGrams: 2.02, printTimeSeconds: 577, filamentGrams: [2.02], colors: ['#FFFFFF'], materialIds: [8] }
+      result: multi ? { totalGrams: 10, printTimeSeconds: 577, filamentGrams: [4, 6], colors: ['#ffffff', '#000000'], materialIds: [8, 9], selectedPlates, plates: [{ id: 1, name: 'Kecil', totalGrams: 4, printTimeSeconds: 200 }, { id: 2, name: 'Besar', totalGrams: 6, printTimeSeconds: 377 }] } : { totalGrams: 2.02, printTimeSeconds: 577, filamentGrams: [2.02], colors: ['#FFFFFF'], materialIds: [8] }
     }
     assert.equal(url, '/api/custom-orders')
     calls++
@@ -65,6 +75,7 @@ test('custom order waits for STL / 3MF slicing, maps missing 3MF colors, checks 
   document.body.append(host)
   const app = createApp({ render: () => h(Suspense, null, { default: () => h(Page) }) })
   app.component('CustomOrderSlice', Slicer)
+  app.component('MaterialColorPicker', MaterialPicker)
   app.component('AppModal', { render() { return h('div', { class: 'test-modal' }, this.$slots.default?.()) } })
   app.component('IdrInput', { props: ['modelValue'], emits: ['update:modelValue'], render() {
     return h('input', { value: this.modelValue, onInput: (event) => this.$emit('update:modelValue', Number(event.target.value)) })
@@ -90,10 +101,16 @@ test('custom order waits for STL / 3MF slicing, maps missing 3MF colors, checks 
     assert.equal(host.querySelector('input[type="file"]').multiple, false)
     assert.equal(host.querySelector('input[type="file"]').accept, '.stl,.3mf')
     await pick('box.stl')
-    const materialSelect = [...host.querySelectorAll('select')].find((item) => item.textContent.includes('PLA White'))
-    assert.equal(materialSelect.multiple, false)
-    assert.equal(materialSelect.textContent.includes('PETG'), false)
-    assert.equal(materialSelect.textContent.includes('Resin'), false)
+    const materialPicker = host.querySelector('[aria-haspopup="dialog"]')
+    assert.match(materialPicker.textContent, /PLA White/)
+    materialPicker.click()
+    await settle()
+    const materialDialog = document.querySelector('[role="dialog"][aria-label^="Pilih material"]')
+    assert.ok(materialDialog)
+    const materialCards = [...materialDialog.querySelectorAll('.grid button')].map((item) => item.textContent)
+    assert.equal(materialCards.some((item) => item.includes('PETG') || item.includes('Resin')), false)
+    materialDialog.querySelector('[aria-label="Tutup"]').click()
+    await settle()
     button('Slice dengan Orca').click()
     await settle()
     assert.equal(button('Simpan pesanan').disabled, false)
@@ -107,15 +124,31 @@ test('custom order waits for STL / 3MF slicing, maps missing 3MF colors, checks 
     assert.match(host.textContent, /Pilih file STL atau 3MF/)
     assert.equal(button('Slice dengan Orca').disabled, true)
     await pick('box.3mf')
+    button('1 plate dipilih').click()
+    await settle()
+    const plateChoices = host.querySelectorAll('#custom-order-plates input[type="checkbox"]')
+    assert.equal(plateChoices.length, 2)
+    plateChoices[1].click()
+    await settle()
+    assert.equal(plateChoices[0].checked, true)
+    assert.equal(plateChoices[1].checked, true)
+    button('Terapkan plate').click()
+    await settle()
+    assert.deepEqual(selectedPlates, [1, 2])
     assert.equal(button('Slice dengan Orca').disabled, true)
-    const mapping = [...host.querySelectorAll('select')].filter((item) => item.textContent.includes('Pilih material / pengganti'))
+    const mapping = host.querySelectorAll('[aria-haspopup="dialog"]')
     assert.equal(mapping.length, 2)
-    mapping[1].value = '9'
-    mapping[1].dispatchEvent(new window.Event('change'))
+    mapping[1].click()
+    await settle()
+    const black = [...document.querySelectorAll('[role="dialog"] button')].find((item) => item.textContent.includes('PLA Black'))
+    assert.ok(black)
+    black.click()
     await settle()
     assert.equal(button('Slice dengan Orca').disabled, false)
     button('Slice dengan Orca').click()
     await settle()
+    assert.match(host.textContent, /2 plate.*10\.00 g/)
+    assert.match(host.textContent, /Plate 2.*Besar.*6\.00 g/)
     const quantity = [...host.querySelectorAll('input[type="number"]')].find((item) => item.min === '1')
     quantity.value = '20'
     quantity.dispatchEvent(new window.Event('input'))

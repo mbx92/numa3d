@@ -9,12 +9,14 @@ const props = defineProps({
   hex: { type: String, default: DEFAULT_MATERIAL_COLOR },
   label: { type: String, default: 'Warna' },
   materialType: { type: String, default: 'filament' },
-  size: { type: String, default: 'md' }
+  size: { type: String, default: 'md' },
+  materials: { type: Array, default: null },
+  disabled: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['select'])
 
-const { filterByType, materialById, filamentTypes, refresh, refreshFilamentTypes } = useToolMaterials()
+const toolMaterials = props.materials ? null : useToolMaterials()
 
 const open = ref(false)
 const root = ref(null)
@@ -22,16 +24,19 @@ const dialog = ref(null)
 const selectedFilamentType = ref('all')
 const paletteId = useId()
 
-const options = computed(() => filterByType(props.materialType ?? 'filament'))
-const selected = computed(() => materialById(props.materialId))
+const options = computed(() => props.materials ?? toolMaterials.filterByType(props.materialType ?? 'filament'))
+const selected = computed(() => options.value.find((material) => Number(material.id) === Number(props.materialId)) || null)
 const showFilamentTabs = computed(() => (props.materialType ?? 'filament') === 'filament')
-const filamentTabs = computed(() => filamentFilterTabs(filamentTypes.value, options.value))
+const localFilamentTypes = computed(() => [...new Map((props.materials || [])
+  .filter((material) => material.filamentTypeId != null && material.filamentTypeName)
+  .map((material) => [material.filamentTypeId, { id: material.filamentTypeId, name: material.filamentTypeName }])).values()])
+const filamentTabs = computed(() => filamentFilterTabs(props.materials ? localFilamentTypes.value : toolMaterials.filamentTypes.value, options.value))
 const filteredOptions = computed(() => showFilamentTabs.value ? filterFilamentMaterials(options.value, selectedFilamentType.value) : options.value)
 watch(filamentTabs, (tabs) => {
   if (!tabs.some((tab) => tab.id === selectedFilamentType.value)) selectedFilamentType.value = 'all'
 })
 watch(open, async (visible) => {
-  if (visible) await Promise.allSettled([refresh(), refreshFilamentTypes()])
+  if (visible && toolMaterials) await Promise.allSettled([toolMaterials.refresh(), toolMaterials.refreshFilamentTypes()])
 })
 
 function navigateTab(event, index) {
@@ -50,6 +55,7 @@ const swatchHex = computed(() =>
 const buttonSize = computed(() => (props.size === 'sm' ? 'h-7 w-7' : 'h-10 w-10'))
 
 function toggle() {
+  if (props.disabled) return
   open.value = !open.value
 }
 
@@ -58,6 +64,7 @@ function close() {
 }
 
 function pick(material) {
+  if (props.disabled || (props.materials && Number(material.stockQuantity) <= 0)) return
   emit('select', material)
   close()
 }
@@ -90,6 +97,7 @@ onUnmounted(() => {
       :class="size === 'sm' ? 'p-1' : 'w-full px-2 py-2'"
       :aria-expanded="open"
       aria-haspopup="dialog"
+      :disabled="disabled"
       @click.stop="toggle"
     >
       <span
@@ -168,6 +176,7 @@ onUnmounted(() => {
                 v-for="m in filteredOptions"
                 :key="m.id"
                 type="button"
+                :disabled="materials && Number(m.stockQuantity) <= 0"
                 class="relative flex flex-col items-stretch rounded-lg border p-2.5 text-left transition-all hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/40"
                 :class="
                   Number(materialId) === Number(m.id)
@@ -187,6 +196,7 @@ onUnmounted(() => {
                   </span>
                 </span>
                 <span class="mt-1 text-[10px] font-mono text-ink-400">{{ m.color || 'tanpa swatch' }}</span>
+                <span v-if="materials" class="mt-1 text-[10px] text-ink-400">Stok {{ Number(m.stockQuantity).toFixed(1) }} g</span>
                 <span
                   v-if="Number(materialId) === Number(m.id)"
                   class="absolute top-2 right-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent-500 text-white shadow-sm"

@@ -374,7 +374,7 @@ async function deliver() {
           <div class="flex justify-between gap-2"><span class="text-ink-500">HPP total pesanan</span><span class="font-mono">{{ formatIDR(order.hpp * order.quantity) }}</span></div>
           <div class="flex justify-between gap-2"><span class="text-ink-500">Harga saran</span><span class="font-mono">{{ formatIDR(order.suggestedPrice) }}</span></div>
           <p v-if="order.slicerResult" class="text-xs text-teal-700 pt-2">
-            Model {{ order.slicerResult.filename }} · {{ order.slicerResult.profile }} · {{ order.slicerResult.colors.length }} material.
+            Model {{ order.slicerResult.filename }} · <template v-if="order.slicerResult.selectedPlates?.length">Plate {{ order.slicerResult.selectedPlates.join(', ') }} · </template><template v-else-if="order.slicerResult.selectedPlate">Plate {{ order.slicerResult.selectedPlate }} · </template>{{ order.slicerResult.profile }} · {{ order.slicerResult.colors.length }} material.
             Durasi asli {{ Math.floor(order.slicerResult.printTimeSeconds / 60) }} menit {{ Math.round(order.slicerResult.printTimeSeconds % 60) }} detik / unit; pencatatan dibulatkan ke atas ke menit.
           </p>
           <p v-if="order.notes" class="text-xs text-ink-400 pt-2">{{ order.notes }}</p>

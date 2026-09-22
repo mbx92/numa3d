@@ -237,7 +237,7 @@ onUnmounted(() => { requestId++; sliceVersion++ })
             <span class="text-sm font-medium text-ink-800">
               {{ inspecting ? 'Memeriksa isi 3MF…' : selectedFile ? selectedFile.name : 'Pilih atau jatuhkan file 3MF' }}
             </span>
-            <span class="text-xs text-ink-400">Maksimal 40 MB · satu plate · maksimal empat warna aktif</span>
+            <span class="text-xs text-ink-400">ZIP maks. 40 MB · isi maks. 200 MB · mesh maks. 2.684.352 segitiga · satu plate · 4 warna aktif</span>
             <input ref="fileInput" type="file" accept=".3mf,model/3mf" class="sr-only" :disabled="inspecting || converting || slicing" @change="onFileChange" />
           </label>
 

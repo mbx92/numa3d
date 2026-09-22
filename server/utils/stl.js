@@ -1,8 +1,8 @@
 const invalid = (message) => Object.assign(new Error(message), { statusCode: 400 })
 
 // Validate geometry before accepting a job; STL carries no print settings or colors.
-export function validateStl(bytes) {
-  if (!bytes?.length || bytes.length > 40 * 1024 * 1024) throw invalid('File STL wajib disertakan, maksimal 40 MB')
+export function validateStl(bytes, { maxBytes = 40 * 1024 * 1024 } = {}) {
+  if (!bytes?.length || bytes.length > maxBytes) throw invalid(`File STL wajib disertakan, maksimal ${Math.floor(maxBytes / 1024 / 1024)} MB`)
   const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity]
   let triangles = 0
   const vertex = (values) => values.forEach((value, axis) => {

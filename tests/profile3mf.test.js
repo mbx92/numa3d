@@ -34,7 +34,7 @@ test('3MF profile tool inspects geometry and rebuilds a sanitized Kobra X QR Det
   assert.deepEqual(inspection.model.size, [20, 18, 10])
   assert.deepEqual(inspection.model.colors, ['#d3c5a3'])
   assert.equal(inspection.model.objects, 1)
-  assert.equal(inspection.model.plates, 1)
+  assert.equal(inspection.model.plates.length, 1)
 
   const converted = await convertProfile3mf(source, 'Bier Kisten.3mf')
   const archive = unzipSync(converted.bytes)
@@ -47,6 +47,8 @@ test('3MF profile tool inspects geometry and rebuilds a sanitized Kobra X QR Det
   assert.equal(settings.wall_loops, '2')
   assert.equal(settings.sparse_infill_density, '15%')
   assert.equal(settings.enable_support, '0')
+  assert.equal(settings.travel_acceleration, '5000')
+  assert.equal(settings.travel_speed, '300')
   assert.deepEqual(settings.post_process, [])
   assert.equal(archive['Auxiliaries/source-note.txt'], undefined)
   assert.equal(converted.bytes.includes(Buffer.from('must-not-survive')), false)
@@ -63,8 +65,15 @@ test('3MF profile tool rejects unsafe inputs and multi-plate projects', async ()
   const xml = strFromU8(archive[path])
   const plate = xml.match(/<plate>[\s\S]*?<\/plate>/)?.[0]
   assert.ok(plate)
-  archive[path] = strToU8(xml.replace('</config>', `${plate}</config>`))
-  assert.throws(() => inspectProfile3mf(Buffer.from(zipSync(archive)), 'two-plates.3mf'), /multi-plate/)
+  archive[path] = strToU8(xml.replace('</config>', `${plate.replace('key="plater_id" value="1"', 'key="plater_id" value="2"').replace('key="instance_id" value="0"', 'key="instance_id" value="1"')}</config>`))
+  const modelPath = '3D/3dmodel.model'
+  const modelXml = strFromU8(archive[modelPath])
+  const item = modelXml.match(/<item\b[^>]*\/>/)?.[0]
+  assert.ok(item)
+  archive[modelPath] = strToU8(modelXml.replace('</build>', `${item}</build>`))
+  const multi = inspectProfile3mf(Buffer.from(zipSync(archive)), 'two-plates.3mf')
+  assert.equal(multi.compatible, false)
+  assert.match(multi.issues[0], /satu plate/)
 })
 
 test('3MF profile slicing maps inventory material and keeps QR Detail settings', async () => {
@@ -82,5 +91,6 @@ test('3MF profile slicing maps inventory material and keeps QR Detail settings',
   assert.equal(prepared.settings.layer_height, '0.12')
   assert.equal(prepared.settings.wall_loops, '2')
   assert.equal(prepared.settings.enable_support, '0')
+  assert.equal(prepared.settings.travel_acceleration, '5000')
   assert.deepEqual(inspectCustom3mf(prepared.bytes).colors, ['#101820'])
 })

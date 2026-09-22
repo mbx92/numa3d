@@ -26,10 +26,17 @@ export function validateSlicerUpload({ file, filename, tool, includeProfile }) {
   return { file, filename: safeName, tool, format: ext, includeProfile: profile3mf ? true : custom ? false : includeProfile !== false }
 }
 
-export async function enqueueSlicerJob({ db, storage, auth, file, filename, tool, includeProfile, materialIds }) {
+export async function enqueueSlicerJob({ db, storage, auth, file, filename, tool, includeProfile, materialIds, selectedPlate = null, selectedPlates = null }) {
   const input = validateSlicerUpload({ file, filename, tool, includeProfile })
   const mappedMaterials = tool === 'custom-order' || tool === '3mf-profile'
-  const inputConfig = mappedMaterials ? await resolveCustomMaterials(db, inspectCustomModel(input.file, input.format), materialIds) : null
+  if (selectedPlate != null && (!Number.isSafeInteger(selectedPlate) || selectedPlate <= 0)) throw invalid('Pilihan plate tidak valid')
+  const selection = selectedPlates ?? (selectedPlate == null ? null : [selectedPlate])
+  if (selection != null && (tool !== 'custom-order' || input.format !== '3mf' || !Array.isArray(selection))) throw invalid('Pilihan plate hanya berlaku untuk 3MF Custom Order')
+  const inspection = mappedMaterials ? inspectCustomModel(input.file, input.format, selection) : null
+  if (tool === 'custom-order' && input.format === '3mf' && inspection.plates.length > 1 && selection == null) throw invalid('Pilih plate 3MF sebelum slicing')
+  if (tool === '3mf-profile' && inspection.plates.length > 1) throw invalid('Tool profil hanya mendukung satu plate 3MF')
+  if (inspection?.empty || inspection?.emptyPlates?.length) throw invalid('Plate 3MF yang dipilih tidak memiliki model yang dapat dicetak')
+  const inputConfig = mappedMaterials ? await resolveCustomMaterials(db, inspection, materialIds) : null
   const requestId = randomUUID()
   const objectKey = `slicer/jobs/${auth.id}/${requestId}.${input.format}`
   let uploaded = false

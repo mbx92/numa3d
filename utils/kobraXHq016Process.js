@@ -256,7 +256,8 @@ export const KOBRA_X_HQ_016_PROCESS = Object.freeze({
   "top_surface_line_width": "0.42",
   "top_surface_pattern": "monotonicline",
   "top_surface_speed": "150",
-  "travel_acceleration": "10000",
+  // Orca 2.4.2 compares this with Kobra X's 6500 mm/s² extruding limit when validating a project.
+  "travel_acceleration": "5000",
   "travel_jerk": "9",
   "travel_speed": "300",
   "travel_speed_z": "0",

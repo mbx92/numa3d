@@ -56,6 +56,8 @@ export function inspectProfile3mf(bytes, filename) {
   const sourceFilename = cleanSourceFilename(filename)
   const model = inspectCustom3mf(bytes)
   const issues = []
+  if (model.plates.length > 1) issues.push('Tool profil hanya mendukung satu plate 3MF')
+  if (model.empty) issues.push('Plate 3MF tidak memiliki model yang dapat dicetak')
   if (model.colors.length > model.maxColors) {
     issues.push(`Model memakai ${model.colors.length} warna aktif; profil ini mendukung maksimal ${model.maxColors} warna`)
   }
