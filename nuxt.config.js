@@ -45,6 +45,8 @@ export default defineNuxtConfig({
     adminUsername: process.env.ADMIN_USERNAME || 'admin',
     adminPassword: process.env.ADMIN_PASSWORD || '',
     sessionSecret: process.env.SESSION_SECRET || 'dev-secret-ganti-di-env',
+    // Explicit opt-in for production images used over HTTP on a development LAN.
+    allowInsecureSessionCookie: false,
     minio: {
       endPoint: process.env.MINIO_ENDPOINT || 'localhost',
       port: Number(process.env.MINIO_PORT || 9000),

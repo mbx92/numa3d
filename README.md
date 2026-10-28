@@ -119,6 +119,7 @@ Postgres dan MinIO tidak ikut di-compose — pakai server yang sudah ada. Templa
 |---|---|
 | `DATABASE_URL` | `postgres://user:pass@host:5432/dbname` |
 | `SESSION_SECRET` | `openssl rand -hex 32` |
+| `NUXT_ALLOW_INSECURE_SESSION_COOKIE` | Default `false`. Set `true` hanya untuk deployment development melalui HTTP LAN. |
 | `ADMIN_PASSWORD` | password admin pertama (hanya jika tabel users kosong) |
 | `MINIO_ENDPOINT` | **hostname saja** (tanpa `https://`), mis. `s3.example.com` atau `minio` di Docker |
 | `MINIO_PORT` | internal Docker biasanya `9000`; domain HTTPS publik biasanya `443` |
